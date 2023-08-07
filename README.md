@@ -13,21 +13,21 @@
 
 2. Create the following directory in the user directory:
     ```bash
-    .terraform.d/plugins/terraform.local/xenserver/0.3.1/<OS_ARCH>/
+    .terraform.d/plugins/terraform.local/local/xenserver/0.3.1/<OS_ARCH>/
     ```
     The OS architecture will look something like `linux_amd64`. See [Terraform documentation](https://developer.hashicorp.com/terraform/registry/providers/os-arch) for recommended combinations.
 
 3. Move the `terraform-provider-xenserver` binary into the new directory and rename to `terraform-provider-xenserver_v0.3.1`.
     ```bash
     mv terraform-provider-xenserver \
-    ~/.terraform.d/plugins/terraform.local/xenserver/0.3.1/<OS_ARCH>/terraform-provider-xenserver_v0.3.1
+    ~/.terraform.d/plugins/terraform.local/local/xenserver/0.3.1/<OS_ARCH>/terraform-provider-xenserver_v0.3.1
     ```
 
 This should now be recognised as a local provider by Terraform and can be set as a required provider in the following format:
 ```terraform
 required_providers {
   xenserver = {
-    source  = "terraform.local/xenserver"
+    source  = "terraform.local/local/xenserver"
     version = "0.3.1"
   }
 }
