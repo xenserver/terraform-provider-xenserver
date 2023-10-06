@@ -23,7 +23,7 @@ import (
 	"log"
 	"strconv"
 
-	xenapi "github.com/terra-farm/go-xen-api-client"
+	xenapi "github.com/sarah-soo/go-xen-api-client"
 )
 
 type Range struct {
@@ -508,10 +508,6 @@ func (this *VBDDescriptor) Query(c *Connection) error {
 
 	vdi := &VDIDescriptor{
 		VDIRef: vbd.VDI,
-	}
-
-	if err := vdi.Query(c); err != nil {
-		return err
 	}
 
 	this.VDI = vdi

@@ -22,7 +22,7 @@ import (
 	"log"
 
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	xenapi "github.com/terra-farm/go-xen-api-client"
+	xenapi "github.com/sarah-soo/go-xen-api-client"
 )
 
 const (
@@ -165,16 +165,6 @@ func resourceVDIUpdate(d *schema.ResourceData, m interface{}) error {
 		}
 
 		d.SetPartial(vdiSchemaName)
-	}
-
-	if d.HasChange(vdiSchemaSize) {
-		_, n := d.GetChange(vdiSchemaSize)
-
-		if err := c.client.VDI.SetVirtualSize(c.session, vdi.VDIRef, n.(int)); err != nil {
-			return err
-		}
-
-		d.SetPartial(vdiSchemaSize)
 	}
 
 	if d.HasChange(vdiSchemaShared) {
