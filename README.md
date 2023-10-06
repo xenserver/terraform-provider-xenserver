@@ -3,6 +3,8 @@
 
 # Terraform Provider for XenServer
 
+**You can now create a VM on XenServer 8!**
+
 ## How to Build and Use
 
 1. To compile the provider, clone this repository and run the following command from the repository root:
@@ -38,8 +40,6 @@ required_providers {
 This repository was forked from [terra-farm/terraform-provider-xenserver](https://github.com/terra-farm/terraform-provider-xenserver) on 2nd June 2023 after ownership was transferred to XenServer. Many thanks to the original creators in the [terra-farm](https://github.com/terra-farm) project and their community for working on this.
 
 ---
-
-NOTE: This has been updated to work with Terraform v.0.12.x
 
 Website: [Xenserver Provider](https://terra-farm.github.io/provider-xenserver/)
 
