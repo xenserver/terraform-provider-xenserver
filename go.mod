@@ -1,4 +1,4 @@
-module github.com/terra-farm/terraform-provider-xenserver
+module github.com/xenserver/terraform-provider-xenserver
 
 go 1.16
 
@@ -31,7 +31,7 @@ require (
 	github.com/mitchellh/mapstructure v1.4.2 // indirect
 	github.com/oklog/run v1.1.0 // indirect
 	github.com/posener/complete v1.2.3 // indirect
-	github.com/terra-farm/go-xen-api-client v0.0.2
+	github.com/sarah-soo/go-xen-api-client v1.0.0
 	github.com/ulikunitz/xz v0.5.10 // indirect
 	github.com/vmihailenco/tagparser v0.1.2 // indirect
 	github.com/zclconf/go-cty v1.10.0 // indirect

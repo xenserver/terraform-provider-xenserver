@@ -1,7 +1,7 @@
 package xenserver
 
 import (
-	xenapi "github.com/terra-farm/go-xen-api-client"
+	xenapi "github.com/sarah-soo/go-xen-api-client"
 )
 
 // Config ...
