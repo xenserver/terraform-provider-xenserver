@@ -1,4 +1,3 @@
-
 # xenserver_vm
 
 Provides a XenServer virtual machine resource. This can be used to create, modify, and delete virtual machines.
@@ -8,11 +7,11 @@ Provides a XenServer virtual machine resource. This can be used to create, modif
 resource "xenserver_vm" "vm_example" {
   base_template_name = "vm-template"
   name_label         = "vm-example"
-  static_mem_min  = 8589934592
-  static_mem_max  = 8589934592
-  dynamic_mem_min = 8589934592
-  dynamic_mem_max = 8589934592
-  vcpus           = 1
+  static_mem_min     = 8589934592 # 2 GB
+  static_mem_max     = 8589934592
+  dynamic_mem_min    = 8589934592
+  dynamic_mem_max    = 8589934592
+  vcpus              = 1
 
   hard_drive {
     is_from_template = true
@@ -21,7 +20,7 @@ resource "xenserver_vm" "vm_example" {
 
   cdrom {
     is_from_template = true
-    user_device      = "3"
+    user_device      = "0"
   }
 }
 ```
@@ -67,9 +66,9 @@ The `hard_drive` block supports:
 
 The `network_interface` block supports:
 
-* `network_uuid` - () The UUID of the virtual network interface.
-* `mtu` - () The maximum transmission unit in octets.
-* `device` - () The order in which VIF backends are created.
+* `network_uuid` - (?) The UUID of the virtual network interface.
+* `mtu` - (?) The maximum transmission unit in octets.
+* `device` - (?) The order in which VIF backends are created.
 
 ---
 
