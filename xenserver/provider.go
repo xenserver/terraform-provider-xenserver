@@ -192,10 +192,9 @@ func (p *Provider) Resources(_ context.Context) []func() resource.Resource {
 }
 
 func (p *Provider) DataSources(_ context.Context) []func() datasource.DataSource {
-	return nil
-	// return []func() datasource.DataSource{
-	// 	NewPIFDataSource,
-	// }
+	return []func() datasource.DataSource{
+		NewPIFDataSource,
+	}
 }
 
 func (p *Provider) Functions(_ context.Context) []func() function.Function {
