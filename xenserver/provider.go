@@ -185,10 +185,10 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 }
 
 func (p *Provider) Resources(_ context.Context) []func() resource.Resource {
-	return nil
-	// return []func() resource.Resource{
-	// 	NewVMResource,
-	// }
+	// return nil
+	return []func() resource.Resource{
+		NewVMResource,
+	}
 }
 
 func (p *Provider) DataSources(_ context.Context) []func() datasource.DataSource {
