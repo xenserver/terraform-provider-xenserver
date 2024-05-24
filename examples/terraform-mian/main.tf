@@ -20,3 +20,15 @@ data "xenserver_pif" "pif_data" {
 output "pif_data_out" {
   value = data.xenserver_pif.pif_data
 }
+
+resource "xenserver_vm" "vm" {
+  name_label    = "Test Centos Vm"
+  template_name = "CentOS 7"
+  other_config = {
+    flag = "1"
+  }
+}
+
+output "vm_out" {
+  value = xenserver_vm.vm
+}
