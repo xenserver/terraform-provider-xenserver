@@ -1,70 +1,206 @@
 package xenserver
 
 import (
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/terraform"
+	"context"
+	"os"
+
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/function"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/provider"
+	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
+
+	"xenapi"
 )
 
-// Provider ...
-func Provider() terraform.ResourceProvider {
-	return &schema.Provider{
-		Schema: map[string]*schema.Schema{
-			"url": &schema.Schema{
-				Type:        schema.TypeString,
-				Optional:    true,
-				Default:     "",
-				Description: descriptions["url"],
-			},
+// Ensure Provider satisfies various provider interfaces.
+var _ provider.Provider = &Provider{}
+var _ provider.ProviderWithFunctions = &Provider{}
 
-			"username": &schema.Schema{
-				Type:        schema.TypeString,
-				Optional:    true,
-				Default:     "",
-				Description: descriptions["username"],
-			},
+// Provider defines the provider implementation.
+type Provider struct {
+	// version is set to the provider version on release, "dev" when the
+	// provider is built and ran locally, and "test" when running acceptance
+	// testing.
+	version string
+}
 
-			"password": &schema.Schema{
-				Type:        schema.TypeString,
-				Optional:    true,
-				Default:     "",
-				Description: descriptions["password"],
-			},
-		},
-
-		DataSourcesMap: map[string]*schema.Resource{
-			"xenserver_pif":  dataSourceXenServerPif(),
-			"xenserver_pifs": dataSourceXenServerPifs(),
-			"xenserver_sr":   dataSourceXenServerSR(),
-		},
-
-		ResourcesMap: map[string]*schema.Resource{
-			"xenserver_vm":      resourceVM(),
-			"xenserver_vdi":     resourceVDI(),
-			"xenserver_network": resourceNetwork(),
-		},
-
-		ConfigureFunc: providerConfigure,
+func New(version string) func() provider.Provider {
+	return func() provider.Provider {
+		return &Provider{
+			version: version,
+		}
 	}
 }
 
-var descriptions map[string]string
+// ProviderModel describes the provider data model.
+type ProviderModel struct {
+	Host     types.String `tfsdk:"host"`
+	Username types.String `tfsdk:"username"`
+	Password types.String `tfsdk:"password"`
+}
 
-func init() {
-	descriptions = map[string]string{
-		"url": "The URL to the XenAPI endpoint, typically \"https://<XenServer Management IP>\"",
+func (p *Provider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
+	resp.TypeName = "xenserver"
+	resp.Version = p.version
+}
 
-		"username": "The username to use to authenticate to XenServer",
-
-		"password": "The password to use to authenticate to XenServer",
+func (p *Provider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"host": schema.StringAttribute{
+				MarkdownDescription: "The URL of target Xenserver host",
+				Required:            true,
+			},
+			"username": schema.StringAttribute{
+				MarkdownDescription: "The user name of target Xenserver host",
+				Required:            true,
+			},
+			"password": schema.StringAttribute{
+				MarkdownDescription: "The password of target Xenserver host",
+				Required:            true,
+				Sensitive:           true,
+			},
+		},
 	}
 }
 
-func providerConfigure(d *schema.ResourceData) (interface{}, error) {
-	config := Config{
-		URL:      d.Get("url").(string),
-		Username: d.Get("username").(string),
-		Password: d.Get("password").(string),
+func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
+	tflog.Debug(ctx, "Configuring XenServer Client")
+	var data ProviderModel
+
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
-	return config.NewConnection()
+	// If practitioner provided a configuration value for any of the
+	// attributes, it must be a known value.
+
+	if data.Host.IsUnknown() {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("host"),
+			"Unknown XenServer API Host",
+			"The provider cannot create the XenServer API client as there is an unknown configuration value for the XenServer API host. "+
+				"Either target apply the source of the value first, set the value statically in the configuration, or use the XENSERVER_HOST environment variable.",
+		)
+	}
+	if data.Username.IsUnknown() {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("username"),
+			"Unknown XenServer API Username",
+			"The provider cannot create the XenServer API client as there is an unknown configuration value for the XenServer API username. "+
+				"Either target apply the source of the value first, set the value statically in the configuration, or use the XENSERVER_USERNAME environment variable.",
+		)
+	}
+	if data.Password.IsUnknown() {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("password"),
+			"Unknown XenServer API Password",
+			"The provider cannot create the XenServer API client as there is an unknown configuration value for the XenServer API password. "+
+				"Either target apply the source of the value first, set the value statically in the configuration, or use the XENSERVER_PASSWORD environment variable.",
+		)
+	}
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	host := os.Getenv("XENSERVER_HOST")
+	username := os.Getenv("XENSERVER_USERNAME")
+	password := os.Getenv("XENSERVER_PASSWORD")
+
+	if !data.Host.IsNull() {
+		host = data.Host.ValueString()
+	}
+	if !data.Username.IsNull() {
+		username = data.Username.ValueString()
+	}
+	if !data.Password.IsNull() {
+		password = data.Password.ValueString()
+	}
+
+	// If any of the expected configurations are missing, return
+	// errors with provider-specific guidance.
+
+	if host == "" {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("host"),
+			"Missing XenServer API Host",
+			"The provider cannot create the XenServer API client as there is a missing or empty value for the XenServer API host. "+
+				"Set the host value in the configuration or use the XENSERVER_HOST environment variable. "+
+				"If either is already set, ensure the value is not empty.",
+		)
+	}
+	if username == "" {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("username"),
+			"Missing XenServer API Username",
+			"The provider cannot create the XenServer API client as there is a missing or empty value for the XenServer API username. "+
+				"Set the username value in the configuration or use the XENSERVER_USERNAME environment variable. "+
+				"If either is already set, ensure the value is not empty.",
+		)
+	}
+	if password == "" {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("password"),
+			"Missing XenServer API Password",
+			"The provider cannot create the XenServer API client as there is a missing or empty value for the XenServer API password. "+
+				"Set the password value in the configuration or use the XENSERVER_PASSWORD environment variable. "+
+				"If either is already set, ensure the value is not empty.",
+		)
+	}
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	ctx = tflog.SetField(ctx, "host", host)
+	ctx = tflog.SetField(ctx, "username", username)
+	ctx = tflog.SetField(ctx, "password", password)
+	ctx = tflog.MaskFieldValuesWithFieldKeys(ctx, "password")
+	tflog.Debug(ctx, "Creating XenServer API session")
+
+	session := xenapi.NewSession(&xenapi.ClientOpts{
+		URL: host,
+		Headers: map[string]string{
+			"User-Agent": "XS SDK for Go v1.0",
+		},
+	})
+	_, err := session.LoginWithPassword(username, password, "1.0", "terraform provider")
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to Create XENSERVER API Client",
+			"An unexpected error occurred when creating the XENSERVER API client. "+
+				"If the error is not clear, please contact the provider developers.\n\n"+
+				"XENSERVER client Error: "+err.Error(),
+		)
+		return
+	}
+	tflog.Debug(ctx, "api version: "+session.APIVersion.String())
+	tflog.Debug(ctx, "xapi rpm version: "+session.XAPIVersion)
+	resp.DataSourceData = session
+	resp.ResourceData = session
+}
+
+func (p *Provider) Resources(_ context.Context) []func() resource.Resource {
+	return nil
+	// return []func() resource.Resource{
+	// 	NewVMResource,
+	// }
+}
+
+func (p *Provider) DataSources(_ context.Context) []func() datasource.DataSource {
+	return nil
+	// return []func() datasource.DataSource{
+	// 	NewPIFDataSource,
+	// }
+}
+
+func (p *Provider) Functions(_ context.Context) []func() function.Function {
+	return nil
+	// return []func() function.Function{
+	// 	NewExampleFunction,
+	// }
 }
