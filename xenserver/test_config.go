@@ -7,7 +7,7 @@ import (
 
 var (
 	providerConfig = fmt.Sprintf(`
-  provider "xenserver" {
+provider "xenserver" {
 	host     = "%s"
 	username = "%s"
 	password = "%s"

@@ -24,6 +24,7 @@ website/node_modules
 *.iml
 *.test
 *.iml
+*.env
 
 website/vendor
 
@@ -38,4 +39,4 @@ website/vendor
 
 # SDK folder
 goSDK/*
-.env
+
