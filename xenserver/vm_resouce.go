@@ -108,7 +108,7 @@ func (r *VMResource) Configure(_ context.Context, req resource.ConfigureRequest,
 	r.session = session
 }
 
-// Read data from Plan, create resouce, get data from new source, set to State
+// Read data from Plan, create resource, get data from new source, set to State
 // terraform plan/apply
 func (r *VMResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var data VMResourceModel
@@ -332,7 +332,7 @@ func (r *VMResource) Delete(ctx context.Context, req resource.DeleteRequest, res
 	}
 }
 
-// Import existing resouece with id, call Read()
+// Import existing resource with id, call Read()
 // terraform import
 func (r *VMResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)

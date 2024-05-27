@@ -1,3 +1,7 @@
+locals {
+  env_vars = { for tuple in regexall("export\\s*(\\S*)\\s*=\\s*(\\S*)\\s*", file("../../.env")) : tuple[0] => tuple[1] }
+}
+
 terraform {
   required_providers {
     xenserver = {
@@ -7,9 +11,9 @@ terraform {
 }
 
 provider "xenserver" {
-  host     = "https://10.70.40.100"
-  username = "root"
-  password = "BOfpcNyZ5cMe"
+  host     = local.env_vars["XENSERVER_HOST"]
+  username = local.env_vars["XENSERVER_USERNAME"]
+  password = local.env_vars["XENSERVER_PASSWORD"]
 }
 
 data "xenserver_pif" "pif_data" {
@@ -22,7 +26,7 @@ output "pif_data_out" {
 }
 
 resource "xenserver_vm" "vm" {
-  name_label    = "Test Centos Vm"
+  name_label    = "Test CentOS VM"
   template_name = "CentOS 7"
   other_config = {
     flag = "1"

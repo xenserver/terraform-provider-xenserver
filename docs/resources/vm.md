@@ -48,5 +48,5 @@ output "vm_out" {
 Import is supported using the following syntax:
 
 ```shell
-terraform import xenserver_vm.vm1 "fa4a1711-fa0d-bfee-25c4-87ba3186c0c1"
+terraform import xenserver_vm.vm <xenserver_vm.vm.id>
 ```
