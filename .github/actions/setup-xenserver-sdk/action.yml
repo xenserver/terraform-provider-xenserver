@@ -1,0 +1,16 @@
+name: "Setup XenServer SDK"
+description: "Downloads and extracts XenServer SDK"
+inputs:
+  XENSERVER_SDK_URL:
+    description: "The URL of the XenServer SDK"
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - run: |
+        curl -L ${{ inputs.XENSERVER_SDK_URL }} -o xenserver-sdk.zip
+        unzip xenserver-sdk.zip
+        mkdir -p goSDK
+        mv XenServer-SDK*/XenServerGo/src/* goSDK/
+        rm -rf XenServer-SDK* xenserver-sdk.zip
+      shell: bash
