@@ -7,10 +7,12 @@ on:
   pull_request:
     paths-ignore:
       - "README.md"
+      - "DEVELOP.md"
       - "LICENSE.md"
   push:
     paths-ignore:
       - "README.md"
+      - "DEVELOP.md"
       - "LICENSE.md"
 
 # Testing only needs permissions to read the repository contents.
