@@ -37,7 +37,7 @@ To compile the provider, run `"go install"`. This will build the provider and pu
 
 ### Document
 
-To generate or update documentation, run `go generate`.
+To generate or update documentation, run `go generate ./...`.
 
 ### Log
 
@@ -116,3 +116,11 @@ gofmt -w -l xenserver/*.go
 sudo docker run -it -v $(pwd):/app -w /app golangci/golangci-lint bash
 golangci-lint run --config=/app/.golangci.yml
 ```
+
+## Contributing
+
+See [DEVELOP.md](DEVELOP.md)
+
+## License
+
+See [LICENSE.md](LICENSE.md)
