@@ -49,7 +49,7 @@ golangci-lint run --config=/app/.golangci.yml
 
 3. Add new component configuration under `/examples/terraform-main/main.tf`, and run some manual tests(see [Prepare Terraform for local provider install](README.md)).
 
-*Note:* Before run tests, there should be a set up XenServer instance.
+*Note:* Before running tests, the XenServer instance should be properly set up.
 
 ### Name rules
 
@@ -85,7 +85,7 @@ it as another remote "github-fork" to local repository.
 Steps:
 
 1. Push commit to `github-fork` and raise PR from `github-fork` to [terraform-provider-xenserver](https://github.com/xenserver/terraform-provider-xenserver), the PR should contains the messages of acceptance tests result.
-2. Contact the repository owner to help trigger the XenRT tests.
+2. Contact the repository owner to help trigger the internal tests.
 4. 2 approves needed before merger PR.
 
 ## Version Control
