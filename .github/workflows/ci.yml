@@ -1,0 +1,65 @@
+# Terraform Provider CI workflow.
+name: Continuous Integration
+
+# This GitHub action runs your tests for each pull request and push.
+# Optionally, you can turn it on using a schedule for regular testing.
+on:
+  pull_request:
+    paths-ignore:
+      - "README.md"
+      - "LICENSE.md"
+  push:
+    paths-ignore:
+      - "README.md"
+      - "LICENSE.md"
+
+# Testing only needs permissions to read the repository contents.
+permissions:
+  contents: read
+
+jobs:
+  # Ensure project builds before running testing matrix
+  scan:
+    name: Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+          go-version: "1.22.0"
+          cache: true
+      - name: Download and extract XenServer SDK
+        uses: ./.github/actions/setup-xenserver-sdk
+        with:
+          XENSERVER_SDK_URL: ${{ vars.XENSERVER_SDK_URL }}
+      - name: Run linters
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+          go-version: "1.22.0"
+          cache: true
+      - name: Download and extract XenServer SDK
+        uses: ./.github/actions/setup-xenserver-sdk
+        with:
+          XENSERVER_SDK_URL: ${{ vars.XENSERVER_SDK_URL }}
+      - run: go mod download
+      - run: go build -v .
+      - run: go generate ./...
+      - name: git diff
+        run: |
+          git diff --compact-summary --exit-code || \
+            (echo; echo "Unexpected difference in directories after code generation. Run 'go generate ./...' command and commit."; exit 1)
+  # TODO:
+  # As the UT now using un-mocked XenAPI, so skip the UT in CI for now.
+  # test:

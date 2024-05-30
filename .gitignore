@@ -38,5 +38,5 @@ website/vendor
 .vscode/
 
 # SDK folder
-goSDK/*
+goSDK
 
