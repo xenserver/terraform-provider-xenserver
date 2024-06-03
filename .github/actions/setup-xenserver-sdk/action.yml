@@ -7,10 +7,31 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - run: |
-        curl -L ${{ inputs.XENSERVER_SDK_URL }} -o xenserver-sdk.zip
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: "3.x"
+
+    - name: Install python dependencies
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install beautifulsoup4 requests
+
+    - name: extract xensdk version
+      id: extract-xensdk-version
+      shell: bash
+      run: python .github/actions/setup-xenserver-sdk/extract_sdk_version.py
+
+    - name: Download and extract SDK
+      shell: bash
+      run: |
+        url=${{ inputs.XENSERVER_SDK_URL }}
+        if [ -z "$url" ]; then
+          url=${{ steps.extract-xensdk-version.outputs.XENSERVER_SDK_URL }}
+        fi
+        curl -L $url -o xenserver-sdk.zip
         unzip xenserver-sdk.zip
         mkdir -p goSDK
         mv XenServer-SDK*/XenServerGo/src/* goSDK/
         rm -rf XenServer-SDK* xenserver-sdk.zip
-      shell: bash
