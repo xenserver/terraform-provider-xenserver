@@ -35,3 +35,11 @@ resource "xenserver_vm" "test_vm" {
 }
 `, name_label)
 }
+
+func testAccSRDataSourceConfig(name_label string) string {
+	return fmt.Sprintf(`
+data "xenserver_sr" "test_sr_data" {
+	name_label = "%s"
+}
+`, name_label)
+}

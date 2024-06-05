@@ -194,6 +194,7 @@ func (p *Provider) Resources(_ context.Context) []func() resource.Resource {
 func (p *Provider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		NewPIFDataSource,
+		NewSRDataSource,
 	}
 }
 
