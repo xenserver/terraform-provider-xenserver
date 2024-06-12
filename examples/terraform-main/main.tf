@@ -44,3 +44,14 @@ data "xenserver_sr" "sr" {
 output "local_storage_output" {
   value = data.xenserver_sr.sr.data_items
 }
+resource "xenserver_network" "network" {
+  name_label       = "Network Object on Pool"
+  name_description = "VM and Host objects that are attached to the Network object"
+  mtu              = 1500
+  // managed = true // This can be set on create and can't be updated
+  other_config = {}
+}
+
+output "network_out" {
+  value = xenserver_network.network.id
+}
