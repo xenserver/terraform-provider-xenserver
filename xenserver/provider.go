@@ -17,11 +17,11 @@ import (
 )
 
 // Ensure Provider satisfies various provider interfaces.
-var _ provider.Provider = &Provider{}
-var _ provider.ProviderWithFunctions = &Provider{}
+var _ provider.Provider = &xsProvider{}
+var _ provider.ProviderWithFunctions = &xsProvider{}
 
-// Provider defines the provider implementation.
-type Provider struct {
+// xsProvider defines the provider implementation.
+type xsProvider struct {
 	// version is set to the provider version on release, "dev" when the
 	// provider is built and ran locally, and "test" when running acceptance
 	// testing.
@@ -30,25 +30,25 @@ type Provider struct {
 
 func New(version string) func() provider.Provider {
 	return func() provider.Provider {
-		return &Provider{
+		return &xsProvider{
 			version: version,
 		}
 	}
 }
 
-// ProviderModel describes the provider data model.
-type ProviderModel struct {
+// providerModel describes the provider data model.
+type providerModel struct {
 	Host     types.String `tfsdk:"host"`
 	Username types.String `tfsdk:"username"`
 	Password types.String `tfsdk:"password"`
 }
 
-func (p *Provider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
+func (p *xsProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
 	resp.TypeName = "xenserver"
 	resp.Version = p.version
 }
 
-func (p *Provider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
+func (p *xsProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
 			"host": schema.StringAttribute{
@@ -68,9 +68,9 @@ func (p *Provider) Schema(_ context.Context, _ provider.SchemaRequest, resp *pro
 	}
 }
 
-func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
+func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	tflog.Debug(ctx, "Configuring XenServer Client")
-	var data ProviderModel
+	var data providerModel
 
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -171,34 +171,32 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 	_, err := session.LoginWithPassword(username, password, "1.0", "terraform provider")
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to Create XENSERVER API Client",
+			"Unable to create XENSERVER API client",
 			"An unexpected error occurred when creating the XENSERVER API client. "+
 				"If the error is not clear, please contact the provider developers.\n\n"+
 				"XENSERVER client Error: "+err.Error(),
 		)
 		return
 	}
-	tflog.Debug(ctx, "api version: "+session.APIVersion.String())
-	tflog.Debug(ctx, "xapi rpm version: "+session.XAPIVersion)
+
 	resp.DataSourceData = session
 	resp.ResourceData = session
 }
 
-func (p *Provider) Resources(_ context.Context) []func() resource.Resource {
-	// return nil
+func (p *xsProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewVMResource,
 	}
 }
 
-func (p *Provider) DataSources(_ context.Context) []func() datasource.DataSource {
+func (p *xsProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		NewPIFDataSource,
 		NewSRDataSource,
 	}
 }
 
-func (p *Provider) Functions(_ context.Context) []func() function.Function {
+func (p *xsProvider) Functions(_ context.Context) []func() function.Function {
 	return nil
 	// return []func() function.Function{
 	// 	NewExampleFunction,

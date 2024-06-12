@@ -11,7 +11,16 @@ import (
 	"xenapi"
 )
 
-func GetFirstTemplate(session *xenapi.Session, templateName string) (xenapi.VMRef, error) {
+// vmResourceModel describes the resource data model.
+type vmResourceModel struct {
+	NameLabel    types.String `tfsdk:"name_label"`
+	TemplateName types.String `tfsdk:"template_name"`
+	OtherConfig  types.Map    `tfsdk:"other_config"`
+	Snapshots    types.List   `tfsdk:"snapshots"`
+	UUID         types.String `tfsdk:"id"`
+}
+
+func getFirstTemplate(session *xenapi.Session, templateName string) (xenapi.VMRef, error) {
 	records, err := xenapi.VM.GetAllRecords(session)
 	if err != nil {
 		return "", errors.New(err.Error())
@@ -22,45 +31,45 @@ func GetFirstTemplate(session *xenapi.Session, templateName string) (xenapi.VMRe
 			return ref, nil
 		}
 	}
-	return "", errors.New("no VM template found")
+	return "", errors.New("unable to find VM template ref")
 }
 
-// Get VMResourceModel OtherConfig base on data
-func GetVMOtherConfig(ctx context.Context, data VMResourceModel) (map[string]string, error) {
+// Get vmResourceModel OtherConfig base on data
+func getVMOtherConfig(ctx context.Context, data vmResourceModel) (map[string]string, error) {
 	otherConfig := make(map[string]string)
 	if !data.OtherConfig.IsNull() {
 		diags := data.OtherConfig.ElementsAs(ctx, &otherConfig, false)
 		if diags.HasError() {
-			return nil, errors.New("error accessing vm other_config")
+			return nil, errors.New("unable to read VM other config")
 		}
 	}
 	otherConfig["template_name"] = data.TemplateName.ValueString()
 	return otherConfig, nil
 }
 
-// Update VMResourceModel base on new vmRecord, except uuid
-func UpdateVMResourceModel(ctx context.Context, vmRecord xenapi.VMRecord, data *VMResourceModel) error {
+// Update vmResourceModel base on new vmRecord, except uuid
+func updateVMResourceModel(ctx context.Context, vmRecord xenapi.VMRecord, data *vmResourceModel) error {
 	data.NameLabel = types.StringValue(vmRecord.NameLabel)
 	data.TemplateName = types.StringValue(vmRecord.OtherConfig["template_name"])
 	var diags diag.Diagnostics
 	delete(vmRecord.OtherConfig, "template_name")
 	data.OtherConfig, diags = types.MapValueFrom(ctx, types.StringType, vmRecord.OtherConfig)
 	if diags.HasError() {
-		return errors.New("error update data for vm other_config")
+		return errors.New("unable to read VM other config")
 	}
-	err := UpdateVMResourceModelComputed(ctx, vmRecord, data)
+	err := updateVMResourceModelComputed(ctx, vmRecord, data)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-// Update VMResourceModel computed field base on new vmRecord, except uuid
-func UpdateVMResourceModelComputed(ctx context.Context, vmRecord xenapi.VMRecord, data *VMResourceModel) error {
+// Update vmResourceModel computed field base on new vmRecord, except uuid
+func updateVMResourceModelComputed(ctx context.Context, vmRecord xenapi.VMRecord, data *vmResourceModel) error {
 	var diags diag.Diagnostics
 	data.Snapshots, diags = types.ListValueFrom(ctx, types.StringType, vmRecord.Snapshots)
 	if diags.HasError() {
-		return errors.New("error update data for vm snaphots")
+		return errors.New("unable to read VM snapshots")
 	}
 	return nil
 }

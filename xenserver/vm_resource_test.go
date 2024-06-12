@@ -1,10 +1,23 @@
 package xenserver
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
+
+func testAccVMResourceConfig(name_label string) string {
+	return fmt.Sprintf(`
+resource "xenserver_vm" "test_vm" {
+	name_label = "%s"
+	template_name = "CentOS 7"
+	other_config = {
+		flag = "1"
+	}
+}
+`, name_label)
+}
 
 func TestAccVMResource(t *testing.T) {
 	resource.Test(t, resource.TestCase{

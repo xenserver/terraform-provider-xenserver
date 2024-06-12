@@ -16,34 +16,27 @@ import (
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ datasource.DataSource              = &PIFDataSource{}
-	_ datasource.DataSourceWithConfigure = &PIFDataSource{}
+	_ datasource.DataSource              = &pifDataSource{}
+	_ datasource.DataSourceWithConfigure = &pifDataSource{}
 )
 
 // NewPIFDataSource is a helper function to simplify the provider implementation.
 func NewPIFDataSource() datasource.DataSource {
-	return &PIFDataSource{}
+	return &pifDataSource{}
 }
 
-// PIFDataSource is the data source implementation.
-type PIFDataSource struct {
+// pifDataSource is the data source implementation.
+type pifDataSource struct {
 	session *xenapi.Session
 }
 
-// PIFDataSourceModel describes the data source data model.
-type PIFDataSourceModel struct {
-	Device     types.String `tfsdk:"device"`
-	Management types.Bool   `tfsdk:"management"`
-	Network    types.String `tfsdk:"network"`
-}
-
 // Metadata returns the data source type name.
-func (d *PIFDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
+func (d *pifDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_pif"
 }
 
 // Schema defines the schema for the data source.
-func (d *PIFDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
+func (d *pifDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		// This description is used by the documentation generator and the language server.
 		MarkdownDescription: "PIF data source",
@@ -65,7 +58,7 @@ func (d *PIFDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, re
 	}
 }
 
-func (d *PIFDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
+func (d *pifDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
 	}
@@ -81,8 +74,8 @@ func (d *PIFDataSource) Configure(_ context.Context, req datasource.ConfigureReq
 }
 
 // Read refreshes the Terraform state with the latest data.
-func (d *PIFDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	var data PIFDataSourceModel
+func (d *pifDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
+	var data pifDataSourceModel
 
 	// Read Terraform configuration data into the model
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)

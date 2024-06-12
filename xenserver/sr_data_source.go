@@ -6,7 +6,6 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"xenapi"
@@ -14,58 +13,27 @@ import (
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ datasource.DataSource              = &SRDataSource{}
-	_ datasource.DataSourceWithConfigure = &SRDataSource{}
+	_ datasource.DataSource              = &srDataSource{}
+	_ datasource.DataSourceWithConfigure = &srDataSource{}
 )
 
 // NewSRDataSource is a helper function to simplify the provider implementation.
 func NewSRDataSource() datasource.DataSource {
-	return &SRDataSource{}
+	return &srDataSource{}
 }
 
-// SRDataSource is the data source implementation.
-type SRDataSource struct {
+// srDataSource is the data source implementation.
+type srDataSource struct {
 	session *xenapi.Session
 }
 
-// SRDataSourceModel describes the data source data model.
-type SRDataSourceModel struct {
-	NameLabel types.String   `tfsdk:"name_label"`
-	UUID      types.String   `tfsdk:"uuid"`
-	DataItems []SRRecordData `tfsdk:"data_items"`
-}
-
-type SRRecordData struct {
-	UUID                types.String `tfsdk:"uuid"`
-	NameLabel           types.String `tfsdk:"name_label"`
-	NameDescription     types.String `tfsdk:"name_description"`
-	AllowedOperations   types.List   `tfsdk:"allowed_operations"`
-	CurrentOperations   types.Map    `tfsdk:"current_operations"`
-	VDIs                types.List   `tfsdk:"vdis"`
-	PBDs                types.List   `tfsdk:"pbds"`
-	VirtualAllocation   types.Int64  `tfsdk:"virtual_allocation"`
-	PhysicalUtilisation types.Int64  `tfsdk:"physical_utilisation"`
-	PhysicalSize        types.Int64  `tfsdk:"physical_size"`
-	Type                types.String `tfsdk:"type"`
-	ContentType         types.String `tfsdk:"content_type"`
-	Shared              types.Bool   `tfsdk:"shared"`
-	OtherConfig         types.Map    `tfsdk:"other_config"`
-	Tags                types.List   `tfsdk:"tags"`
-	SmConfig            types.Map    `tfsdk:"sm_config"`
-	Blobs               types.Map    `tfsdk:"blobs"`
-	LocalCacheEnabled   types.Bool   `tfsdk:"local_cache_enabled"`
-	IntroducedBy        types.String `tfsdk:"introduced_by"`
-	Clustered           types.Bool   `tfsdk:"clustered"`
-	IsToolsSr           types.Bool   `tfsdk:"is_tools_sr"`
-}
-
 // Metadata returns the data source type name.
-func (d *SRDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
+func (d *srDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_sr"
 }
 
 // Schema defines the schema for the data source.
-func (d *SRDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
+func (d *srDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "The data source of XenServer storage repository",
 
@@ -182,7 +150,7 @@ func (d *SRDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, res
 	}
 }
 
-func (d *SRDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
+func (d *srDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
 	}
@@ -198,8 +166,8 @@ func (d *SRDataSource) Configure(_ context.Context, req datasource.ConfigureRequ
 }
 
 // Read refreshes the Terraform state with the latest data.
-func (d *SRDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	var data SRDataSourceModel
+func (d *srDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
+	var data srDataSourceModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -214,8 +182,8 @@ func (d *SRDataSource) Read(ctx context.Context, req datasource.ReadRequest, res
 		return
 	}
 
-	var srItems []SRRecordData
-	var diags diag.Diagnostics
+	var srItems []srRecordData
+
 	for _, srRecord := range srRecords {
 		if !data.NameLabel.IsNull() && srRecord.NameLabel != data.NameLabel.ValueString() {
 			continue
@@ -223,85 +191,16 @@ func (d *SRDataSource) Read(ctx context.Context, req datasource.ReadRequest, res
 		if !data.UUID.IsNull() && srRecord.UUID != data.UUID.ValueString() {
 			continue
 		}
-		var srData SRRecordData
-		srData.UUID = types.StringValue(srRecord.UUID)
-		srData.NameLabel = types.StringValue(srRecord.NameLabel)
-		srData.NameDescription = types.StringValue(srRecord.NameDescription)
-		srData.AllowedOperations, diags = types.ListValueFrom(ctx, types.StringType, srRecord.AllowedOperations)
-		if diags.HasError() {
-			resp.Diagnostics.AddError(
-				"Unable to read SR allowed operations",
-				err.Error(),
-			)
-			return
-		}
-		srData.CurrentOperations, diags = types.MapValueFrom(ctx, types.StringType, srRecord.CurrentOperations)
-		if diags.HasError() {
-			resp.Diagnostics.AddError(
-				"Unable to read SR current operations",
-				err.Error(),
-			)
-			return
-		}
-		srData.VDIs, diags = types.ListValueFrom(ctx, types.StringType, srRecord.VDIs)
-		if diags.HasError() {
-			resp.Diagnostics.AddError(
-				"Unable to read SR VDIs",
-				err.Error(),
-			)
-			return
-		}
-		srData.PBDs, diags = types.ListValueFrom(ctx, types.StringType, srRecord.PBDs)
-		if diags.HasError() {
-			resp.Diagnostics.AddError(
-				"Unable to read SR PBDs",
-				err.Error(),
-			)
-			return
-		}
-		srData.VirtualAllocation = types.Int64Value(int64(srRecord.VirtualAllocation))
-		srData.PhysicalUtilisation = types.Int64Value(int64(srRecord.PhysicalUtilisation))
-		srData.PhysicalSize = types.Int64Value(int64(srRecord.PhysicalSize))
-		srData.Type = types.StringValue(srRecord.Type)
-		srData.ContentType = types.StringValue(srRecord.ContentType)
-		srData.Shared = types.BoolValue(srRecord.Shared)
-		srData.OtherConfig, diags = types.MapValueFrom(ctx, types.StringType, srRecord.OtherConfig)
-		if diags.HasError() {
-			resp.Diagnostics.AddError(
-				"Unable to read SR other config",
-				err.Error(),
-			)
-			return
-		}
-		srData.Tags, diags = types.ListValueFrom(ctx, types.StringType, srRecord.Tags)
-		if diags.HasError() {
-			resp.Diagnostics.AddError(
-				"Unable to Read SR Tags",
-				err.Error(),
-			)
-			return
-		}
-		srData.SmConfig, diags = types.MapValueFrom(ctx, types.StringType, srRecord.SmConfig)
-		if diags.HasError() {
-			resp.Diagnostics.AddError(
-				"Unable to read SR SM config",
-				err.Error(),
-			)
-			return
-		}
-		srData.Blobs, diags = types.MapValueFrom(ctx, types.StringType, srRecord.Blobs)
-		if diags.HasError() {
-			resp.Diagnostics.AddError(
-				"Unable to read SR Blobs",
-				err.Error(),
-			)
-			return
-		}
-		srData.LocalCacheEnabled = types.BoolValue(srRecord.LocalCacheEnabled)
-		srData.IntroducedBy = types.StringValue(string(srRecord.IntroducedBy))
-		srData.Clustered = types.BoolValue(srRecord.Clustered)
-		srData.IsToolsSr = types.BoolValue(srRecord.IsToolsSr)
 
+		var srData srRecordData
+		err = updateSRRecordData(ctx, srRecord, &srData)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Unable to update SR record data",
+				err.Error(),
+			)
+			return
+		}
 		srItems = append(srItems, srData)
 	}
 	data.DataItems = srItems
