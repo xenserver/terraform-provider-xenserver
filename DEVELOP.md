@@ -12,9 +12,11 @@ This is the best practice document for XenServer terraform provider development,
 
 2. For each new added component, add the according "NewXX" function into the return value of provider function `Resources`, `DataSources` or `Functions` under `xenserver/provider.go`.
 
-3. For each new added component, create an acceptance test file `<name>_<component_type>_test.go` under folder `xenserver/`. The test configuration can be written together under `xenserver/test.config.go`.
+3. For each new added component, create an acceptance test file `<name>_<component_type>_test.go` under folder `xenserver/`.
 
-4. For each new added component, requires to add an example for it under folder `examples/`.
+4. For each new added component, create a utils file `<name>_utils.go` under folder `xenserver/` to store the type definitions and common functions.
+
+5. For each new added component, requires to add an example for it under folder `examples/`.
 
 - `provider`
 
@@ -32,7 +34,7 @@ This is the best practice document for XenServer terraform provider development,
 
     create a file `function.tf` under folder `examples/functions/<function_name>/` to show how to use this function. 
 
-5. Generate new documents base on changes, run `go generate ./...`.
+6. Generate new documents base on changes, run `go generate ./...`.
 
 ### Local Checking and Testing
 
@@ -55,20 +57,24 @@ golangci-lint run --config=/app/.golangci.yml
 
 - component name, like resource, data-source, function, follow `xenserver_<name>`. eg.
 
-```shell
+```
 xenserver_vm
 ```
 
-- function name follow `Pascal`, eg.
+- function name and var name follow `Camel-Case`, eg.
 
-```shell
-func GetFirstTemplate(){}
+```
+func getFirstTemplate(){}
+var srRef string
 ```
 
-- var name follow `Camel-Case`, eg.
+- struct key follow `Pascal`, eg.
 
-```shell
-var dataState VMResourceModel
+```
+type vmResourceModel struct {
+	NameLabel    types.String `tfsdk:"name_label"`
+	TemplateName types.String `tfsdk:"template_name"``
+}
 ```
 
 ## Development Process For Community Contributors

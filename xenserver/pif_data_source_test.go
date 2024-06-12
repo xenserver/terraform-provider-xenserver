@@ -1,10 +1,20 @@
 package xenserver
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
+
+func testAccPifDataSourceConfig(device string) string {
+	return fmt.Sprintf(`
+data "xenserver_pif" "test_pif_data" {
+	device = "%s"
+	management = true
+}
+`, device)
+}
 
 func TestAccPifDataSource(t *testing.T) {
 	resource.Test(t, resource.TestCase{
