@@ -1,0 +1,1 @@
+terraform import xenserver_sr_nfs.nfs_test <xenserver_sr_nfs.nfs_test.id>

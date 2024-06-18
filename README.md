@@ -55,6 +55,8 @@ In order to run the full suite of acceptance tests, prepare a local `.env` file 
 export XENSERVER_HOST=https://<xenserver-host-ip>
 export XENSERVER_USERNAME=<username>
 export XENSERVER_PASSWORD=<password>
+export NFS_SERVER=<nfs-server-ip>
+export NFS_SERVER_PATH=<nfs-server-path>
 ```
 
 Run `"make testacc"`. *Note:* Acceptance tests create real resources, and often cost money to run.

@@ -3,6 +3,8 @@ package xenserver
 import (
 	"context"
 	"errors"
+	"reflect"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -88,5 +90,287 @@ func updateSRRecordData(ctx context.Context, record xenapi.SRRecord, data *srRec
 	data.IntroducedBy = types.StringValue(string(record.IntroducedBy))
 	data.Clustered = types.BoolValue(record.Clustered)
 	data.IsToolsSr = types.BoolValue(record.IsToolsSr)
+	return nil
+}
+
+type srCreateParams struct {
+	Host            xenapi.HostRef
+	DeviceConfig    map[string]string
+	PhysicalSize    int
+	NameLabel       string
+	NameDescription string
+	TypeKey         string
+	ContentType     string
+	Shared          bool
+	SmConfig        map[string]string
+}
+
+// srResourceModel describes the resource data model.
+type srResourceModel struct {
+	NameLabel       types.String `tfsdk:"name_label"`
+	NameDescription types.String `tfsdk:"name_description"`
+	Type            types.String `tfsdk:"type"`
+	ContentType     types.String `tfsdk:"content_type"`
+	Shared          types.Bool   `tfsdk:"shared"`
+	SmConfig        types.Map    `tfsdk:"sm_config"`
+	DeviceConfig    types.Map    `tfsdk:"device_config"`
+	Host            types.String `tfsdk:"host"`
+	UUID            types.String `tfsdk:"id"`
+}
+
+func getPoolCoordinateRef(session *xenapi.Session) (xenapi.HostRef, error) {
+	poolRefs, err := xenapi.Pool.GetAll(session)
+	if err != nil {
+		return xenapi.HostRef(""), errors.New(err.Error())
+	}
+	coordinateRef, err := xenapi.Pool.GetMaster(session, poolRefs[0])
+	if err != nil {
+		return coordinateRef, errors.New(err.Error())
+	}
+	return coordinateRef, nil
+}
+
+func getSRCreateParams(ctx context.Context, session *xenapi.Session, data srResourceModel) (srCreateParams, error) {
+	var params srCreateParams
+	params.NameLabel = data.NameLabel.ValueString()
+	params.NameDescription = data.NameDescription.ValueString()
+	params.TypeKey = data.Type.ValueString()
+	params.ContentType = data.ContentType.ValueString()
+	params.Shared = data.Shared.ValueBool()
+	var diags diag.Diagnostics
+	diags = data.DeviceConfig.ElementsAs(ctx, &params.DeviceConfig, false)
+	if diags.HasError() {
+		return params, errors.New("unable to access SR device config data")
+	}
+	diags = data.SmConfig.ElementsAs(ctx, &params.SmConfig, false)
+	if diags.HasError() {
+		return params, errors.New("unable to access SR SM config data")
+	}
+	coordinateRef, err := getPoolCoordinateRef(session)
+	if err != nil {
+		return params, err
+	}
+	params.Host = coordinateRef
+	if !data.Host.IsUnknown() {
+		hostRef, err := xenapi.Host.GetByUUID(session, data.Host.ValueString())
+		if err != nil {
+			return params, errors.New(err.Error())
+		}
+		if params.Shared && hostRef != params.Host {
+			return params, errors.New("shared SR can only created with coordinate host")
+		}
+		params.Host = hostRef
+	}
+
+	return params, nil
+}
+
+func getSRRecordAndPBDRecord(session *xenapi.Session, srRef xenapi.SRRef) (xenapi.SRRecord, xenapi.PBDRecord, error) {
+	srRecord, err := xenapi.SR.GetRecord(session, srRef)
+	if err != nil {
+		return xenapi.SRRecord{}, xenapi.PBDRecord{}, errors.New(err.Error())
+	}
+	pbdRecord, err := xenapi.PBD.GetRecord(session, srRecord.PBDs[0])
+	if err != nil {
+		return xenapi.SRRecord{}, xenapi.PBDRecord{}, errors.New(err.Error())
+	}
+	return srRecord, pbdRecord, nil
+}
+
+func updateSRResourceModel(ctx context.Context, session *xenapi.Session, srRecord xenapi.SRRecord, pbdRecord xenapi.PBDRecord, data *srResourceModel) error {
+	data.NameLabel = types.StringValue(srRecord.NameLabel)
+
+	return updateSRResourceModelComputed(ctx, session, srRecord, pbdRecord, data)
+}
+
+func updateSRResourceModelComputed(ctx context.Context, session *xenapi.Session, srRecord xenapi.SRRecord, pbdRecord xenapi.PBDRecord, data *srResourceModel) error {
+	data.UUID = types.StringValue(srRecord.UUID)
+	data.NameDescription = types.StringValue(srRecord.NameDescription)
+	data.Type = types.StringValue(srRecord.Type)
+	data.ContentType = types.StringValue(srRecord.ContentType)
+	data.Shared = types.BoolValue(srRecord.Shared)
+	var diags diag.Diagnostics
+	data.SmConfig, diags = types.MapValueFrom(ctx, types.StringType, srRecord.SmConfig)
+	if diags.HasError() {
+		return errors.New("unable to access SR SM config")
+	}
+	hostRef, err := getPoolCoordinateRef(session)
+	if err != nil {
+		return err
+	}
+	if !srRecord.Shared {
+		hostRef = pbdRecord.Host
+	}
+	hostUUID, err := xenapi.Host.GetUUID(session, hostRef)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	data.Host = types.StringValue(hostUUID)
+	data.DeviceConfig, diags = types.MapValueFrom(ctx, types.StringType, pbdRecord.DeviceConfig)
+	if diags.HasError() {
+		return errors.New("unable to access PBD device config")
+	}
+
+	return nil
+}
+
+func srResourceModelUpdateCheck(data srResourceModel, dataState srResourceModel) error {
+	if data.Shared != dataState.Shared {
+		return errors.New(`"shared" doesn't expected to be updated`)
+	}
+	if !data.Host.IsUnknown() && data.Host != dataState.Host {
+		return errors.New(`"host" doesn't expected to be updated`)
+	}
+	if !reflect.DeepEqual(data.DeviceConfig, dataState.DeviceConfig) {
+		return errors.New(`"device_config" doesn't expected to be updated`)
+	}
+	if data.Type != dataState.Type {
+		return errors.New(`"type" doesn't expected to be updated`)
+	}
+	if data.ContentType != dataState.ContentType {
+		return errors.New(`"content_type" doesn't expected to be updated`)
+	}
+	return nil
+}
+
+func srResourceModelUpdate(ctx context.Context, session *xenapi.Session, ref xenapi.SRRef, data srResourceModel) error {
+	err := xenapi.SR.SetNameLabel(session, ref, data.NameLabel.ValueString())
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	err = xenapi.SR.SetNameDescription(session, ref, data.NameDescription.ValueString())
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	var diags diag.Diagnostics
+	smConfig := make(map[string]string)
+	diags = data.SmConfig.ElementsAs(ctx, &smConfig, false)
+	if diags.HasError() {
+		return errors.New("unable to access SR SM config data")
+	}
+	err = xenapi.SR.SetSmConfig(session, ref, smConfig)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	return nil
+}
+
+func srDelete(session *xenapi.Session, srUUID string) error {
+	// unplug all PBDs on SR before destroying the SR
+	srRef, err := xenapi.SR.GetByUUID(session, srUUID)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	pbdRefs, err := xenapi.SR.GetPBDs(session, srRef)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	for _, pbdRef := range pbdRefs {
+		pbdRecord, err := xenapi.PBD.GetRecord(session, pbdRef)
+		if err != nil {
+			return errors.New(err.Error())
+		}
+		if pbdRecord.CurrentlyAttached {
+			err = xenapi.PBD.Unplug(session, pbdRef)
+			if err != nil {
+				return errors.New(err.Error())
+			}
+		}
+	}
+	err = xenapi.SR.Destroy(session, srRef)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	return nil
+}
+
+type nfsResourceModel struct {
+	NameLabel       types.String `tfsdk:"name_label"`
+	NameDescription types.String `tfsdk:"name_description"`
+	StorageLocation types.String `tfsdk:"storage_location"`
+	Version         types.String `tfsdk:"version"`
+	AdvancedOptions types.String `tfsdk:"advanced_options"`
+	UUID            types.String `tfsdk:"id"`
+}
+
+func getNFSCreateParams(session *xenapi.Session, data nfsResourceModel) (srCreateParams, error) {
+	var params srCreateParams
+	coordinateRef, err := getPoolCoordinateRef(session)
+	if err != nil {
+		return params, err
+	}
+	params.Host = coordinateRef
+	deviceConfig := make(map[string]string)
+	storageLocation := strings.Split(data.StorageLocation.ValueString(), ":")
+	deviceConfig["server"] = strings.TrimSpace(storageLocation[0])
+	deviceConfig["serverpath"] = strings.TrimSpace(strings.Join(storageLocation[1:], ":"))
+	deviceConfig["nfsversion"] = data.Version.ValueString()
+	deviceConfig["options"] = data.AdvancedOptions.ValueString()
+	params.DeviceConfig = deviceConfig
+	params.NameLabel = data.NameLabel.ValueString()
+	params.NameDescription = data.NameDescription.ValueString()
+	params.TypeKey = "nfs"
+	params.Shared = true
+	params.SmConfig = make(map[string]string)
+
+	return params, nil
+}
+
+func updateNFSResourceModel(srRecord xenapi.SRRecord, pbdRecord xenapi.PBDRecord, data *nfsResourceModel) error {
+	data.NameLabel = types.StringValue(srRecord.NameLabel)
+	server, ok := pbdRecord.DeviceConfig["server"]
+	if !ok {
+		return errors.New(`Unable to find "server" in PBD device config`)
+	}
+	serverPath, ok := pbdRecord.DeviceConfig["serverpath"]
+	if !ok {
+		return errors.New(`Unable to find "serverpath" in PBD device config`)
+	}
+	data.StorageLocation = types.StringValue(server + ":" + serverPath)
+	nfsVersion, ok := pbdRecord.DeviceConfig["nfsversion"]
+	if !ok {
+		return errors.New(`Unable to find "nfsversion" in PBD device config`)
+	}
+	data.Version = types.StringValue(nfsVersion)
+	err := updateNFSResourceModelComputed(srRecord, pbdRecord, data)
+
+	return err
+}
+
+func updateNFSResourceModelComputed(srRecord xenapi.SRRecord, pbdRecord xenapi.PBDRecord, data *nfsResourceModel) error {
+	data.UUID = types.StringValue(srRecord.UUID)
+	data.NameDescription = types.StringValue(srRecord.NameDescription)
+	advancedOptions, ok := pbdRecord.DeviceConfig["options"]
+	if !ok {
+		data.AdvancedOptions = types.StringValue("")
+	}
+	data.AdvancedOptions = types.StringValue(advancedOptions)
+
+	return nil
+}
+
+func nfsResourceModelUpdateCheck(data nfsResourceModel, dataState nfsResourceModel) error {
+	if data.StorageLocation != dataState.StorageLocation {
+		return errors.New(`"storage_location" doesn't expected to be updated`)
+	}
+	if data.Version != dataState.Version {
+		return errors.New(`"version" doesn't expected to be updated`)
+	}
+	if data.AdvancedOptions != dataState.AdvancedOptions {
+		return errors.New(`"advanced_options" doesn't expected to be updated`)
+	}
+	return nil
+}
+
+func nfsResourceModelUpdate(session *xenapi.Session, ref xenapi.SRRef, data nfsResourceModel) error {
+	err := xenapi.SR.SetNameLabel(session, ref, data.NameLabel.ValueString())
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	err = xenapi.SR.SetNameDescription(session, ref, data.NameDescription.ValueString())
+	if err != nil {
+		return errors.New(err.Error())
+	}
+
 	return nil
 }

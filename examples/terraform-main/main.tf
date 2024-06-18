@@ -44,6 +44,42 @@ data "xenserver_sr" "sr" {
 output "local_storage_output" {
   value = data.xenserver_sr.sr.data_items
 }
+
+resource "xenserver_sr" "local" {
+  name_label = "Test Local SR"
+  type       = "dummy"
+  shared     = false
+}
+
+output "sr_local_out" {
+  value = xenserver_sr.local
+}
+
+resource "xenserver_sr" "nfs" {
+  name_label = "Test NFS SR"
+  type       = "nfs"
+  device_config = {
+    serverpath = local.env_vars["NFS_SERVER_PATH"]
+    server     = local.env_vars["NFS_SERVER"]
+    nfsversion = "3"
+  }
+}
+
+output "sr_nfs_out" {
+  value = xenserver_sr.nfs
+}
+
+resource "xenserver_sr_nfs" "nfs_test" {
+  name_label       = "NFS virtual disk storage"
+  name_description = "A test NFS storage repository"
+  version          = "3"
+  storage_location = format("%s:%s", local.env_vars["NFS_SERVER"], local.env_vars["NFS_SERVER_PATH"])
+}
+
+output "nfs_test_out" {
+  value = xenserver_sr_nfs.nfs_test
+}
+
 resource "xenserver_network" "network" {
   name_label       = "Network Object on Pool"
   name_description = "VM and Host objects that are attached to the Network object"
