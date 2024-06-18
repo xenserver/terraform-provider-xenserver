@@ -15,6 +15,12 @@ provider "xenserver" {
   username = local.env_vars["XENSERVER_USERNAME"]
   password = local.env_vars["XENSERVER_PASSWORD"]
 }
+data "xenserver_vm" "vm_data" {
+}
+
+output "vm_data_out" {
+  value = data.xenserver_vm.vm_data.data_items
+}
 
 data "xenserver_pif" "pif" {
   device     = "eth0"
