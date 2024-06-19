@@ -189,6 +189,7 @@ func (p *xsProvider) Resources(_ context.Context) []func() resource.Resource {
 		NewNetworkResource,
 		NewSRResource,
 		NewNFSResource,
+		NewVDIResource,
 	}
 }
 

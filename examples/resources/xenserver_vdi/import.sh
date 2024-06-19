@@ -1,0 +1,1 @@
+terraform import xenserver_vdi.vdi <xenserver_vdi.vdi.id>
