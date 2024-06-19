@@ -3,12 +3,12 @@
 page_title: "xenserver_pif Data Source - xenserver"
 subcategory: ""
 description: |-
-  Provides information about a physical network interface (PIF) of XenServer
+  Provides information about the physical network interface (PIF) of XenServer
 ---
 
 # xenserver_pif (Data Source)
 
-Provides information about a physical network interface (PIF) of XenServer
+Provides information about the physical network interface (PIF) of XenServer
 
 ## Example Usage
 

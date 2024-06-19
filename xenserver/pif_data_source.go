@@ -187,7 +187,7 @@ func pifSchema() map[string]schema.Attribute {
 
 func (d *pifDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Provides information about a physical network interface (PIF) of XenServer",
+		MarkdownDescription: "Provides information about the physical network interface (PIF) of XenServer",
 		Attributes: map[string]schema.Attribute{
 			"device": schema.StringAttribute{
 				MarkdownDescription: "The machine-readable name of the physical interface (PIF) (e.g. eth0)",

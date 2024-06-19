@@ -4,10 +4,86 @@ import (
 	"context"
 	"errors"
 
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"xenapi"
 )
+
+// srDataSourceModel describes the data source data model.
+type networkDataSourceModel struct {
+	NameLabel types.String        `tfsdk:"name_label"`
+	UUID      types.String        `tfsdk:"uuid"`
+	DataItems []networkRecordData `tfsdk:"data_items"`
+}
+
+type networkRecordData struct {
+	UUID               types.String `tfsdk:"uuid"`
+	NameLabel          types.String `tfsdk:"name_label"`
+	NameDescription    types.String `tfsdk:"name_description"`
+	AllowedOperations  types.List   `tfsdk:"allowed_operations"`
+	CurrentOperations  types.Map    `tfsdk:"current_operations"`
+	VIFs               types.List   `tfsdk:"vifs"`
+	PIFs               types.List   `tfsdk:"pifs"`
+	MTU                types.Int64  `tfsdk:"mtu"`
+	OtherConfig        types.Map    `tfsdk:"other_config"`
+	Bridge             types.String `tfsdk:"bridge"`
+	Managed            types.Bool   `tfsdk:"managed"`
+	Blobs              types.Map    `tfsdk:"blobs"`
+	Tags               types.List   `tfsdk:"tags"`
+	DefaultLockingMode types.String `tfsdk:"default_locking_mode"`
+	AssignedIps        types.Map    `tfsdk:"assigned_ips"`
+	Purpose            types.List   `tfsdk:"purpose"`
+}
+
+func updateNetworkRecordData(ctx context.Context, record xenapi.NetworkRecord, data *networkRecordData) error {
+	data.UUID = types.StringValue(record.UUID)
+	data.NameLabel = types.StringValue(record.NameLabel)
+	data.NameDescription = types.StringValue(record.NameDescription)
+	var diags diag.Diagnostics
+	data.AllowedOperations, diags = types.ListValueFrom(ctx, types.StringType, record.AllowedOperations)
+	if diags.HasError() {
+		return errors.New("unable to read network allowed operations")
+	}
+	data.CurrentOperations, diags = types.MapValueFrom(ctx, types.StringType, record.CurrentOperations)
+	if diags.HasError() {
+		return errors.New("unable to read network current operation")
+	}
+	data.VIFs, diags = types.ListValueFrom(ctx, types.StringType, record.VIFs)
+	if diags.HasError() {
+		return errors.New("unable to read network VIFs")
+	}
+	data.PIFs, diags = types.ListValueFrom(ctx, types.StringType, record.PIFs)
+	if diags.HasError() {
+		return errors.New("unable to read network PIFs")
+	}
+	data.MTU = types.Int64Value(int64(record.MTU))
+	data.OtherConfig, diags = types.MapValueFrom(ctx, types.StringType, record.OtherConfig)
+	if diags.HasError() {
+		return errors.New("unable to read network other config")
+	}
+	data.Bridge = types.StringValue(record.Bridge)
+	data.Managed = types.BoolValue(record.Managed)
+	data.Blobs, diags = types.MapValueFrom(ctx, types.StringType, record.Blobs)
+	if diags.HasError() {
+		return errors.New("unable to read network blobs")
+	}
+	data.Tags, diags = types.ListValueFrom(ctx, types.StringType, record.Tags)
+	if diags.HasError() {
+		return errors.New("unable to read network tags")
+	}
+	data.DefaultLockingMode = types.StringValue(string(record.DefaultLockingMode))
+	data.AssignedIps, diags = types.MapValueFrom(ctx, types.StringType, record.AssignedIps)
+	if diags.HasError() {
+		return errors.New("unable to read network assigned_ips")
+	}
+	data.Purpose, diags = types.ListValueFrom(ctx, types.StringType, record.Purpose)
+	if diags.HasError() {
+		return errors.New("unable to read network purpose")
+	}
+
+	return nil
+}
 
 // NetworkResourceModel describes the resource data model.
 type networkResourceModel struct {

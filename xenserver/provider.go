@@ -198,6 +198,7 @@ func (p *xsProvider) DataSources(_ context.Context) []func() datasource.DataSour
 		NewPIFDataSource,
 		NewSRDataSource,
 		NewVMDataSource,
+		NewNetworkDataSource,
 	}
 }
 

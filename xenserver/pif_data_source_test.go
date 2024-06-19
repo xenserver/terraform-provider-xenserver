@@ -26,6 +26,7 @@ func TestAccPifDataSource(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("data.xenserver_pif.test_pif_data", "device", "eth0"),
 					resource.TestCheckResourceAttr("data.xenserver_pif.test_pif_data", "management", "true"),
+					resource.TestCheckResourceAttrSet("data.xenserver_pif.test_pif_data", "data_items.#"),
 				),
 			},
 		},

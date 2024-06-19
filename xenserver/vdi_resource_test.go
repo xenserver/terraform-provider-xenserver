@@ -2,6 +2,7 @@ package xenserver
 
 import (
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -9,20 +10,22 @@ import (
 
 func testAccVDIResourceConfig(name_label string, name_description string) string {
 	return fmt.Sprintf(`
-data "xenserver_sr" "sr" {
-	name_label = "Local storage"
+resource "xenserver_sr_nfs" "nfs" {
+	name_label       = "test NFS SR"
+	version          = "3"
+	storage_location = "%s"
 }
 
 resource "xenserver_vdi" "test_vdi" {
 	name_label       = "%s"
 	name_description = "%s"
-	sr_uuid          = data.xenserver_sr.sr.data_items[0].uuid
+	sr_uuid          = xenserver_sr_nfs.nfs.id
 	virtual_size     = 1 * 1024 * 1024 * 1024
 	other_config     = {
 		"flag" = "1"
 	}
 }
-`, name_label, name_description)
+`, os.Getenv("NFS_SERVER")+":"+os.Getenv("NFS_SERVER_PATH"), name_label, name_description)
 }
 
 func TestAccVDIResource(t *testing.T) {
