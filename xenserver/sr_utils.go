@@ -137,8 +137,7 @@ func getSRCreateParams(ctx context.Context, session *xenapi.Session, data srReso
 	params.TypeKey = data.Type.ValueString()
 	params.ContentType = data.ContentType.ValueString()
 	params.Shared = data.Shared.ValueBool()
-	var diags diag.Diagnostics
-	diags = data.DeviceConfig.ElementsAs(ctx, &params.DeviceConfig, false)
+	diags := data.DeviceConfig.ElementsAs(ctx, &params.DeviceConfig, false)
 	if diags.HasError() {
 		return params, errors.New("unable to access SR device config data")
 	}
@@ -242,9 +241,8 @@ func srResourceModelUpdate(ctx context.Context, session *xenapi.Session, ref xen
 	if err != nil {
 		return errors.New(err.Error())
 	}
-	var diags diag.Diagnostics
 	smConfig := make(map[string]string)
-	diags = data.SmConfig.ElementsAs(ctx, &smConfig, false)
+	diags := data.SmConfig.ElementsAs(ctx, &smConfig, false)
 	if diags.HasError() {
 		return errors.New("unable to access SR SM config data")
 	}

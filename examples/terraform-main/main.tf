@@ -91,3 +91,31 @@ resource "xenserver_network" "network" {
 output "network_out" {
   value = xenserver_network.network.id
 }
+
+resource "xenserver_vdi" "vdi1" {
+  name_label       = "Test VDI1"
+  name_description = "A test VDI on NFS SR"
+  sr_uuid          = xenserver_sr_nfs.nfs_test.id
+  virtual_size     = 1 * 1024 * 1024 * 1024
+  sharable         = true
+  other_config = {
+    "flag" = "1"
+  }
+}
+
+output "vdi_out1" {
+  value = xenserver_vdi.vdi1
+}
+
+resource "xenserver_vdi" "vdi2" {
+  name_label       = "Test VDI2"
+  name_description = "A test VDI on Local storage"
+  sr_uuid          = data.xenserver_sr.sr.data_items[0].uuid
+  virtual_size     = 1 * 1024 * 1024 * 1024
+  read_only        = true
+  type             = "system"
+}
+
+output "vdi_out2" {
+  value = xenserver_vdi.vdi2
+}
