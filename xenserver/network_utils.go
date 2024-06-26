@@ -3,6 +3,8 @@ package xenserver
 import (
 	"context"
 	"errors"
+	"slices"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -10,7 +12,6 @@ import (
 	"xenapi"
 )
 
-// srDataSourceModel describes the data source data model.
 type networkDataSourceModel struct {
 	NameLabel types.String        `tfsdk:"name_label"`
 	UUID      types.String        `tfsdk:"uuid"`
@@ -85,7 +86,6 @@ func updateNetworkRecordData(ctx context.Context, record xenapi.NetworkRecord, d
 	return nil
 }
 
-// NetworkResourceModel describes the resource data model.
 type networkResourceModel struct {
 	NameLabel       types.String `tfsdk:"name_label"`
 	NameDescription types.String `tfsdk:"name_description"`
@@ -95,7 +95,6 @@ type networkResourceModel struct {
 	UUID            types.String `tfsdk:"id"`
 }
 
-// Update NetworkResourceModel base on new NetworkRecord
 func updateNetworkResourceModel(ctx context.Context, networkRecord xenapi.NetworkRecord, data *networkResourceModel) error {
 	data.NameLabel = types.StringValue(networkRecord.NameLabel)
 
@@ -106,7 +105,6 @@ func updateNetworkResourceModel(ctx context.Context, networkRecord xenapi.Networ
 	return nil
 }
 
-// Update NetworkResourceModel computed field base on new NetworkRecord
 func updateNetworkResourceModelComputed(ctx context.Context, networkRecord xenapi.NetworkRecord, data *networkResourceModel) error {
 	data.UUID = types.StringValue(networkRecord.UUID)
 	data.NameDescription = types.StringValue(networkRecord.NameDescription)
@@ -121,7 +119,6 @@ func updateNetworkResourceModelComputed(ctx context.Context, networkRecord xenap
 	return nil
 }
 
-// update fields of network resource by xen-api sdk
 func updateNetworkFields(ctx context.Context, session *xenapi.Session, networkRef xenapi.NetworkRef, data networkResourceModel) error {
 	err := xenapi.Network.SetNameLabel(session, networkRef, data.NameLabel.ValueString())
 	if err != nil {
@@ -149,4 +146,115 @@ func updateNetworkFields(ctx context.Context, session *xenapi.Session, networkRe
 		return errors.New("unable to update network other_config")
 	}
 	return nil
+}
+
+type nicDataSourceModel struct {
+	NetworkType types.String `tfsdk:"network_type"`
+	DataItems   []string     `tfsdk:"data_items"`
+}
+
+func unique(items []string) []string {
+	slices.Sort(items)
+	items = slices.Compact(items)
+	return items
+}
+
+func getBondNICs(session *xenapi.Session) ([]string, error) {
+	var nics []string
+	bondRecords, err := xenapi.Bond.GetAllRecords(session)
+	if err != nil {
+		return nics, errors.New(err.Error())
+	}
+	var bondDevices []string
+	for _, bondRecord := range bondRecords {
+		pifRecord, err := xenapi.PIF.GetRecord(session, bondRecord.Master)
+		if err != nil {
+			return nics, errors.New(err.Error())
+		}
+		if !slices.Contains(bondDevices, pifRecord.Device) {
+			bondDevices = append(bondDevices, pifRecord.Device)
+			var bondSlaveDevices []string
+			for _, slave := range bondRecord.Slaves {
+				record, err := xenapi.PIF.GetRecord(session, slave)
+				if err != nil {
+					return nics, errors.New(err.Error())
+				}
+				bondSlaveDevices = append(bondSlaveDevices, record.Device)
+			}
+			nics = append(nics, getNICNameForBondDevices(bondSlaveDevices))
+		}
+	}
+	return unique(nics), nil
+}
+
+func getPhysicalNICs(pifRecords map[xenapi.PIFRef]xenapi.PIFRecord) []string {
+	var devices []string
+	for _, pifRecord := range pifRecords {
+		if pifRecord.Physical {
+			devices = append(devices, pifRecord.Device)
+		}
+	}
+	return getNICsNameForDevices(unique(devices), "NIC")
+}
+
+func getPhysicalWithoutBondNICs(pifRecords map[xenapi.PIFRef]xenapi.PIFRecord) []string {
+	var devices []string
+	for _, pifRecord := range pifRecords {
+		if pifRecord.Physical && string(pifRecord.BondSlaveOf) == "OpaqueRef:NULL" {
+			devices = append(devices, pifRecord.Device)
+		}
+	}
+	return getNICsNameForDevices(unique(devices), "NIC")
+}
+
+func getNonPhysicalSRIOVNICs(pifRecords map[xenapi.PIFRef]xenapi.PIFRecord) []string {
+	var devices []string
+	for _, pifRecord := range pifRecords {
+		if pifRecord.Physical && len(pifRecord.SriovPhysicalPIFOf) > 0 && string(pifRecord.BondSlaveOf) == "OpaqueRef:NULL" {
+			devices = append(devices, pifRecord.Device)
+		}
+	}
+	return getNICsNameForDevices(unique(devices), "NIC-SR-IOV")
+}
+
+func getPhysicalSRIOVNICs(pifRecords map[xenapi.PIFRef]xenapi.PIFRecord, available bool) []string {
+	// At lease one of Host in Pool has the PIF with capabilities of "sriov"
+	// If available is true, then return the NICs which are not been used by any SR-IOV Network
+	var devices []string
+	for _, pifRecord := range pifRecords {
+		if pifRecord.Physical && slices.Contains(pifRecord.Capabilities, "sriov") {
+			if available && len(pifRecord.SriovPhysicalPIFOf) > 0 {
+				continue
+			} else {
+				devices = append(devices, pifRecord.Device)
+			}
+		}
+	}
+	return getNICsNameForDevices(unique(devices), "NIC")
+}
+
+func getNICsNameForDevices(devices []string, name string) []string {
+	// devices := []string{"eth0", "eth1", "eth2"}
+	// nics := []string{"NIC 0", "NIC 1", "NIC 2"}
+	// nics := []string{"NIC-SR-IOV 0", "NIC-SR-IOV 1", "NIC-SR-IOV 2"}
+	var nics []string
+	for _, device := range devices {
+		if strings.HasPrefix(device, "eth") {
+			nics = append(nics, name+" "+strings.Split(device, "eth")[1])
+		}
+	}
+	return nics
+}
+
+func getNICNameForBondDevices(devices []string) string {
+	// devices := []string{"eth0", "eth1", "eth2"}
+	// name := "Bond 0+1+2"
+	name := "Bond"
+	var deviceNumberStrings []string
+	for _, device := range devices {
+		if strings.HasPrefix(device, "eth") {
+			deviceNumberStrings = append(deviceNumberStrings, strings.Split(device, "eth")[1])
+		}
+	}
+	return name + " " + strings.Join(deviceNumberStrings, "+")
 }
