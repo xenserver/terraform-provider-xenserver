@@ -9,12 +9,23 @@ import (
 
 func testAccVMResourceConfig(name_label string) string {
 	return fmt.Sprintf(`
+data "xenserver_sr" "sr" {
+  name_label = "Local storage"
+}
+
+resource "xenserver_vdi" "vdi" {
+  name_label       = "local-storage-vdi"
+  sr_uuid          = data.xenserver_sr.sr.data_items[0].uuid
+  virtual_size     = 100 * 1024 * 1024 * 1024
+}
+
 resource "xenserver_vm" "test_vm" {
-	name_label = "%s"
-	template_name = "CentOS 7"
-	other_config = {
-		flag = "1"
-	}
+  name_label = "%s"
+  template_name = "Windows 11"
+  hard_drive = [ xenserver_vdi.vdi.id ]
+  other_config = {
+  	"flag" = "1"
+  }
 }
 `, name_label)
 }
@@ -28,11 +39,11 @@ func TestAccVMResource(t *testing.T) {
 				Config: providerConfig + testAccVMResourceConfig("test vm 1"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "name_label", "test vm 1"),
-					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "template_name", "CentOS 7"),
+					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "template_name", "Windows 11"),
+					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "hard_drive.#", "1"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "other_config.%", "1"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "other_config.flag", "1"),
 					// Verify dynamic values have any value set in the state.
-					resource.TestCheckResourceAttrSet("xenserver_vm.test_vm", "snapshots.#"),
 					resource.TestCheckResourceAttrSet("xenserver_vm.test_vm", "id"),
 				),
 			},
@@ -52,7 +63,7 @@ func TestAccVMResource(t *testing.T) {
 				Config: providerConfig + testAccVMResourceConfig("test vm 2"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "name_label", "test vm 2"),
-					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "template_name", "CentOS 7"),
+					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "template_name", "Windows 11"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "other_config.%", "1"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "other_config.flag", "1"),
 				),

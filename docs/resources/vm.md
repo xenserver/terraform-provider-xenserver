@@ -31,6 +31,7 @@ output "vm_out" {
 
 ### Required
 
+- `hard_drive` (List of String) A list of vdi uuids to attach to the virtual machine
 - `name_label` (String) The name of the virtual machine
 - `template_name` (String) The template name of the virtual machine which cloned from
 
@@ -41,7 +42,6 @@ output "vm_out" {
 ### Read-Only
 
 - `id` (String) UUID of the virtual machine
-- `snapshots` (List of String) The all snapshots of the virtual machine
 
 ## Import
 
