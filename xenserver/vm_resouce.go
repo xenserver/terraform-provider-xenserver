@@ -1,25 +1,18 @@
-// Example of resource
-
 package xenserver
 
 import (
 	"context"
 	"fmt"
 
-	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapdefault"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"xenapi"
 )
 
-// Ensure provider defined types fully satisfy framework interfaces.
 var (
 	_ resource.Resource                = &vmResource{}
 	_ resource.ResourceWithConfigure   = &vmResource{}
@@ -30,65 +23,22 @@ func NewVMResource() resource.Resource {
 	return &vmResource{}
 }
 
-// vmResource defines the resource implementation.
 type vmResource struct {
 	session *xenapi.Session
 }
 
-// Set the resource name
 func (r *vmResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_vm"
 }
 
-// Set the defined data model of the resource
 func (r *vmResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		// This description is used by the documentation generator and the language server.
 		MarkdownDescription: "VM resource",
-		Attributes: map[string]schema.Attribute{
-			// required
-			"name_label": schema.StringAttribute{
-				MarkdownDescription: "The name of the virtual machine",
-				Required:            true,
-			},
-			"template_name": schema.StringAttribute{
-				MarkdownDescription: "The template name of the virtual machine which cloned from",
-				Required:            true,
-				// The resource will be removed and created again if the value of the attribute changes
-				// PlanModifiers: []planmodifier.String{
-				// 	stringplanmodifier.RequiresReplace(),
-				// },
-			},
-			// optional
-			"other_config": schema.MapAttribute{
-				MarkdownDescription: "The other config of the virtual machine",
-				Optional:            true,
-				Computed:            true,
-				ElementType:         types.StringType,
-				Default:             mapdefault.StaticValue(types.MapValueMust(types.StringType, map[string]attr.Value{})),
-			},
-			// read only
-			"snapshots": schema.ListAttribute{
-				MarkdownDescription: "The all snapshots of the virtual machine",
-				// If Required and Optional are both false, Computed must be true, and the attribute will be considered "read only"
-				Computed:    true,
-				ElementType: types.StringType,
-			},
-			"id": schema.StringAttribute{
-				MarkdownDescription: "UUID of the virtual machine",
-				Computed:            true,
-				// attributes which are not configurable and that should not show updates from the existing state value
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
-			},
-		},
+		Attributes:          VMSchema(),
 	}
 }
 
-// Set the parameter of the resource, pass value from provider
 func (r *vmResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
 		return
 	}
@@ -103,8 +53,6 @@ func (r *vmResource) Configure(_ context.Context, req resource.ConfigureRequest,
 	r.session = session
 }
 
-// Read data from Plan, create resource, get data from new source, set to State
-// terraform plan/apply
 func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var data vmResourceModel
 	// Read Terraform plan data into the model
@@ -114,7 +62,6 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 	}
 
 	// create new resource
-	tflog.Debug(ctx, "Get a template")
 	templateRef, err := getFirstTemplate(r.session, data.TemplateName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -133,6 +80,15 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 		return
 	}
 
+	err = xenapi.VM.SetIsATemplate(r.session, vmRef, false)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to set VM from a template",
+			err.Error(),
+		)
+		return
+	}
+
 	// Set some configure field
 	otherConfig, err := getVMOtherConfig(ctx, data)
 	if err != nil {
@@ -142,6 +98,7 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 		)
 		return
 	}
+
 	err = xenapi.VM.SetOtherConfig(r.session, vmRef, otherConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -151,6 +108,16 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 		return
 	}
 
+	// set VBDs
+	_, err = createVBDs(ctx, data.HardDrive, vmRef, r.session)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to create VBDs",
+			err.Error(),
+		)
+		return
+	}
+
 	// Overwrite data with refreshed resource state
 	vmRecord, err := xenapi.VM.GetRecord(r.session, vmRef)
 	if err != nil {
@@ -160,37 +127,24 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 		)
 		return
 	}
-	// Set all computed values
-	data.UUID = types.StringValue(vmRecord.UUID)
-	err = updateVMResourceModelComputed(ctx, vmRecord, &data)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Unable to update VM resource model computed fields",
-			err.Error(),
-		)
-		return
-	}
 
-	// Write logs using the tflog package
-	// Documentation: https://terraform.io/plugin/log
-	tflog.Trace(ctx, "VM created")
+	// Set all computed valueunable to get VDI refs
+	data.UUID = types.StringValue(vmRecord.UUID)
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-// Read data from State, retrieve the resource's information, update to State
-// terraform import
 func (r *vmResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data vmResourceModel
-	// Read Terraform prior state data into the model
-	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+	var state vmResourceModel
+
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Overwrite data with refreshed resource state
-	vmRef, err := xenapi.VM.GetByUUID(r.session, data.UUID.ValueString())
+	// Overwrite state with refreshed resource state
+	vmRef, err := xenapi.VM.GetByUUID(r.session, state.UUID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to get VM ref",
@@ -198,6 +152,7 @@ func (r *vmResource) Read(ctx context.Context, req resource.ReadRequest, resp *r
 		)
 		return
 	}
+
 	vmRecord, err := xenapi.VM.GetRecord(r.session, vmRef)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -206,34 +161,29 @@ func (r *vmResource) Read(ctx context.Context, req resource.ReadRequest, resp *r
 		)
 		return
 	}
-	err = updateVMResourceModel(ctx, vmRecord, &data)
+
+	err = updateVMResourceModel(ctx, r.session, vmRecord, &state)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to update VM resource model data",
+			"Unable to update VM resource model state",
 			err.Error(),
 		)
 		return
 	}
-	// Save updated data into Terraform state
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+
+	// Save updated state into Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-// Read data from Plan, update resource configuration, Set to State
-// terraform plan/apply (+2)
 func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data vmResourceModel
-	// Read Terraform plan data into the model
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	var plan, state vmResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	var dataState vmResourceModel
-	resp.Diagnostics.Append(req.State.Get(ctx, &dataState)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-	if data.TemplateName != dataState.TemplateName {
+	if plan.TemplateName != state.TemplateName {
 		resp.Diagnostics.AddError(
 			"Unable to change template name",
 			"The template name doesn't expected to be updated",
@@ -242,7 +192,7 @@ func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, res
 	}
 
 	// Get existing vm record
-	vmRef, err := xenapi.VM.GetByUUID(r.session, data.UUID.ValueString())
+	vmRef, err := xenapi.VM.GetByUUID(r.session, plan.UUID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to get VM ref",
@@ -250,8 +200,9 @@ func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, res
 		)
 		return
 	}
+
 	// Update existing vm resource with new plan
-	err = xenapi.VM.SetNameLabel(r.session, vmRef, data.NameLabel.ValueString())
+	err = xenapi.VM.SetNameLabel(r.session, vmRef, plan.NameLabel.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to set VM name label",
@@ -259,7 +210,8 @@ func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, res
 		)
 		return
 	}
-	otherConfig, err := getVMOtherConfig(ctx, data)
+
+	otherConfig, err := getVMOtherConfig(ctx, plan)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to get VM other config",
@@ -267,6 +219,7 @@ func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, res
 		)
 		return
 	}
+
 	err = xenapi.VM.SetOtherConfig(r.session, vmRef, otherConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -276,40 +229,50 @@ func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, res
 		return
 	}
 
-	// Overwrite computed data with refreshed resource state
-	vmRecord, err := xenapi.VM.GetRecord(r.session, vmRef)
-	if err != nil {
+	// Judge if the hard drive field in plan has changed, if added, create new VBDs, if removed, destroy VBDs
+	planVDIUUIDs := make([]string, 0, len(plan.HardDrive.Elements()))
+	diags := plan.HardDrive.ElementsAs(ctx, &planVDIUUIDs, false)
+	if diags.HasError() {
 		resp.Diagnostics.AddError(
-			"Unable to get VM record",
-			err.Error(),
+			"Unable to get VDI UUIDs in plan data hard drive attributes",
+			"Unable to get VDI UUIDs in plan data hard drive attributes",
 		)
 		return
 	}
-	err = updateVMResourceModelComputed(ctx, vmRecord, &data)
+
+	stateVDIUUIDs := make([]string, 0, len(state.HardDrive.Elements()))
+	diags = state.HardDrive.ElementsAs(ctx, &stateVDIUUIDs, false)
+	if diags.HasError() {
+		resp.Diagnostics.AddError(
+			"Unable to get VDI UUIDs in state data hard drive attributes",
+			"Unable to get VDI UUIDs in state data hard drive attributes",
+		)
+		return
+	}
+
+	err = updateVBDs(planVDIUUIDs, stateVDIUUIDs, vmRef, r.session)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to update VM resource model computed fields",
+			"Unable to update VBDs",
 			err.Error(),
 		)
 		return
 	}
 
-	// Save updated data into Terraform state
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	// Save updated plan into Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-// Read data from State, delete resource
-// terraform destroy
 func (r *vmResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data vmResourceModel
-	// Read Terraform prior state data into the model
-	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+	var state vmResourceModel
+	// Read Terraform prior state state into the model
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	// delete resource
-	vmRef, err := xenapi.VM.GetByUUID(r.session, data.UUID.ValueString())
+	vmRef, err := xenapi.VM.GetByUUID(r.session, state.UUID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to get VM ref",
@@ -317,6 +280,7 @@ func (r *vmResource) Delete(ctx context.Context, req resource.DeleteRequest, res
 		)
 		return
 	}
+
 	err = xenapi.VM.Destroy(r.session, vmRef)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -327,8 +291,6 @@ func (r *vmResource) Delete(ctx context.Context, req resource.DeleteRequest, res
 	}
 }
 
-// Import existing resource with id, call Read()
-// terraform import
 func (r *vmResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
