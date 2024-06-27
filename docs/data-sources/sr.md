@@ -3,12 +3,12 @@
 page_title: "xenserver_sr Data Source - xenserver"
 subcategory: ""
 description: |-
-  The data source of XenServer storage repository
+  Provides information about the storage repository of XenServer
 ---
 
 # xenserver_sr (Data Source)
 
-The data source of XenServer storage repository
+Provides information about the storage repository of XenServer
 
 ## Example Usage
 

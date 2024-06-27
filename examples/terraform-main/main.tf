@@ -15,6 +15,7 @@ provider "xenserver" {
   username = local.env_vars["XENSERVER_USERNAME"]
   password = local.env_vars["XENSERVER_PASSWORD"]
 }
+
 data "xenserver_vm" "vm_data" {
 }
 
@@ -95,7 +96,7 @@ resource "xenserver_network" "network" {
 }
 
 output "network_out" {
-  value = xenserver_network.network.id
+  value = xenserver_network.network
 }
 
 resource "xenserver_vdi" "vdi1" {
@@ -124,4 +125,12 @@ resource "xenserver_vdi" "vdi2" {
 
 output "vdi_out2" {
   value = xenserver_vdi.vdi2
+}
+
+data "xenserver_network" "network" {
+  name_label = "Pool-wide network associated with eth0"
+}
+
+output "network_output" {
+  value = data.xenserver_network.network.data_items
 }

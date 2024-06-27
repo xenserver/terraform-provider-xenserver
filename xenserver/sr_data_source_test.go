@@ -23,6 +23,7 @@ func TestAccSRDataSource(t *testing.T) {
 				Config: providerConfig + testAccSRDataSourceConfig("Local storage"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("data.xenserver_sr.test_sr_data", "name_label", "Local storage"),
+					resource.TestCheckResourceAttrSet("data.xenserver_sr.test_sr_data", "data_items.#"),
 				),
 			},
 		},

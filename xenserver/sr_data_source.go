@@ -35,7 +35,7 @@ func (d *srDataSource) Metadata(_ context.Context, req datasource.MetadataReques
 // Schema defines the schema for the data source.
 func (d *srDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "The data source of XenServer storage repository",
+		MarkdownDescription: "Provides information about the storage repository of XenServer",
 
 		Attributes: map[string]schema.Attribute{
 			"name_label": schema.StringAttribute{
