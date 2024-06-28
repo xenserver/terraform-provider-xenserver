@@ -3,6 +3,7 @@ package xenserver
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 
@@ -86,64 +87,237 @@ func updateNetworkRecordData(ctx context.Context, record xenapi.NetworkRecord, d
 	return nil
 }
 
-type networkResourceModel struct {
+type vlanResourceModel struct {
 	NameLabel       types.String `tfsdk:"name_label"`
 	NameDescription types.String `tfsdk:"name_description"`
 	MTU             types.Int64  `tfsdk:"mtu"`
 	Managed         types.Bool   `tfsdk:"managed"`
 	OtherConfig     types.Map    `tfsdk:"other_config"`
+	Tag             types.Int64  `tfsdk:"vlan_tag"`
+	NIC             types.String `tfsdk:"nic"`
 	UUID            types.String `tfsdk:"id"`
 }
 
-func updateNetworkResourceModel(ctx context.Context, networkRecord xenapi.NetworkRecord, data *networkResourceModel) error {
-	data.NameLabel = types.StringValue(networkRecord.NameLabel)
+type vlanCreateParams struct {
+	PifRef     xenapi.PIFRef
+	NetworkRef xenapi.NetworkRef
+	Tag        int
+}
 
-	err := updateNetworkResourceModelComputed(ctx, networkRecord, data)
+func checkMTU(mtu int) error {
+	if mtu <= 0 {
+		return errors.New("MTU value must above 0 ")
+	}
+	return nil
+}
+
+func getNetworkCreateParams(ctx context.Context, data vlanResourceModel) (xenapi.NetworkRecord, error) {
+	var record xenapi.NetworkRecord
+	record.NameLabel = data.NameLabel.ValueString()
+	record.NameDescription = data.NameDescription.ValueString()
+	record.MTU = int(data.MTU.ValueInt64())
+	err := checkMTU(record.MTU)
+	if err != nil {
+		return record, err
+	}
+	record.Managed = data.Managed.ValueBool()
+	diags := data.OtherConfig.ElementsAs(ctx, &record.OtherConfig, false)
+	if diags.HasError() {
+		return record, errors.New("unable to access vlan other config")
+	}
+
+	return record, nil
+}
+
+func getBondNICDevice(session *xenapi.Session, nic string) (string, error) {
+	// nic eg. "Bond 0+1+2" return eg. "bond0"
+	// slavesDevices eg. ["0", "1", "2"]
+	slavesDevices := strings.Split(strings.Split(nic, " ")[1], "+")
+	bondRecords, err := xenapi.Bond.GetAllRecords(session)
+	if err != nil {
+		return "", errors.New(err.Error())
+	}
+	for _, bondRecord := range bondRecords {
+		devices := []string{}
+		for _, slave := range bondRecord.Slaves {
+			pifRecord, err := xenapi.PIF.GetRecord(session, slave)
+			if err != nil {
+				return "", errors.New(err.Error())
+			}
+			devices = append(devices, strings.Split(pifRecord.Device, "eth")[1])
+		}
+		slices.Sort(devices)
+		if slices.Equal(slavesDevices, devices) {
+			record, err := xenapi.PIF.GetRecord(session, bondRecord.Master)
+			if err != nil {
+				return "", errors.New(err.Error())
+			}
+			return record.Device, nil
+		}
+	}
+	return "", fmt.Errorf("unable to find device for %s", nic)
+}
+
+func getPifRefsForNIC(session *xenapi.Session, nic string) ([]xenapi.PIFRef, error) {
+	// nic eg. 1. NIC 0 2. NIC-SR-IOV 0 3. Bond 0+1+2
+	var pifRefs []xenapi.PIFRef
+	pifRecords, err := xenapi.PIF.GetAllRecords(session)
+	if err != nil {
+		return pifRefs, errors.New(err.Error())
+	}
+	device := "eth" + strings.Split(nic, " ")[1]
+	if strings.HasPrefix(nic, "Bond") {
+		device, err = getBondNICDevice(session, nic)
+		if err != nil {
+			return pifRefs, err
+		}
+	}
+	uuids := []string{}
+	for _, pifRecord := range pifRecords {
+		if pifRecord.Device == device && ((strings.HasPrefix(nic, "NIC-SR-IOV") && !pifRecord.Physical && len(pifRecord.SriovLogicalPIFOf) > 0) ||
+			(strings.HasPrefix(nic, "NIC") && pifRecord.Physical && string(pifRecord.BondSlaveOf) == "OpaqueRef:NULL") ||
+			(strings.HasPrefix(nic, "Bond") && !pifRecord.Physical && len(pifRecord.BondMasterOf) > 0)) {
+			uuids = append(uuids, pifRecord.UUID)
+		}
+	}
+	for _, uuid := range uuids {
+		ref, err := xenapi.PIF.GetByUUID(session, uuid)
+		if err != nil {
+			return pifRefs, errors.New(err.Error())
+		}
+		pifRefs = append(pifRefs, ref)
+	}
+
+	return pifRefs, nil
+}
+
+func getVlanCreateParams(session *xenapi.Session, data vlanResourceModel, networkRef xenapi.NetworkRef) (vlanCreateParams, error) {
+	var params vlanCreateParams
+	pifRefs, err := getPifRefsForNIC(session, data.NIC.ValueString())
+	if err != nil {
+		return params, err
+	}
+	if len(pifRefs) == 0 {
+		return params, errors.New("unable to find PIF for NIC")
+	}
+	params.PifRef = pifRefs[0]
+	params.NetworkRef = networkRef
+	params.Tag = int(data.Tag.ValueInt64())
+
+	return params, nil
+}
+
+func getNICFromPIF(session *xenapi.Session, pifRecord xenapi.PIFRecord) (string, error) {
+	// return eg. NIC 0, NIC-SR-IOV 0, Bond 0+1+2
+	name := ""
+	if strings.HasPrefix(pifRecord.Device, "eth") {
+		index := strings.Split(pifRecord.Device, "eth")[1]
+		name = "NIC " + index
+		if !pifRecord.Physical && pifRecord.VLANMasterOf != "OpaqueRef:NULL" {
+			vlanRecord, err := xenapi.VLAN.GetRecord(session, pifRecord.VLANMasterOf)
+			if err != nil {
+				return name, errors.New(err.Error())
+			}
+			taggedPifRecord, err := xenapi.PIF.GetRecord(session, vlanRecord.TaggedPIF)
+			if err != nil {
+				return name, errors.New(err.Error())
+			}
+			if len(taggedPifRecord.SriovLogicalPIFOf) > 0 {
+				name = "NIC-SR-IOV " + index
+			}
+		}
+	} else if strings.HasPrefix(pifRecord.Device, "bond") {
+		vlanRecord, err := xenapi.VLAN.GetRecord(session, pifRecord.VLANMasterOf)
+		if err != nil {
+			return name, errors.New(err.Error())
+		}
+		taggedPifRecord, err := xenapi.PIF.GetRecord(session, vlanRecord.TaggedPIF)
+		if err != nil {
+			return name, errors.New(err.Error())
+		}
+		bondRecord, err := xenapi.Bond.GetRecord(session, taggedPifRecord.BondMasterOf[0])
+		if err != nil {
+			return name, errors.New(err.Error())
+		}
+		bondSlaveDevices, err := getBondSlaveDevices(session, bondRecord.Slaves)
+		if err != nil {
+			return name, err
+		}
+		name = getNICNameForBondDevices(bondSlaveDevices)
+	}
+
+	return name, nil
+}
+
+func updateVlanResourceModel(ctx context.Context, session *xenapi.Session, record xenapi.NetworkRecord, data *vlanResourceModel) error {
+	data.NameLabel = types.StringValue(record.NameLabel)
+	pifRecord, err := xenapi.PIF.GetRecord(session, record.PIFs[0])
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	data.Tag = types.Int64Value(int64(pifRecord.VLAN))
+	nicName, err := getNICFromPIF(session, pifRecord)
 	if err != nil {
 		return err
 	}
-	return nil
+	data.NIC = types.StringValue(nicName)
+
+	return updateVlanResourceModelComputed(ctx, record, data)
 }
 
-func updateNetworkResourceModelComputed(ctx context.Context, networkRecord xenapi.NetworkRecord, data *networkResourceModel) error {
-	data.UUID = types.StringValue(networkRecord.UUID)
-	data.NameDescription = types.StringValue(networkRecord.NameDescription)
-	data.MTU = types.Int64Value(int64(networkRecord.MTU))
-	data.Managed = types.BoolValue(networkRecord.Managed)
-
-	otherConfig, diags := types.MapValueFrom(ctx, types.StringType, networkRecord.OtherConfig)
-	data.OtherConfig = otherConfig
+func updateVlanResourceModelComputed(ctx context.Context, record xenapi.NetworkRecord, data *vlanResourceModel) error {
+	data.UUID = types.StringValue(record.UUID)
+	data.NameDescription = types.StringValue(record.NameDescription)
+	data.MTU = types.Int64Value(int64(record.MTU))
+	data.Managed = types.BoolValue(record.Managed)
+	var diags diag.Diagnostics
+	data.OtherConfig, diags = types.MapValueFrom(ctx, types.StringType, record.OtherConfig)
 	if diags.HasError() {
-		return errors.New("unable to update data for network other_config")
+		return errors.New("unable to update data for network_vlan other_config")
+	}
+
+	return nil
+}
+
+func vlanResourceModelUpdateCheck(data vlanResourceModel, dataState vlanResourceModel) error {
+	if data.NIC != dataState.NIC {
+		return errors.New(`"nic" doesn't expected to be updated`)
+	}
+	if data.Tag != dataState.Tag {
+		return errors.New(`"vlan_tag" doesn't expected to be updated`)
+	}
+	if data.Managed != dataState.Managed {
+		return errors.New(`"managed" doesn't expected to be updated`)
 	}
 	return nil
 }
 
-func updateNetworkFields(ctx context.Context, session *xenapi.Session, networkRef xenapi.NetworkRef, data networkResourceModel) error {
-	err := xenapi.Network.SetNameLabel(session, networkRef, data.NameLabel.ValueString())
+func vlanResourceModelUpdate(ctx context.Context, session *xenapi.Session, ref xenapi.NetworkRef, data vlanResourceModel) error {
+	err := xenapi.Network.SetNameLabel(session, ref, data.NameLabel.ValueString())
 	if err != nil {
-		return errors.New("unable to update network name_label")
+		return errors.New(err.Error())
 	}
-
-	err = xenapi.Network.SetNameDescription(session, networkRef, data.NameDescription.ValueString())
+	err = xenapi.Network.SetNameDescription(session, ref, data.NameDescription.ValueString())
 	if err != nil {
-		return errors.New("unable to update network name_description")
+		return errors.New(err.Error())
 	}
-
-	err = xenapi.Network.SetMTU(session, networkRef, int(data.MTU.ValueInt64()))
+	mtu := int(data.MTU.ValueInt64())
+	err = checkMTU(mtu)
 	if err != nil {
-		return errors.New("unable to update network mtu")
+		return err
 	}
-
-	otherConfig := make(map[string]string, len(data.OtherConfig.Elements()))
+	err = xenapi.Network.SetMTU(session, ref, mtu)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	otherConfig := make(map[string]string)
 	diags := data.OtherConfig.ElementsAs(ctx, &otherConfig, false)
 	if diags.HasError() {
-		return errors.New("unable to update network other_config")
+		return errors.New("unable to access network other config")
 	}
-
-	err = xenapi.Network.SetOtherConfig(session, networkRef, otherConfig)
+	err = xenapi.Network.SetOtherConfig(session, ref, otherConfig)
 	if err != nil {
-		return errors.New("unable to update network other_config")
+		return errors.New(err.Error())
 	}
 	return nil
 }
@@ -157,6 +331,18 @@ func unique(items []string) []string {
 	slices.Sort(items)
 	items = slices.Compact(items)
 	return items
+}
+
+func getBondSlaveDevices(session *xenapi.Session, bondSlaves []xenapi.PIFRef) ([]string, error) {
+	var bondSlaveDevices []string
+	for _, slave := range bondSlaves {
+		record, err := xenapi.PIF.GetRecord(session, slave)
+		if err != nil {
+			return bondSlaveDevices, errors.New(err.Error())
+		}
+		bondSlaveDevices = append(bondSlaveDevices, record.Device)
+	}
+	return bondSlaveDevices, nil
 }
 
 func getBondNICs(session *xenapi.Session) ([]string, error) {
@@ -173,13 +359,9 @@ func getBondNICs(session *xenapi.Session) ([]string, error) {
 		}
 		if !slices.Contains(bondDevices, pifRecord.Device) {
 			bondDevices = append(bondDevices, pifRecord.Device)
-			var bondSlaveDevices []string
-			for _, slave := range bondRecord.Slaves {
-				record, err := xenapi.PIF.GetRecord(session, slave)
-				if err != nil {
-					return nics, errors.New(err.Error())
-				}
-				bondSlaveDevices = append(bondSlaveDevices, record.Device)
+			bondSlaveDevices, err := getBondSlaveDevices(session, bondRecord.Slaves)
+			if err != nil {
+				return nics, err
 			}
 			nics = append(nics, getNICNameForBondDevices(bondSlaveDevices))
 		}
@@ -256,5 +438,6 @@ func getNICNameForBondDevices(devices []string) string {
 			deviceNumberStrings = append(deviceNumberStrings, strings.Split(device, "eth")[1])
 		}
 	}
+	slices.Sort(deviceNumberStrings)
 	return name + " " + strings.Join(deviceNumberStrings, "+")
 }

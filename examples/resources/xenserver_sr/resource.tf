@@ -16,6 +16,7 @@ resource "xenserver_sr" "nfs" {
   name_label   = "Test NFS SR"
   type         = "nfs"
   content_type = ""
+  shared       = true
   device_config = {
     server     = "10.70.58.9"
     serverpath = "/xenrtnfs"

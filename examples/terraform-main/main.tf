@@ -87,18 +87,6 @@ output "nfs_test_out" {
   value = xenserver_sr_nfs.nfs_test
 }
 
-resource "xenserver_network" "network" {
-  name_label       = "Network Object on Pool"
-  name_description = "VM and Host objects that are attached to the Network object"
-  mtu              = 1500
-  // managed = true // This can be set on create and can't be updated
-  other_config = {}
-}
-
-output "network_out" {
-  value = xenserver_network.network
-}
-
 resource "xenserver_vdi" "vdi1" {
   name_label       = "Test VDI1"
   name_description = "A test VDI on NFS SR"
@@ -141,4 +129,15 @@ data "xenserver_nic" "nic" {
 
 output "nic_output" {
   value = data.xenserver_nic.nic.data_items
+}
+
+resource "xenserver_network_vlan" "vlan" {
+  name_label = "test external network"
+  mtu        = 1600
+  vlan_tag   = 1
+  nic        = data.xenserver_nic.nic.data_items[0]
+}
+
+output "vlan_output" {
+  value = data.xenserver_network_vlan.vlan
 }
