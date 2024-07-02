@@ -318,16 +318,16 @@ func updateNFSResourceModel(srRecord xenapi.SRRecord, pbdRecord xenapi.PBDRecord
 	data.NameLabel = types.StringValue(srRecord.NameLabel)
 	server, ok := pbdRecord.DeviceConfig["server"]
 	if !ok {
-		return errors.New(`Unable to find "server" in PBD device config`)
+		return errors.New(`unable to find "server" in PBD device config`)
 	}
 	serverPath, ok := pbdRecord.DeviceConfig["serverpath"]
 	if !ok {
-		return errors.New(`Unable to find "serverpath" in PBD device config`)
+		return errors.New(`unable to find "serverpath" in PBD device config`)
 	}
 	data.StorageLocation = types.StringValue(server + ":" + serverPath)
 	nfsVersion, ok := pbdRecord.DeviceConfig["nfsversion"]
 	if !ok {
-		return errors.New(`Unable to find "nfsversion" in PBD device config`)
+		return errors.New(`unable to find "nfsversion" in PBD device config`)
 	}
 	data.Version = types.StringValue(nfsVersion)
 	err := updateNFSResourceModelComputed(srRecord, pbdRecord, data)

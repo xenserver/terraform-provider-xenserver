@@ -5,7 +5,12 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"xenapi"
@@ -115,8 +120,41 @@ type vmResourceModel struct {
 	NameLabel    types.String `tfsdk:"name_label"`
 	TemplateName types.String `tfsdk:"template_name"`
 	OtherConfig  types.Map    `tfsdk:"other_config"`
-	Snapshots    types.List   `tfsdk:"snapshots"`
+	HardDrive    types.List   `tfsdk:"hard_drive"`
 	UUID         types.String `tfsdk:"id"`
+}
+
+func VMSchema() map[string]schema.Attribute {
+	return map[string]schema.Attribute{
+		"name_label": schema.StringAttribute{
+			MarkdownDescription: "The name of the virtual machine",
+			Required:            true,
+		},
+		"template_name": schema.StringAttribute{
+			MarkdownDescription: "The template name of the virtual machine which cloned from",
+			Required:            true,
+		},
+		"hard_drive": schema.ListAttribute{
+			MarkdownDescription: "A list of vdi uuids to attach to the virtual machine",
+			ElementType:         types.StringType,
+			Required:            true,
+		},
+		"other_config": schema.MapAttribute{
+			MarkdownDescription: "The other config of the virtual machine",
+			Optional:            true,
+			Computed:            true,
+			ElementType:         types.StringType,
+			Default:             mapdefault.StaticValue(types.MapValueMust(types.StringType, map[string]attr.Value{})),
+		},
+		"id": schema.StringAttribute{
+			MarkdownDescription: "UUID of the virtual machine",
+			Computed:            true,
+			// attributes which are not configurable and that should not show updates from the existing state value
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.UseStateForUnknown(),
+			},
+		},
+	}
 }
 
 func updateVMRecordData(ctx context.Context, record xenapi.VMRecord, data *vmRecordData) error {
@@ -324,28 +362,43 @@ func getVMOtherConfig(ctx context.Context, data vmResourceModel) (map[string]str
 }
 
 // Update vmResourceModel base on new vmRecord, except uuid
-func updateVMResourceModel(ctx context.Context, vmRecord xenapi.VMRecord, data *vmResourceModel) error {
+func updateVMResourceModel(ctx context.Context, session *xenapi.Session, vmRecord xenapi.VMRecord, data *vmResourceModel) error {
 	data.NameLabel = types.StringValue(vmRecord.NameLabel)
 	data.TemplateName = types.StringValue(vmRecord.OtherConfig["template_name"])
-	var diags diag.Diagnostics
+
+	vdiUUIDs, err := getVDIUUIDsFromVMRecord(session, vmRecord)
+	if err != nil {
+		return errors.New("unable to get VDI UUIDs from VM record")
+	}
+	vdiList, diags := types.ListValueFrom(ctx, types.StringType, vdiUUIDs)
+	if diags.HasError() {
+		return errors.New("unable to read VM hard drive")
+	}
+	data.HardDrive = vdiList
+
 	delete(vmRecord.OtherConfig, "template_name")
 	data.OtherConfig, diags = types.MapValueFrom(ctx, types.StringType, vmRecord.OtherConfig)
 	if diags.HasError() {
 		return errors.New("unable to read VM other config")
 	}
-	err := updateVMResourceModelComputed(ctx, vmRecord, data)
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
-// Update vmResourceModel computed field base on new vmRecord, except uuid
-func updateVMResourceModelComputed(ctx context.Context, vmRecord xenapi.VMRecord, data *vmResourceModel) error {
-	var diags diag.Diagnostics
-	data.Snapshots, diags = types.ListValueFrom(ctx, types.StringType, vmRecord.Snapshots)
-	if diags.HasError() {
-		return errors.New("unable to read VM snapshots")
+func getVDIUUIDsFromVMRecord(session *xenapi.Session, vmRecord xenapi.VMRecord) ([]string, error) {
+	var vdiUUIDs []string
+	// Get VBDs and extract VDI references vmRecord.VBDs
+	for _, vbdRef := range vmRecord.VBDs {
+		vbdRecord, err := xenapi.VBD.GetRecord(session, vbdRef)
+		if err != nil {
+			return nil, errors.New("unable to get VBD record")
+		}
+
+		vdiRecord, err := xenapi.VDI.GetRecord(session, vbdRecord.VDI)
+		if err != nil {
+			return nil, errors.New("unable to get VDI record")
+		}
+
+		vdiUUIDs = append(vdiUUIDs, vdiRecord.UUID)
 	}
-	return nil
+	return vdiUUIDs, nil
 }

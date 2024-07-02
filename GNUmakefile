@@ -1,3 +1,5 @@
+WORKDIR ?= examples/terraform-main
+
 SHELL := /bin/bash
 default: testacc
 
@@ -16,26 +18,26 @@ provider: go.mod  ## make provider
 	ls -l $(GOBIN)/terraform-provider-xenserver
 
 apply: .env provider  ## make apply
-	cd examples/terraform-main && \
+	cd $(WORKDIR) && \
     terraform plan && \
     terraform apply -auto-approve
 
 show_state: .env  ## make show_state resource=xenserver_vm.vm
-	@cd examples/terraform-main && \
+	@cd $(WORKDIR) && \
 	if [ -z "$(resource)" ]; then echo "USAGE: make show_state resource=<>" && \
 	echo "List available resources:" && echo "`terraform state list`" && exit 1; fi && \
 	terraform state show $(resource)
 
 import: .env  ## make import resource=xenserver_vm.vm id=vm-uuid
-	@cd examples/terraform-main && \
+	@cd $(WORKDIR) && \
 	if [ -z "$(resource)" ] || [ -z "$(id)" ]; then echo "USAGE: make import resource=<> id=<>"; exit 1; fi && \
 	terraform import $(resource) $(id)
 
 remove: .env  ## make remove resource=xenserver_vm.vm
-	@cd examples/terraform-main && \
+	@cd $(WORKDIR) && \
 	if [ -z "$(resource)" ]; then echo "USAGE: make remove resource=<>"; exit 1; fi && \
 	terraform state rm $(resource)
 
 destroy:
-	cd examples/terraform-main && \
+	cd $(WORKDIR) && \
     terraform destroy -auto-approve

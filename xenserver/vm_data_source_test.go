@@ -9,9 +9,23 @@ import (
 
 func testAccVMDataSourceConfig(name_label string) string {
 	return fmt.Sprintf(`
+data "xenserver_sr" "sr" {
+  name_label = "Local storage"
+}
+
+resource "xenserver_vdi" "vdi" {
+  name_label       = "local-storage-vdi"
+  sr_uuid          = data.xenserver_sr.sr.data_items[0].uuid
+  virtual_size     = 100 * 1024 * 1024 * 1024
+}
+
 resource "xenserver_vm" "test_vm" {
-	name_label = "%s"
-	template_name = "CentOS 7"
+  name_label = "%s"
+  template_name = "Windows 11"
+  hard_drive = [ xenserver_vdi.vdi.id ]
+  other_config = {
+  	"flag" = "1"
+  }
 }
 
 data "xenserver_vm" "test_vm_data" {
