@@ -53,6 +53,7 @@ func (r *vmResource) Configure(_ context.Context, req resource.ConfigureRequest,
 }
 
 func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	tflog.Debug(ctx, "---> Create VM resource")
 	var plan vmResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
@@ -78,6 +79,7 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 		return
 	}
 
+	// add some extra configure field to vm ----------------
 	err = xenapi.VM.SetIsATemplate(r.session, vmRef, false)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -87,27 +89,18 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 		return
 	}
 
-	// Set some configure field
-	otherConfig, err := getVMOtherConfig(ctx, plan)
+	// add other_config
+	err = setOtherConfigFromPlan(ctx, r.session, plan, vmRef)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to get VM other config",
+			"Unable to set other config",
 			err.Error(),
 		)
 		return
 	}
 
-	err = xenapi.VM.SetOtherConfig(r.session, vmRef, otherConfig)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Unable to set VM other config",
-			err.Error(),
-		)
-		return
-	}
-
-	// set VBDs
-	_, err = createVBDs(ctx, plan, vmRef, r.session)
+	// add hard_drive
+	err = createVBDs(ctx, plan, vmRef, r.session)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to create VBDs",
@@ -116,7 +109,17 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 		return
 	}
 
-	// Overwrite plan with refreshed resource state
+	// add network_interface
+	err = createVIFs(ctx, plan, vmRef, r.session)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to create VIFs",
+			err.Error(),
+		)
+		return
+	}
+
+	// Overwrite data with refreshed resource state
 	vmRecord, err := xenapi.VM.GetRecord(r.session, vmRef)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -135,20 +138,12 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 		return
 	}
 
-	plan.HardDrive, err = sortHardDrive(ctx, plan.HardDrive)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Unable to sort hard drive",
-			err.Error(),
-		)
-		return
-	}
-
 	// Save plan into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (r *vmResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	tflog.Debug(ctx, "---> Read VM resource")
 	var state vmResourceModel
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -189,6 +184,7 @@ func (r *vmResource) Read(ctx context.Context, req resource.ReadRequest, resp *r
 }
 
 func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	tflog.Debug(ctx, "---> Update VM resource")
 	var plan, state vmResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -198,8 +194,8 @@ func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, res
 
 	if plan.TemplateName != state.TemplateName {
 		resp.Diagnostics.AddError(
-			"Unable to change template name",
 			"The template name doesn't expected to be updated",
+			"plan.TemplateName: "+plan.TemplateName.ValueString()+"  state.TemplateName: "+state.TemplateName.ValueString(),
 		)
 		return
 	}
@@ -214,38 +210,10 @@ func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, res
 		return
 	}
 
-	// Update existing vm resource with new plan
-	err = xenapi.VM.SetNameLabel(r.session, vmRef, plan.NameLabel.ValueString())
+	err = vmResourceModelUpdate(ctx, r.session, vmRef, plan, state)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to set VM name label",
-			err.Error(),
-		)
-		return
-	}
-
-	otherConfig, err := getVMOtherConfig(ctx, plan)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Unable to get VM other config",
-			err.Error(),
-		)
-		return
-	}
-
-	err = xenapi.VM.SetOtherConfig(r.session, vmRef, otherConfig)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Unable to set VM other config",
-			err.Error(),
-		)
-		return
-	}
-
-	err = updateVBDs(ctx, plan, state, vmRef, r.session)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Unable to update VBDs",
+			"Unable to update VM",
 			err.Error(),
 		)
 		return
@@ -270,20 +238,12 @@ func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, res
 		return
 	}
 
-	plan.HardDrive, err = sortHardDrive(ctx, plan.HardDrive)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Unable to sort hard drive",
-			err.Error(),
-		)
-		return
-	}
-
 	// Save updated plan into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (r *vmResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	tflog.Debug(ctx, "---> Delete VM resource")
 	var state vmResourceModel
 	// Read Terraform prior state state into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)

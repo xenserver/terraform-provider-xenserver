@@ -22,6 +22,9 @@ apply: .env provider  ## make apply
     terraform plan && \
     terraform apply -auto-approve
 
+apply_vm: .env provider  ## make apply_vm
+	$(MAKE) WORKDIR=examples/vm-main apply
+
 show_state: .env  ## make show_state resource=xenserver_vm.vm
 	@cd $(WORKDIR) && \
 	if [ -z "$(resource)" ]; then echo "USAGE: make show_state resource=<>" && \
@@ -41,3 +44,6 @@ remove: .env  ## make remove resource=xenserver_vm.vm
 destroy:
 	cd $(WORKDIR) && \
     terraform destroy -auto-approve
+
+destroy_vm:
+	$(MAKE) WORKDIR=examples/vm-main destroy

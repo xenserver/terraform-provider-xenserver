@@ -18,7 +18,9 @@ resource "xenserver_vdi" "vdi1" {
 	sr_uuid      = data.xenserver_sr.sr.data_items[0].uuid
 	virtual_size = 100 * 1024 * 1024 * 1024
 }
-	
+
+data "xenserver_network" "network" {}
+
 resource "xenserver_vm" "vm" {
 	name_label    = "A test virtual-machine"
 	template_name = "Windows 11"
@@ -26,6 +28,17 @@ resource "xenserver_vm" "vm" {
 		{
 		vdi_uuid = xenserver_vdi.vdi1.uuid,
 		mode     = "RW"
+		},
+	]
+	network_interface = [
+		{
+		other_config = {
+			ethtool-gso = "off"
+		}
+		device		 = "0"
+		mtu          = 1600
+		mac          = "11:22:33:44:55:66"
+		network_uuid = data.xenserver_network.network.data_items[1].uuid,
 		},
 	]
 }

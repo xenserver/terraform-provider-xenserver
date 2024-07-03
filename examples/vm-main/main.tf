@@ -31,9 +31,12 @@ resource "xenserver_vdi" "vdi2" {
   virtual_size = 100 * 1024 * 1024 * 1024
 }
 
+data "xenserver_network" "network" {}
+
 resource "xenserver_vm" "vm" {
   name_label    = "A test virtual-machine"
   template_name = "Windows 11"
+
   hard_drive = [
     {
       vdi_uuid = xenserver_vdi.vdi1.uuid,
@@ -46,6 +49,26 @@ resource "xenserver_vm" "vm" {
       mode     = "RO"
     },
   ]
+
+  network_interface = [
+    {
+      device       = "0"
+      network_uuid = data.xenserver_network.network.data_items[0].uuid,
+    },
+    {
+      device = "1"
+      other_config = {
+        ethtool-gso = "off"
+      }
+      mtu          = 1700
+      mac          = "11:22:33:44:55:66"
+      network_uuid = data.xenserver_network.network.data_items[0].uuid,
+    },
+  ]
+
+  other_config = {
+    "tf_created" = "true"
+  }
 }
 
 output "vm_out" {

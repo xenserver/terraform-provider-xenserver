@@ -28,9 +28,12 @@ resource "xenserver_vdi" "vdi2" {
   virtual_size = 100 * 1024 * 1024 * 1024
 }
 
+data "xenserver_network" "network" {}
+
 resource "xenserver_vm" "vm" {
   name_label    = "A test virtual-machine"
   template_name = "Windows 11"
+
   hard_drive = [
     {
       vdi_uuid = xenserver_vdi.vdi1.uuid,
@@ -43,6 +46,26 @@ resource "xenserver_vm" "vm" {
       mode     = "RO"
     },
   ]
+
+  network_interface = [
+    {
+      network_uuid = data.xenserver_network.network.data_items[0].uuid,
+      device       = "0"
+    },
+    {
+      other_config = {
+        ethtool-gso = "off"
+      }
+      mtu          = 1600
+      device       = "0"
+      mac          = "11:22:33:44:55:66"
+      network_uuid = data.xenserver_network.network.data_items[1].uuid,
+    },
+  ]
+
+  other_config = {
+    "tf_created" = "true"
+  }
 }
 
 output "vm_out" {
@@ -55,12 +78,13 @@ output "vm_out" {
 
 ### Required
 
-- `hard_drive` (Attributes List) A list of hard drive attributes to attach to the virtual machine (see [below for nested schema](#nestedatt--hard_drive))
 - `name_label` (String) The name of the virtual machine
+- `network_interface` (Attributes Set) A set of network interface attributes to attach to the virtual machine (see [below for nested schema](#nestedatt--network_interface))
 - `template_name` (String) The template name of the virtual machine which cloned from
 
 ### Optional
 
+- `hard_drive` (Attributes Set) A set of hard drive attributes to attach to the virtual machine (see [below for nested schema](#nestedatt--hard_drive))
 - `other_config` (Map of String) The other config of the virtual machine
 
 ### Read-Only
@@ -68,12 +92,31 @@ output "vm_out" {
 - `id` (String) The test id of the virtual machine
 - `uuid` (String) The UUID of the virtual machine
 
+<a id="nestedatt--network_interface"></a>
+### Nested Schema for `network_interface`
+
+Required:
+
+- `device` (String) Order in which VIF backends are created by xapi, default to be 0. if changed, the network will be recreated
+- `network_uuid` (String) Network UUID to attach to VIF
+
+Optional:
+
+- `mac` (String) MAC address of the VIF, if not provided, XenServer will generate a random MAC address.
+- `mtu` (Number) MTU in octets, default: 1500
+- `other_config` (Map of String) The additional configuration, default to be {}
+
+Read-Only:
+
+- `vif_ref` (String)
+
+
 <a id="nestedatt--hard_drive"></a>
 ### Nested Schema for `hard_drive`
 
 Required:
 
-- `vdi_uuid` (String) VDI UUID to attach to VBD
+- `vdi_uuid` (String) VDI UUID to attach to VBD, Note that using the same VDI for multiple VBDs is not supported
 
 Optional:
 
@@ -82,7 +125,7 @@ Optional:
 
 Read-Only:
 
-- `vbd_ref` (String) VBD Reference
+- `vbd_ref` (String)
 
 ## Import
 
