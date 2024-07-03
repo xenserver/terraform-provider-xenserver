@@ -3,6 +3,7 @@ package xenserver
 import (
 	"context"
 	"errors"
+	"sort"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -12,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 
 	"xenapi"
 )
@@ -134,10 +136,12 @@ func VMSchema() map[string]schema.Attribute {
 			MarkdownDescription: "The template name of the virtual machine which cloned from",
 			Required:            true,
 		},
-		"hard_drive": schema.ListAttribute{
-			MarkdownDescription: "A list of vdi uuids to attach to the virtual machine",
-			ElementType:         types.StringType,
-			Required:            true,
+		"hard_drive": schema.ListNestedAttribute{
+			MarkdownDescription: "A list of hard drive attributes to attach to the virtual machine",
+			NestedObject: schema.NestedAttributeObject{
+				Attributes: VBDSchema(),
+			},
+			Required: true,
 		},
 		"other_config": schema.MapAttribute{
 			MarkdownDescription: "The other config of the virtual machine",
@@ -335,17 +339,19 @@ func updateVMRecordData(ctx context.Context, record xenapi.VMRecord, data *vmRec
 }
 
 func getFirstTemplate(session *xenapi.Session, templateName string) (xenapi.VMRef, error) {
+	var vmRef xenapi.VMRef
 	records, err := xenapi.VM.GetAllRecords(session)
 	if err != nil {
-		return "", errors.New(err.Error())
+		return vmRef, errors.New(err.Error())
 	}
+
 	// Get the first VM template ref
-	for ref, record := range records {
+	for vmRef, record := range records {
 		if record.IsATemplate && strings.Contains(record.NameLabel, templateName) {
-			return ref, nil
+			return vmRef, nil
 		}
 	}
-	return "", errors.New("unable to find VM template ref")
+	return vmRef, errors.New("unable to find VM template ref")
 }
 
 // Get vmResourceModel OtherConfig base on data
@@ -361,44 +367,67 @@ func getVMOtherConfig(ctx context.Context, data vmResourceModel) (map[string]str
 	return otherConfig, nil
 }
 
+func updateVMResourceModelComputed(ctx context.Context, session *xenapi.Session, vmRecord xenapi.VMRecord, data *vmResourceModel) error {
+	var err error
+	data.HardDrive, err = getVBDsFromVMRecord(ctx, session, vmRecord)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Update vmResourceModel base on new vmRecord, except uuid
 func updateVMResourceModel(ctx context.Context, session *xenapi.Session, vmRecord xenapi.VMRecord, data *vmResourceModel) error {
 	data.NameLabel = types.StringValue(vmRecord.NameLabel)
 	data.TemplateName = types.StringValue(vmRecord.OtherConfig["template_name"])
 
-	vdiUUIDs, err := getVDIUUIDsFromVMRecord(session, vmRecord)
-	if err != nil {
-		return errors.New("unable to get VDI UUIDs from VM record")
-	}
-	vdiList, diags := types.ListValueFrom(ctx, types.StringType, vdiUUIDs)
-	if diags.HasError() {
-		return errors.New("unable to read VM hard drive")
-	}
-	data.HardDrive = vdiList
-
 	delete(vmRecord.OtherConfig, "template_name")
+	var diags diag.Diagnostics
 	data.OtherConfig, diags = types.MapValueFrom(ctx, types.StringType, vmRecord.OtherConfig)
 	if diags.HasError() {
 		return errors.New("unable to read VM other config")
 	}
+
+	err := updateVMResourceModelComputed(ctx, session, vmRecord, data)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
-func getVDIUUIDsFromVMRecord(session *xenapi.Session, vmRecord xenapi.VMRecord) ([]string, error) {
-	var vdiUUIDs []string
-	// Get VBDs and extract VDI references vmRecord.VBDs
+func getVBDsFromVMRecord(ctx context.Context, session *xenapi.Session, vmRecord xenapi.VMRecord) (basetypes.ListValue, error) {
+	var vbdList []vbdResourceModel
+	var listValue basetypes.ListValue
 	for _, vbdRef := range vmRecord.VBDs {
 		vbdRecord, err := xenapi.VBD.GetRecord(session, vbdRef)
 		if err != nil {
-			return nil, errors.New("unable to get VBD record")
+			return listValue, errors.New("unable to get VBD record")
 		}
 
 		vdiRecord, err := xenapi.VDI.GetRecord(session, vbdRecord.VDI)
 		if err != nil {
-			return nil, errors.New("unable to get VDI record")
+			return listValue, errors.New("unable to get VDI record")
 		}
 
-		vdiUUIDs = append(vdiUUIDs, vdiRecord.UUID)
+		vbd := vbdResourceModel{
+			VDI:      types.StringValue(vdiRecord.UUID),
+			Bootable: types.BoolValue(vbdRecord.Bootable),
+			Mode:     types.StringValue(string(vbdRecord.Mode)),
+		}
+
+		vbdList = append(vbdList, vbd)
 	}
-	return vdiUUIDs, nil
+
+	// sort vbdList by VDI UUID
+	sort.Slice(vbdList, func(i, j int) bool {
+		return vbdList[i].VDI.ValueString() < vbdList[j].VDI.ValueString()
+	})
+
+	listValue, diags := types.ListValueFrom(ctx, types.ObjectType{AttrTypes: vbdResourceModelAttrTypes}, vbdList)
+	if diags.HasError() {
+		return listValue, errors.New("unable to get VBD list value")
+	}
+
+	return listValue, nil
 }

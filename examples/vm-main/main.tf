@@ -34,7 +34,18 @@ resource "xenserver_vdi" "vdi2" {
 resource "xenserver_vm" "vm" {
   name_label    = "A test virtual-machine"
   template_name = "Windows 11"
-  hard_drive    = [xenserver_vdi.vdi1.id, xenserver_vdi.vdi2.id]
+  hard_drive = [
+    {
+      vdi_uuid = xenserver_vdi.vdi1.id,
+      bootable = true,
+      mode     = "RW"
+    },
+    {
+      vdi_uuid = xenserver_vdi.vdi2.id,
+      bootable = false,
+      mode     = "RO"
+    },
+  ]
 }
 
 output "vm_out" {
