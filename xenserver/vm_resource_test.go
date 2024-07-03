@@ -22,7 +22,13 @@ resource "xenserver_vdi" "vdi" {
 resource "xenserver_vm" "test_vm" {
   name_label = "%s"
   template_name = "Windows 11"
-  hard_drive = [ xenserver_vdi.vdi.id ]
+  hard_drive = [
+    { 
+      vdi_uuid = xenserver_vdi.vdi.id,
+      bootable = true,
+      mode = "RW"
+    },
+  ]
   other_config = {
   	"flag" = "1"
   }

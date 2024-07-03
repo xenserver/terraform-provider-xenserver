@@ -31,7 +31,7 @@ output "vm_out" {
 
 ### Required
 
-- `hard_drive` (List of String) A list of vdi uuids to attach to the virtual machine
+- `hard_drive` (Attributes List) A list of hard drive attributes to attach to the virtual machine (see [below for nested schema](#nestedatt--hard_drive))
 - `name_label` (String) The name of the virtual machine
 - `template_name` (String) The template name of the virtual machine which cloned from
 
@@ -42,6 +42,18 @@ output "vm_out" {
 ### Read-Only
 
 - `id` (String) UUID of the virtual machine
+
+<a id="nestedatt--hard_drive"></a>
+### Nested Schema for `hard_drive`
+
+Required:
+
+- `vdi_uuid` (String) VDI UUID to attach to VBD
+
+Optional:
+
+- `bootable` (Boolean) Set VBD as bootable, Default: false
+- `mode` (String) The mode the VBD should be mounted with, Default: RW
 
 ## Import
 

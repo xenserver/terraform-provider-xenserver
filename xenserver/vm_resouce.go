@@ -54,15 +54,14 @@ func (r *vmResource) Configure(_ context.Context, req resource.ConfigureRequest,
 }
 
 func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data vmResourceModel
-	// Read Terraform plan data into the model
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	var plan vmResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	// create new resource
-	templateRef, err := getFirstTemplate(r.session, data.TemplateName.ValueString())
+	templateRef, err := getFirstTemplate(r.session, plan.TemplateName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to get template Ref",
@@ -71,7 +70,7 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 		return
 	}
 	tflog.Debug(ctx, "Clone VM from a template")
-	vmRef, err := xenapi.VM.Clone(r.session, templateRef, data.NameLabel.ValueString())
+	vmRef, err := xenapi.VM.Clone(r.session, templateRef, plan.NameLabel.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to clone VM from template",
@@ -83,14 +82,14 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 	err = xenapi.VM.SetIsATemplate(r.session, vmRef, false)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to set VM from a template",
+			`Unable to set VM as "non template"`,
 			err.Error(),
 		)
 		return
 	}
 
 	// Set some configure field
-	otherConfig, err := getVMOtherConfig(ctx, data)
+	otherConfig, err := getVMOtherConfig(ctx, plan)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to get VM other config",
@@ -109,7 +108,7 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 	}
 
 	// set VBDs
-	_, err = createVBDs(ctx, data.HardDrive, vmRef, r.session)
+	_, err = createVBDs(ctx, plan, vmRef, r.session)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to create VBDs",
@@ -118,7 +117,7 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 		return
 	}
 
-	// Overwrite data with refreshed resource state
+	// Overwrite plan with refreshed resource state
 	vmRecord, err := xenapi.VM.GetRecord(r.session, vmRef)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -128,11 +127,19 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 		return
 	}
 
-	// Set all computed valueunable to get VDI refs
-	data.UUID = types.StringValue(vmRecord.UUID)
+	plan.UUID = types.StringValue(vmRecord.UUID)
 
-	// Save data into Terraform state
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	plan.HardDrive, err = sortHardDrive(ctx, plan.HardDrive)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to sort hard drive",
+			err.Error(),
+		)
+		return
+	}
+
+	// Save plan into Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (r *vmResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -229,31 +236,38 @@ func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, res
 		return
 	}
 
-	// Judge if the hard drive field in plan has changed, if added, create new VBDs, if removed, destroy VBDs
-	planVDIUUIDs := make([]string, 0, len(plan.HardDrive.Elements()))
-	diags := plan.HardDrive.ElementsAs(ctx, &planVDIUUIDs, false)
-	if diags.HasError() {
-		resp.Diagnostics.AddError(
-			"Unable to get VDI UUIDs in plan data hard drive attributes",
-			"Unable to get VDI UUIDs in plan data hard drive attributes",
-		)
-		return
-	}
-
-	stateVDIUUIDs := make([]string, 0, len(state.HardDrive.Elements()))
-	diags = state.HardDrive.ElementsAs(ctx, &stateVDIUUIDs, false)
-	if diags.HasError() {
-		resp.Diagnostics.AddError(
-			"Unable to get VDI UUIDs in state data hard drive attributes",
-			"Unable to get VDI UUIDs in state data hard drive attributes",
-		)
-		return
-	}
-
-	err = updateVBDs(planVDIUUIDs, stateVDIUUIDs, vmRef, r.session)
+	err = updateVBDs(ctx, plan, state, vmRef, r.session)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to update VBDs",
+			err.Error(),
+		)
+		return
+	}
+
+	// Overwrite computed data with refreshed resource state
+	vmRecord, err := xenapi.VM.GetRecord(r.session, vmRef)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to get VM record",
+			err.Error(),
+		)
+		return
+	}
+
+	err = updateVMResourceModelComputed(ctx, r.session, vmRecord, &plan)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to update VM resource model state",
+			err.Error(),
+		)
+		return
+	}
+
+	plan.HardDrive, err = sortHardDrive(ctx, plan.HardDrive)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to sort hard drive",
 			err.Error(),
 		)
 		return
