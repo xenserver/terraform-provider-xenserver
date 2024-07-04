@@ -47,6 +47,10 @@ func TestAccVMResource(t *testing.T) {
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "name_label", "test vm 1"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "template_name", "Windows 11"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "hard_drive.#", "1"),
+					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "hard_drive.0.%", "4"),
+					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "hard_drive.0.mode", "RW"),
+					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "hard_drive.0.bootable", "true"),
+					resource.TestCheckResourceAttrSet("xenserver_vm.test_vm", "hard_drive.0.vbd_ref"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "other_config.%", "1"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "other_config.flag", "1"),
 					// Verify dynamic values have any value set in the state.
