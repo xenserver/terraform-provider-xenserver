@@ -72,6 +72,7 @@ func testAccSRResourceConfigShared(name_label string) string {
 resource "xenserver_sr" "test_sr" {
 	name_label    = "%s"
 	type          = "nfs"
+	shared        = true
 	device_config = {
 		server       = "%s"
 		serverpath   = "%s"

@@ -54,10 +54,10 @@ func (r *srResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *r
 				Default:             stringdefault.StaticString(""),
 			},
 			"type": schema.StringAttribute{
-				MarkdownDescription: `The type of the storage repository, default to be ""`,
+				MarkdownDescription: `The type of the storage repository, default to be "dummy"`,
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString(""),
+				Default:             stringdefault.StaticString("dummy"),
 			},
 			"content_type": schema.StringAttribute{
 				MarkdownDescription: `The type of the SR's content, if required (e.g. ISOs), default to be ""`,
@@ -66,10 +66,10 @@ func (r *srResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *r
 				Default:             stringdefault.StaticString(""),
 			},
 			"shared": schema.BoolAttribute{
-				MarkdownDescription: `True if this SR is (capable of being) shared between multiple hosts, default to be true`,
+				MarkdownDescription: `True if this SR is (capable of being) shared between multiple hosts, default to be false`,
 				Optional:            true,
 				Computed:            true,
-				Default:             booldefault.StaticBool(true),
+				Default:             booldefault.StaticBool(false),
 			},
 			"sm_config": schema.MapAttribute{
 				MarkdownDescription: "The SM dependent data, default to be {}",
@@ -202,19 +202,18 @@ func (r *srResource) Read(ctx context.Context, req resource.ReadRequest, resp *r
 }
 
 func (r *srResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data srResourceModel
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	var plan, state srResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	// Checking if configuration changes are allowed
-	var dataState srResourceModel
-	resp.Diagnostics.Append(req.State.Get(ctx, &dataState)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	err := srResourceModelUpdateCheck(data, dataState)
+	err := srResourceModelUpdateCheck(plan, state)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error update xenserver_sr configuration",
@@ -224,7 +223,7 @@ func (r *srResource) Update(ctx context.Context, req resource.UpdateRequest, res
 	}
 
 	// Update the resource with new configuration
-	srRef, err := xenapi.SR.GetByUUID(r.session, data.UUID.ValueString())
+	srRef, err := xenapi.SR.GetByUUID(r.session, plan.UUID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to get SR ref",
@@ -232,7 +231,7 @@ func (r *srResource) Update(ctx context.Context, req resource.UpdateRequest, res
 		)
 		return
 	}
-	err = srResourceModelUpdate(ctx, r.session, srRef, data)
+	err = srResourceModelUpdate(ctx, r.session, srRef, plan)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to update SR resource",
@@ -248,7 +247,7 @@ func (r *srResource) Update(ctx context.Context, req resource.UpdateRequest, res
 		)
 		return
 	}
-	err = updateSRResourceModelComputed(ctx, r.session, srRecord, pbdRecord, &data)
+	err = updateSRResourceModelComputed(ctx, r.session, srRecord, pbdRecord, &plan)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to update the computed fields of SRResourceModel",
@@ -257,7 +256,7 @@ func (r *srResource) Update(ctx context.Context, req resource.UpdateRequest, res
 		return
 	}
 
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (r *srResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

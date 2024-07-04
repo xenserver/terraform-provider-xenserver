@@ -175,19 +175,18 @@ func (r *nfsResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 }
 
 func (r *nfsResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data nfsResourceModel
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	var plan, state nfsResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	// Checking if configuration changes are allowed
-	var dataState nfsResourceModel
-	resp.Diagnostics.Append(req.State.Get(ctx, &dataState)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	err := nfsResourceModelUpdateCheck(data, dataState)
+	err := nfsResourceModelUpdateCheck(plan, state)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error update xenserver_sr_nfs configuration",
@@ -197,7 +196,7 @@ func (r *nfsResource) Update(ctx context.Context, req resource.UpdateRequest, re
 	}
 
 	// Update the resource with new configuration
-	srRef, err := xenapi.SR.GetByUUID(r.session, data.UUID.ValueString())
+	srRef, err := xenapi.SR.GetByUUID(r.session, plan.UUID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to get SR ref",
@@ -205,7 +204,7 @@ func (r *nfsResource) Update(ctx context.Context, req resource.UpdateRequest, re
 		)
 		return
 	}
-	err = nfsResourceModelUpdate(r.session, srRef, data)
+	err = nfsResourceModelUpdate(r.session, srRef, plan)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to update NFS SR resource",
@@ -221,7 +220,7 @@ func (r *nfsResource) Update(ctx context.Context, req resource.UpdateRequest, re
 		)
 		return
 	}
-	err = updateNFSResourceModelComputed(srRecord, pbdRecord, &data)
+	err = updateNFSResourceModelComputed(srRecord, pbdRecord, &plan)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to update the computed fields of NFSResourceModel",
@@ -230,7 +229,7 @@ func (r *nfsResource) Update(ctx context.Context, req resource.UpdateRequest, re
 		return
 	}
 
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (r *nfsResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

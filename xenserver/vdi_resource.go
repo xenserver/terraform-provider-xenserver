@@ -196,19 +196,18 @@ func (r *vdiResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 }
 
 func (r *vdiResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data vdiResourceModel
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	var plan, state vdiResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	// Checking if configuration changes are allowed
-	var dataState vdiResourceModel
-	resp.Diagnostics.Append(req.State.Get(ctx, &dataState)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	err := vdiResourceModelUpdateCheck(data, dataState)
+	err := vdiResourceModelUpdateCheck(plan, state)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error update xenserver_vdi configuration",
@@ -218,7 +217,7 @@ func (r *vdiResource) Update(ctx context.Context, req resource.UpdateRequest, re
 	}
 
 	// Update the resource with new configuration
-	vdiRef, err := xenapi.VDI.GetByUUID(r.session, data.UUID.ValueString())
+	vdiRef, err := xenapi.VDI.GetByUUID(r.session, plan.UUID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to get VDI ref",
@@ -226,7 +225,7 @@ func (r *vdiResource) Update(ctx context.Context, req resource.UpdateRequest, re
 		)
 		return
 	}
-	err = vdiResourceModelUpdate(ctx, r.session, vdiRef, data)
+	err = vdiResourceModelUpdate(ctx, r.session, vdiRef, plan)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to update VDI resource",
@@ -242,7 +241,7 @@ func (r *vdiResource) Update(ctx context.Context, req resource.UpdateRequest, re
 		)
 		return
 	}
-	err = updateVDIResourceModelComputed(ctx, vdiRecord, &data)
+	err = updateVDIResourceModelComputed(ctx, vdiRecord, &plan)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to update the computed fields of VDIResourceModel",
@@ -251,7 +250,7 @@ func (r *vdiResource) Update(ctx context.Context, req resource.UpdateRequest, re
 		return
 	}
 
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (r *vdiResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

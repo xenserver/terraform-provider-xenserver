@@ -1,1 +1,0 @@
-terraform import xenserver_network.network <xenserver_network.network.id>

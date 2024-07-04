@@ -31,6 +31,7 @@ resource "xenserver_sr" "nfs" {
   name_label   = "Test NFS SR"
   type         = "nfs"
   content_type = ""
+  shared       = true
   device_config = {
     server     = "10.70.58.9"
     serverpath = "/xenrtnfs"
@@ -59,9 +60,9 @@ output "nfs_out" {
 - `device_config` (Map of String) The device config that will be passed to backend SR driver, default to be {}
 - `host` (String) The UUID of the host to create/make the SR on
 - `name_description` (String) The human-readable description of the storage repository, default to be ""
-- `shared` (Boolean) True if this SR is (capable of being) shared between multiple hosts, default to be true
+- `shared` (Boolean) True if this SR is (capable of being) shared between multiple hosts, default to be false
 - `sm_config` (Map of String) The SM dependent data, default to be {}
-- `type` (String) The type of the storage repository, default to be ""
+- `type` (String) The type of the storage repository, default to be "dummy"
 
 ### Read-Only
 
