@@ -7,7 +7,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"xenapi"
@@ -127,7 +126,14 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 		return
 	}
 
-	plan.UUID = types.StringValue(vmRecord.UUID)
+	err = updateVMResourceModelComputed(ctx, r.session, vmRecord, &plan)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to update VM resource model state",
+			err.Error(),
+		)
+		return
+	}
 
 	plan.HardDrive, err = sortHardDrive(ctx, plan.HardDrive)
 	if err != nil {

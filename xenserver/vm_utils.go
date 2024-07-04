@@ -369,6 +369,7 @@ func getVMOtherConfig(ctx context.Context, data vmResourceModel) (map[string]str
 
 func updateVMResourceModelComputed(ctx context.Context, session *xenapi.Session, vmRecord xenapi.VMRecord, data *vmResourceModel) error {
 	var err error
+	data.UUID = types.StringValue(vmRecord.UUID)
 	data.HardDrive, err = getVBDsFromVMRecord(ctx, session, vmRecord)
 	if err != nil {
 		return err
@@ -389,11 +390,7 @@ func updateVMResourceModel(ctx context.Context, session *xenapi.Session, vmRecor
 		return errors.New("unable to read VM other config")
 	}
 
-	err := updateVMResourceModelComputed(ctx, session, vmRecord, data)
-	if err != nil {
-		return err
-	}
-	return nil
+	return updateVMResourceModelComputed(ctx, session, vmRecord, data)
 }
 
 func getVBDsFromVMRecord(ctx context.Context, session *xenapi.Session, vmRecord xenapi.VMRecord) (basetypes.ListValue, error) {
@@ -414,6 +411,7 @@ func getVBDsFromVMRecord(ctx context.Context, session *xenapi.Session, vmRecord 
 			VDI:      types.StringValue(vdiRecord.UUID),
 			Bootable: types.BoolValue(vbdRecord.Bootable),
 			Mode:     types.StringValue(string(vbdRecord.Mode)),
+			VBD:      types.StringValue(string(vbdRef)),
 		}
 
 		vbdList = append(vbdList, vbd)

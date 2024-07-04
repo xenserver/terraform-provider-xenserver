@@ -17,12 +17,14 @@ import (
 
 type vbdResourceModel struct {
 	VDI      types.String `tfsdk:"vdi_uuid"`
+	VBD      types.String `tfsdk:"vbd_ref"`
 	Mode     types.String `tfsdk:"mode"`
 	Bootable types.Bool   `tfsdk:"bootable"`
 }
 
 var vbdResourceModelAttrTypes = map[string]attr.Type{
 	"vdi_uuid": types.StringType,
+	"vbd_ref":  types.StringType,
 	"mode":     types.StringType,
 	"bootable": types.BoolType,
 }
@@ -32,6 +34,10 @@ func VBDSchema() map[string]schema.Attribute {
 		"vdi_uuid": schema.StringAttribute{
 			MarkdownDescription: "VDI UUID to attach to VBD",
 			Required:            true,
+		},
+		"vbd_ref": schema.StringAttribute{
+			MarkdownDescription: "VBD Reference",
+			Computed:            true,
 		},
 		"bootable": schema.BoolAttribute{
 			MarkdownDescription: "Set VBD as bootable, Default: false",
@@ -52,12 +58,12 @@ func createVBD(vbd vbdResourceModel, vmRef xenapi.VMRef, session *xenapi.Session
 	var vbdRef xenapi.VBDRef
 	vdiRef, err := xenapi.VDI.GetByUUID(session, vbd.VDI.ValueString())
 	if err != nil {
-		return vbdRef, errors.New("unable to get VDI ref, vdi UUID: " + vbd.VDI.String())
+		return vbdRef, errors.New(err.Error())
 	}
 
 	userDevices, err := xenapi.VM.GetAllowedVBDDevices(session, vmRef)
 	if err != nil {
-		return vbdRef, errors.New("unable to get allowed VBD devices for vm " + string(vmRef))
+		return vbdRef, errors.New(err.Error())
 	}
 
 	if len(userDevices) == 0 {
@@ -76,19 +82,19 @@ func createVBD(vbd vbdResourceModel, vmRef xenapi.VMRef, session *xenapi.Session
 
 	vbdRef, err = xenapi.VBD.Create(session, vbdRecord)
 	if err != nil {
-		return vbdRef, errors.New("unable to create VBD, vdi UUID: " + vbd.VDI.String())
+		return vbdRef, errors.New(err.Error())
 	}
 
 	// plug VBDs if VM is running
 	vmPowerState, err := xenapi.VM.GetPowerState(session, vmRef)
 	if err != nil {
-		return vbdRef, errors.New("unable to get VM power state, vm ref: " + string(vmRef))
+		return vbdRef, errors.New(err.Error())
 	}
 
 	if vmPowerState == xenapi.VMPowerStateRunning {
 		err = xenapi.VBD.Plug(session, vbdRef)
 		if err != nil {
-			return vbdRef, errors.New("unable to plug VBD, vdi UUID: " + vbd.VDI.String())
+			return vbdRef, errors.New(err.Error())
 		}
 	}
 
@@ -113,6 +119,7 @@ func createVBDs(ctx context.Context, data vmResourceModel, vmRef xenapi.VMRef, s
 	return vbdRefs, nil
 }
 
+// sortHardDrive sorts the HardDrive list based on VDI UUID, this is required to compare the VBDs in plan and state
 func sortHardDrive(ctx context.Context, unSortedList basetypes.ListValue) (basetypes.ListValue, error) {
 	var listValue basetypes.ListValue
 	vbdList := make([]vbdResourceModel, 0, len(unSortedList.Elements()))
@@ -159,31 +166,25 @@ func updateVBDs(ctx context.Context, plan vmResourceModel, state vmResourceModel
 	}
 
 	// Create VBDs that are in plan but not in state, Update VBDs if already exists and attributes changed
-	for vdiUUID, vbd := range planVDIsMap {
-		_, ok := stateVDIsMap[vdiUUID]
+	for vdiUUID, planVBD := range planVDIsMap {
+		stateVBD, ok := stateVDIsMap[vdiUUID]
 		if !ok {
 			tflog.Debug(ctx, "---> Create VBD for VDI: "+vdiUUID+" <---")
-			_, err = createVBD(vbd, vmRef, session)
+			_, err = createVBD(planVBD, vmRef, session)
 			if err != nil {
 				return err
 			}
 		} else {
-			vbdRef, err := getVBDRef(session, vdiUUID, vmRef)
-			if err != nil {
-				return err
-			}
-
-			tflog.Debug(ctx, "---> Update VBD "+string(vbdRef)+" for VDI: "+vdiUUID+" <---")
-
-			if planVDIsMap[vdiUUID].Mode != stateVDIsMap[vdiUUID].Mode {
-				err = xenapi.VBD.SetMode(session, vbdRef, xenapi.VbdMode(planVDIsMap[vdiUUID].Mode.ValueString()))
+			tflog.Debug(ctx, "---> Update VBD "+planVBD.VBD.String()+" for VDI: "+vdiUUID+" <---")
+			if planVBD.Mode != stateVBD.Mode {
+				err = xenapi.VBD.SetMode(session, xenapi.VBDRef(planVBD.VBD.ValueString()), xenapi.VbdMode(planVBD.Mode.ValueString()))
 				if err != nil {
 					return errors.New(err.Error())
 				}
 			}
 
-			if planVDIsMap[vdiUUID].Bootable != stateVDIsMap[vdiUUID].Bootable {
-				err = xenapi.VBD.SetBootable(session, vbdRef, planVDIsMap[vdiUUID].Bootable.ValueBool())
+			if planVBD.Bootable != stateVBD.Bootable {
+				err = xenapi.VBD.SetBootable(session, xenapi.VBDRef(planVBD.VBD.ValueString()), planVBD.Bootable.ValueBool())
 				if err != nil {
 					return errors.New(err.Error())
 				}
@@ -192,54 +193,15 @@ func updateVBDs(ctx context.Context, plan vmResourceModel, state vmResourceModel
 	}
 
 	// Destroy VBDs that are not in plan
-	for vdiUUID := range stateVDIsMap {
+	for vdiUUID, stateVBD := range stateVDIsMap {
 		if _, ok := planVDIsMap[vdiUUID]; !ok {
-			tflog.Debug(ctx, "---> Destroy VBD for VDI: "+vdiUUID+" <---")
-			err = removeVBD(session, vdiUUID, vmRef)
+			tflog.Debug(ctx, "---> Destroy VBD:	"+stateVBD.VBD.String())
+			err = xenapi.VBD.Destroy(session, xenapi.VBDRef(stateVBD.VBD.ValueString()))
 			if err != nil {
-				return err
+				return errors.New(err.Error())
 			}
 		}
 	}
 
-	return nil
-}
-func getVBDRef(session *xenapi.Session, vdiUUID string, vmRef xenapi.VMRef) (xenapi.VBDRef, error) {
-	var vbdRef xenapi.VBDRef
-
-	VDIRef, err := xenapi.VDI.GetByUUID(session, vdiUUID)
-	if err != nil {
-		return vbdRef, errors.New("unable to get VDI ref, vdi UUID: " + vdiUUID)
-	}
-
-	VBDRefs, err := xenapi.VDI.GetVBDs(session, VDIRef)
-	if err != nil {
-		return vbdRef, errors.New("unable to get VBDs for VDI, vdi UUID: " + vdiUUID)
-	}
-
-	for _, vbdRef := range VBDRefs {
-		vbdRecord, err := xenapi.VBD.GetRecord(session, vbdRef)
-		if err != nil {
-			return vbdRef, errors.New("unable to get VBD record, vbd ref: " + string(vbdRef))
-		}
-
-		if vbdRecord.VM == vmRef {
-			return vbdRef, nil
-		}
-	}
-
-	return vbdRef, nil
-}
-
-func removeVBD(session *xenapi.Session, vdiUUID string, vmRef xenapi.VMRef) error {
-	vbdRef, err := getVBDRef(session, vdiUUID, vmRef)
-	if err != nil {
-		return err
-	}
-
-	err = xenapi.VBD.Destroy(session, vbdRef)
-	if err != nil {
-		return errors.New("unable to destroy VBD, vbd ref: " + string(vbdRef))
-	}
 	return nil
 }
