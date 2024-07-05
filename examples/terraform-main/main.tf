@@ -32,18 +32,6 @@ output "pif_data_out" {
   value = data.xenserver_pif.pif.data_items
 }
 
-resource "xenserver_vm" "vm" {
-  name_label    = "Test CentOS VM"
-  template_name = "CentOS 7"
-  other_config = {
-    flag = "1"
-  }
-}
-
-output "vm_out" {
-  value = xenserver_vm.vm
-}
-
 data "xenserver_sr" "sr" {
   name_label = "Local storage"
 }
