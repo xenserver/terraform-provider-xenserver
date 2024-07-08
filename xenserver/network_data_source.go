@@ -3,6 +3,7 @@ package xenserver
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -183,6 +184,10 @@ func (d *networkDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		}
 		networkItem = append(networkItem, networkData)
 	}
+
+	sort.Slice(networkItem, func(i, j int) bool {
+		return networkItem[i].UUID.ValueString() < networkItem[j].UUID.ValueString()
+	})
 	data.DataItems = networkItem
 
 	// Save data into Terraform state

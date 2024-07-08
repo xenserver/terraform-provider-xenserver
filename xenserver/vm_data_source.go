@@ -5,6 +5,7 @@ package xenserver
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -504,6 +505,10 @@ func (d *vmDataSource) Read(ctx context.Context, req datasource.ReadRequest, res
 		}
 		vmItems = append(vmItems, vmItem)
 	}
+
+	sort.Slice(vmItems, func(i, j int) bool {
+		return vmItems[i].UUID.ValueString() < vmItems[j].UUID.ValueString()
+	})
 	data.DataItems = vmItems
 
 	// Save data into Terraform state

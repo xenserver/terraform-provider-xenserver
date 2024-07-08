@@ -5,6 +5,7 @@ package xenserver
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -272,6 +273,9 @@ func (d *pifDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 		pifItems = append(pifItems, pifData)
 	}
 
+	sort.Slice(pifItems, func(i, j int) bool {
+		return pifItems[i].UUID.ValueString() < pifItems[j].UUID.ValueString()
+	})
 	data.DataItems = pifItems
 
 	// Save data into Terraform state
