@@ -78,7 +78,7 @@ output "nfs_test_out" {
 resource "xenserver_vdi" "vdi1" {
   name_label       = "Test VDI1"
   name_description = "A test VDI on NFS SR"
-  sr_uuid          = xenserver_sr_nfs.nfs_test.id
+  sr_uuid          = xenserver_sr_nfs.nfs_test.uuid
   virtual_size     = 1 * 1024 * 1024 * 1024
   sharable         = true
   other_config = {

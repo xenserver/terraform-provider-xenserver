@@ -11,5 +11,5 @@ resource "xenserver_network_vlan" "vlan" {
 }
 
 output "vlan_out" {
-  value = xenserver_network_vlan.vlan.id
+  value = xenserver_network_vlan.vlan.uuid
 }

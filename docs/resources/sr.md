@@ -66,12 +66,13 @@ output "nfs_out" {
 
 ### Read-Only
 
-- `id` (String) The UUID of the storage repository
+- `id` (String) The ID of the storage repository
+- `uuid` (String) The UUID of the storage repository
 
 ## Import
 
 Import is supported using the following syntax:
 
 ```shell
-terraform import xenserver_sr.local <xenserver_sr.local.id>
+terraform import xenserver_sr.local <xenserver_sr.local.uuid>
 ```

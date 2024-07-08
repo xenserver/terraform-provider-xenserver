@@ -19,7 +19,8 @@ type vdiResourceModel struct {
 	Sharable        types.Bool   `tfsdk:"sharable"`
 	ReadOnly        types.Bool   `tfsdk:"read_only"`
 	OtherConfig     types.Map    `tfsdk:"other_config"`
-	UUID            types.String `tfsdk:"id"`
+	UUID            types.String `tfsdk:"uuid"`
+	ID              types.String `tfsdk:"id"`
 }
 
 func getVDICreateParams(ctx context.Context, session *xenapi.Session, data vdiResourceModel) (xenapi.VDIRecord, error) {
@@ -58,6 +59,7 @@ func updateVDIResourceModel(ctx context.Context, session *xenapi.Session, record
 
 func updateVDIResourceModelComputed(ctx context.Context, record xenapi.VDIRecord, data *vdiResourceModel) error {
 	data.UUID = types.StringValue(record.UUID)
+	data.ID = types.StringValue(record.UUID)
 	data.NameDescription = types.StringValue(record.NameDescription)
 	data.Type = types.StringValue(string(record.Type))
 	data.Sharable = types.BoolValue(record.Sharable)

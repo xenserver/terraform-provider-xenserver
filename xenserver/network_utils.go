@@ -95,7 +95,8 @@ type vlanResourceModel struct {
 	OtherConfig     types.Map    `tfsdk:"other_config"`
 	Tag             types.Int64  `tfsdk:"vlan_tag"`
 	NIC             types.String `tfsdk:"nic"`
-	UUID            types.String `tfsdk:"id"`
+	UUID            types.String `tfsdk:"uuid"`
+	ID              types.String `tfsdk:"id"`
 }
 
 type vlanCreateParams struct {
@@ -267,6 +268,7 @@ func updateVlanResourceModel(ctx context.Context, session *xenapi.Session, recor
 
 func updateVlanResourceModelComputed(ctx context.Context, record xenapi.NetworkRecord, data *vlanResourceModel) error {
 	data.UUID = types.StringValue(record.UUID)
+	data.ID = types.StringValue(record.UUID)
 	data.NameDescription = types.StringValue(record.NameDescription)
 	data.MTU = types.Int64Value(int64(record.MTU))
 	data.Managed = types.BoolValue(record.Managed)

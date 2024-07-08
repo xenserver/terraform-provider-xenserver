@@ -86,8 +86,15 @@ func (r *vdiResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 				Default:             mapdefault.StaticValue(types.MapValueMust(types.StringType, map[string]attr.Value{})),
 				ElementType:         types.StringType,
 			},
-			"id": schema.StringAttribute{
+			"uuid": schema.StringAttribute{
 				MarkdownDescription: "The UUID of the virtual disk image",
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"id": schema.StringAttribute{
+				MarkdownDescription: "The ID of the virtual disk image",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -279,5 +286,5 @@ func (r *vdiResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 }
 
 func (r *vdiResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	resource.ImportStatePassthroughID(ctx, path.Root("uuid"), req, resp)
 }

@@ -63,8 +63,15 @@ func (r *nfsResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 				Computed:            true,
 				Default:             stringdefault.StaticString(""),
 			},
-			"id": schema.StringAttribute{
+			"uuid": schema.StringAttribute{
 				MarkdownDescription: "The UUID of the NFS storage repository",
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"id": schema.StringAttribute{
+				MarkdownDescription: "The ID of the NFS storage repository",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -250,5 +257,5 @@ func (r *nfsResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 }
 
 func (r *nfsResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	resource.ImportStatePassthroughID(ctx, path.Root("uuid"), req, resp)
 }

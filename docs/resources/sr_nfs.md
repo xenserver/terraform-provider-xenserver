@@ -41,12 +41,13 @@ output "nfs_test_out" {
 
 ### Read-Only
 
-- `id` (String) The UUID of the NFS storage repository
+- `id` (String) The ID of the NFS storage repository
+- `uuid` (String) The UUID of the NFS storage repository
 
 ## Import
 
 Import is supported using the following syntax:
 
 ```shell
-terraform import xenserver_sr_nfs.nfs_test <xenserver_sr_nfs.nfs_test.id>
+terraform import xenserver_sr_nfs.nfs_test <xenserver_sr_nfs.nfs_test.uuid>
 ```

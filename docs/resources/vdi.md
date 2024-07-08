@@ -24,7 +24,7 @@ resource "xenserver_sr_nfs" "nfs" {
 resource "xenserver_vdi" "vdi" {
   name_label       = "Test VDI"
   name_description = "A test VDI on NFS SR"
-  sr_uuid          = xenserver_sr_nfs.nfs.id
+  sr_uuid          = xenserver_sr_nfs.nfs.uuid
   virtual_size     = 1 * 1024 * 1024 * 1024
   sharable         = true
   other_config = {
@@ -74,12 +74,13 @@ output "vdi_out" {
 
 ### Read-Only
 
-- `id` (String) The UUID of the virtual disk image
+- `id` (String) The ID of the virtual disk image
+- `uuid` (String) The UUID of the virtual disk image
 
 ## Import
 
 Import is supported using the following syntax:
 
 ```shell
-terraform import xenserver_vdi.vdi <xenserver_vdi.vdi.id>
+terraform import xenserver_vdi.vdi <xenserver_vdi.vdi.uuid>
 ```

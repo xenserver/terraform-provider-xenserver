@@ -26,7 +26,7 @@ resource "xenserver_network_vlan" "vlan" {
 }
 
 output "vlan_out" {
-  value = xenserver_network_vlan.vlan.id
+  value = xenserver_network_vlan.vlan.uuid
 }
 ```
 
@@ -48,12 +48,13 @@ output "vlan_out" {
 
 ### Read-Only
 
-- `id` (String) The UUID of the network
+- `id` (String) The ID of the network
+- `uuid` (String) The UUID of the network
 
 ## Import
 
 Import is supported using the following syntax:
 
 ```shell
-terraform import xenserver_network_vlan.vlan <xenserver_network_vlan.vlan.id>
+terraform import xenserver_network_vlan.vlan <xenserver_network_vlan.vlan.uuid>
 ```

@@ -33,12 +33,12 @@ resource "xenserver_vm" "vm" {
   template_name = "Windows 11"
   hard_drive = [
     {
-      vdi_uuid = xenserver_vdi.vdi1.id,
+      vdi_uuid = xenserver_vdi.vdi1.uuid,
       bootable = true,
       mode     = "RW"
     },
     {
-      vdi_uuid = xenserver_vdi.vdi2.id,
+      vdi_uuid = xenserver_vdi.vdi2.uuid,
       bootable = false,
       mode     = "RO"
     },
@@ -65,7 +65,8 @@ output "vm_out" {
 
 ### Read-Only
 
-- `id` (String) UUID of the virtual machine
+- `id` (String) The ID of the virtual machine
+- `uuid` (String) The UUID of the virtual machine
 
 <a id="nestedatt--hard_drive"></a>
 ### Nested Schema for `hard_drive`
@@ -88,5 +89,5 @@ Read-Only:
 Import is supported using the following syntax:
 
 ```shell
-terraform import xenserver_vm.vm <xenserver_vm.vm.id>
+terraform import xenserver_vm.vm <xenserver_vm.vm.uuid>
 ```

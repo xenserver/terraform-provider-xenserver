@@ -40,7 +40,7 @@ resource "xenserver_vm" "vm" {
   template_name = "Windows 11"
   hard_drive = [
     {
-      vdi_uuid = xenserver_vdi.vdi1.id,
+      vdi_uuid = xenserver_vdi.vdi1.uuid,
       bootable = true,
       mode     = "RW"
     },
@@ -49,7 +49,7 @@ resource "xenserver_vm" "vm" {
 
 resource "xenserver_snapshot" "snapshot" {
   name_label = "A test snapshot 2"
-  vm_uuid    = xenserver_vm.vm.id
+  vm_uuid    = xenserver_vm.vm.uuid
 }
 ```
 
@@ -67,12 +67,13 @@ resource "xenserver_snapshot" "snapshot" {
 
 ### Read-Only
 
-- `id` (String) The UUID of the snapshot
+- `id` (String) The ID of the snapshot
+- `uuid` (String) The UUID of the snapshot
 
 ## Import
 
 Import is supported using the following syntax:
 
 ```shell
-terraform import xenserver_snapshot.snapshot <xenserver_snapshot.snapshot.id>
+terraform import xenserver_snapshot.snapshot <xenserver_snapshot.snapshot.uuid>
 ```

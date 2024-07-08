@@ -36,7 +36,7 @@ func TestAccSRResourceLocal(t *testing.T) {
 					resource.TestCheckResourceAttr("xenserver_sr.test_sr", "device_config.%", "0"),
 					// Verify dynamic values have any value set in the state.
 					resource.TestCheckResourceAttrSet("xenserver_sr.test_sr", "host"),
-					resource.TestCheckResourceAttrSet("xenserver_sr.test_sr", "id"),
+					resource.TestCheckResourceAttrSet("xenserver_sr.test_sr", "uuid"),
 				),
 			},
 			// ImportState testing
@@ -59,7 +59,7 @@ func TestAccSRResourceLocal(t *testing.T) {
 					resource.TestCheckResourceAttr("xenserver_sr.test_sr", "device_config.%", "0"),
 					// Verify dynamic values have any value set in the state.
 					resource.TestCheckResourceAttrSet("xenserver_sr.test_sr", "host"),
-					resource.TestCheckResourceAttrSet("xenserver_sr.test_sr", "id"),
+					resource.TestCheckResourceAttrSet("xenserver_sr.test_sr", "uuid"),
 				),
 			},
 			// Delete testing automatically occurs in TestCase
@@ -102,7 +102,7 @@ func TestAccSRResourceShared(t *testing.T) {
 					resource.TestCheckResourceAttr("xenserver_sr.test_sr", "device_config.nfsversion", "3"),
 					// Verify dynamic values have any value set in the state.
 					resource.TestCheckResourceAttrSet("xenserver_sr.test_sr", "host"),
-					resource.TestCheckResourceAttrSet("xenserver_sr.test_sr", "id"),
+					resource.TestCheckResourceAttrSet("xenserver_sr.test_sr", "uuid"),
 				),
 			},
 			// ImportState testing
@@ -128,7 +128,7 @@ func TestAccSRResourceShared(t *testing.T) {
 					resource.TestCheckResourceAttr("xenserver_sr.test_sr", "device_config.nfsversion", "3"),
 					// Verify dynamic values have any value set in the state.
 					resource.TestCheckResourceAttrSet("xenserver_sr.test_sr", "host"),
-					resource.TestCheckResourceAttrSet("xenserver_sr.test_sr", "id"),
+					resource.TestCheckResourceAttrSet("xenserver_sr.test_sr", "uuid"),
 				),
 			},
 			// Delete testing automatically occurs in TestCase
