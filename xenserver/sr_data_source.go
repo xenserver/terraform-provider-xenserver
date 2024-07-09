@@ -3,6 +3,7 @@ package xenserver
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -203,6 +204,10 @@ func (d *srDataSource) Read(ctx context.Context, req datasource.ReadRequest, res
 		}
 		srItems = append(srItems, srData)
 	}
+
+	sort.Slice(srItems, func(i, j int) bool {
+		return srItems[i].UUID.ValueString() < srItems[j].UUID.ValueString()
+	})
 	data.DataItems = srItems
 
 	// Save data into Terraform state

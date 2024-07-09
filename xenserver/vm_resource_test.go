@@ -24,7 +24,7 @@ resource "xenserver_vm" "test_vm" {
   template_name = "Windows 11"
   hard_drive = [
     { 
-      vdi_uuid = xenserver_vdi.vdi.id,
+      vdi_uuid = xenserver_vdi.vdi.uuid,
       bootable = true,
       mode = "RW"
     },
@@ -54,7 +54,7 @@ func TestAccVMResource(t *testing.T) {
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "other_config.%", "1"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "other_config.flag", "1"),
 					// Verify dynamic values have any value set in the state.
-					resource.TestCheckResourceAttrSet("xenserver_vm.test_vm", "id"),
+					resource.TestCheckResourceAttrSet("xenserver_vm.test_vm", "uuid"),
 				),
 			},
 			// ImportState testing

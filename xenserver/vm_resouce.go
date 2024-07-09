@@ -312,5 +312,5 @@ func (r *vmResource) Delete(ctx context.Context, req resource.DeleteRequest, res
 }
 
 func (r *vmResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	resource.ImportStatePassthroughID(ctx, path.Root("uuid"), req, resp)
 }

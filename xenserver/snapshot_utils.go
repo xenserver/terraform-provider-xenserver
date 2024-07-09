@@ -13,7 +13,8 @@ type snapshotResourceModel struct {
 	NameLabel  types.String `tfsdk:"name_label"`
 	VM         types.String `tfsdk:"vm_uuid"`
 	WithMemory types.Bool   `tfsdk:"with_memory"`
-	UUID       types.String `tfsdk:"id"`
+	UUID       types.String `tfsdk:"uuid"`
+	ID         types.String `tfsdk:"id"`
 }
 
 func updateSnapshotResourceModel(session *xenapi.Session, record xenapi.VMRecord, data *snapshotResourceModel) error {
@@ -29,6 +30,7 @@ func updateSnapshotResourceModel(session *xenapi.Session, record xenapi.VMRecord
 
 func updateSnapshotResourceModelComputed(record xenapi.VMRecord, data *snapshotResourceModel) error {
 	data.UUID = types.StringValue(record.UUID)
+	data.ID = types.StringValue(record.UUID)
 	if record.PowerState == xenapi.VMPowerStateSuspended {
 		data.WithMemory = types.BoolValue(true)
 	} else {

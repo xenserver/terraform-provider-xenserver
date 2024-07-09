@@ -115,7 +115,8 @@ type srResourceModel struct {
 	SmConfig        types.Map    `tfsdk:"sm_config"`
 	DeviceConfig    types.Map    `tfsdk:"device_config"`
 	Host            types.String `tfsdk:"host"`
-	UUID            types.String `tfsdk:"id"`
+	UUID            types.String `tfsdk:"uuid"`
+	ID              types.String `tfsdk:"id"`
 }
 
 func getPoolCoordinateRef(session *xenapi.Session) (xenapi.HostRef, error) {
@@ -184,6 +185,7 @@ func updateSRResourceModel(ctx context.Context, session *xenapi.Session, srRecor
 
 func updateSRResourceModelComputed(ctx context.Context, session *xenapi.Session, srRecord xenapi.SRRecord, pbdRecord xenapi.PBDRecord, data *srResourceModel) error {
 	data.UUID = types.StringValue(srRecord.UUID)
+	data.ID = types.StringValue(srRecord.UUID)
 	data.NameDescription = types.StringValue(srRecord.NameDescription)
 	data.Type = types.StringValue(srRecord.Type)
 	data.ContentType = types.StringValue(srRecord.ContentType)
@@ -288,7 +290,8 @@ type nfsResourceModel struct {
 	StorageLocation types.String `tfsdk:"storage_location"`
 	Version         types.String `tfsdk:"version"`
 	AdvancedOptions types.String `tfsdk:"advanced_options"`
-	UUID            types.String `tfsdk:"id"`
+	UUID            types.String `tfsdk:"uuid"`
+	ID              types.String `tfsdk:"id"`
 }
 
 func getNFSCreateParams(session *xenapi.Session, data nfsResourceModel) (srCreateParams, error) {
@@ -337,6 +340,7 @@ func updateNFSResourceModel(srRecord xenapi.SRRecord, pbdRecord xenapi.PBDRecord
 
 func updateNFSResourceModelComputed(srRecord xenapi.SRRecord, pbdRecord xenapi.PBDRecord, data *nfsResourceModel) error {
 	data.UUID = types.StringValue(srRecord.UUID)
+	data.ID = types.StringValue(srRecord.UUID)
 	data.NameDescription = types.StringValue(srRecord.NameDescription)
 	advancedOptions, ok := pbdRecord.DeviceConfig["options"]
 	if !ok {

@@ -90,8 +90,15 @@ func (r *srResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *r
 				Optional:            true,
 				Computed:            true,
 			},
-			"id": schema.StringAttribute{
+			"uuid": schema.StringAttribute{
 				MarkdownDescription: "The UUID of the storage repository",
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"id": schema.StringAttribute{
+				MarkdownDescription: "The test id of the storage repository",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -277,5 +284,5 @@ func (r *srResource) Delete(ctx context.Context, req resource.DeleteRequest, res
 }
 
 func (r *srResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	resource.ImportStatePassthroughID(ctx, path.Root("uuid"), req, resp)
 }

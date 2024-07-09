@@ -123,7 +123,8 @@ type vmResourceModel struct {
 	TemplateName types.String `tfsdk:"template_name"`
 	OtherConfig  types.Map    `tfsdk:"other_config"`
 	HardDrive    types.List   `tfsdk:"hard_drive"`
-	UUID         types.String `tfsdk:"id"`
+	UUID         types.String `tfsdk:"uuid"`
+	ID           types.String `tfsdk:"id"`
 }
 
 func VMSchema() map[string]schema.Attribute {
@@ -150,8 +151,16 @@ func VMSchema() map[string]schema.Attribute {
 			ElementType:         types.StringType,
 			Default:             mapdefault.StaticValue(types.MapValueMust(types.StringType, map[string]attr.Value{})),
 		},
+		"uuid": schema.StringAttribute{
+			MarkdownDescription: "The UUID of the virtual machine",
+			Computed:            true,
+			// attributes which are not configurable and that should not show updates from the existing state value
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.UseStateForUnknown(),
+			},
+		},
 		"id": schema.StringAttribute{
-			MarkdownDescription: "UUID of the virtual machine",
+			MarkdownDescription: "The test id of the virtual machine",
 			Computed:            true,
 			// attributes which are not configurable and that should not show updates from the existing state value
 			PlanModifiers: []planmodifier.String{
@@ -370,6 +379,7 @@ func getVMOtherConfig(ctx context.Context, data vmResourceModel) (map[string]str
 func updateVMResourceModelComputed(ctx context.Context, session *xenapi.Session, vmRecord xenapi.VMRecord, data *vmResourceModel) error {
 	var err error
 	data.UUID = types.StringValue(vmRecord.UUID)
+	data.ID = types.StringValue(vmRecord.UUID)
 	data.HardDrive, err = getVBDsFromVMRecord(ctx, session, vmRecord)
 	if err != nil {
 		return err

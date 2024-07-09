@@ -34,7 +34,7 @@ func TestAccNFSResource(t *testing.T) {
 					resource.TestCheckResourceAttr("xenserver_sr_nfs.test_nfs", "advanced_options", ""),
 					// Verify dynamic values have any value set in the state.
 
-					resource.TestCheckResourceAttrSet("xenserver_sr_nfs.test_nfs", "id"),
+					resource.TestCheckResourceAttrSet("xenserver_sr_nfs.test_nfs", "uuid"),
 				),
 			},
 			// ImportState testing
@@ -54,7 +54,7 @@ func TestAccNFSResource(t *testing.T) {
 					resource.TestCheckResourceAttr("xenserver_sr_nfs.test_nfs", "version", "3"),
 					resource.TestCheckResourceAttr("xenserver_sr_nfs.test_nfs", "advanced_options", ""),
 					// Verify dynamic values have any value set in the state.
-					resource.TestCheckResourceAttrSet("xenserver_sr_nfs.test_nfs", "id"),
+					resource.TestCheckResourceAttrSet("xenserver_sr_nfs.test_nfs", "uuid"),
 				),
 			},
 			// Delete testing automatically occurs in TestCase

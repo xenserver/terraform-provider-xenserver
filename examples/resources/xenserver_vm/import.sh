@@ -1,1 +1,1 @@
-terraform import xenserver_vm.vm <xenserver_vm.vm.id>
+terraform import xenserver_vm.vm <xenserver_vm.vm.uuid>

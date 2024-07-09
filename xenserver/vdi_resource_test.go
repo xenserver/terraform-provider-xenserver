@@ -19,7 +19,7 @@ resource "xenserver_sr_nfs" "nfs" {
 resource "xenserver_vdi" "test_vdi" {
 	name_label       = "%s"
 	name_description = "%s"
-	sr_uuid          = xenserver_sr_nfs.nfs.id
+	sr_uuid          = xenserver_sr_nfs.nfs.uuid
 	virtual_size     = 1 * 1024 * 1024 * 1024
 	other_config     = {
 		"flag" = "1"
@@ -43,7 +43,7 @@ func TestAccVDIResource(t *testing.T) {
 					resource.TestCheckResourceAttr("xenserver_vdi.test_vdi", "other_config.flag", "1"),
 					// Verify dynamic values have any value set in the state.
 
-					resource.TestCheckResourceAttrSet("xenserver_vdi.test_vdi", "id"),
+					resource.TestCheckResourceAttrSet("xenserver_vdi.test_vdi", "uuid"),
 				),
 			},
 			// ImportState testing
@@ -63,7 +63,7 @@ func TestAccVDIResource(t *testing.T) {
 					resource.TestCheckResourceAttr("xenserver_vdi.test_vdi", "other_config.%", "1"),
 					resource.TestCheckResourceAttr("xenserver_vdi.test_vdi", "other_config.flag", "1"),
 					// Verify dynamic values have any value set in the state.
-					resource.TestCheckResourceAttrSet("xenserver_vdi.test_vdi", "id"),
+					resource.TestCheckResourceAttrSet("xenserver_vdi.test_vdi", "uuid"),
 				),
 			},
 			// Delete testing automatically occurs in TestCase

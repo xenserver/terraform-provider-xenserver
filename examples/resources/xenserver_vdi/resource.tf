@@ -9,7 +9,7 @@ resource "xenserver_sr_nfs" "nfs" {
 resource "xenserver_vdi" "vdi" {
   name_label       = "Test VDI"
   name_description = "A test VDI on NFS SR"
-  sr_uuid          = xenserver_sr_nfs.nfs.id
+  sr_uuid          = xenserver_sr_nfs.nfs.uuid
   virtual_size     = 1 * 1024 * 1024 * 1024
   sharable         = true
   other_config = {

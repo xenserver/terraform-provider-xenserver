@@ -1,1 +1,1 @@
-terraform import xenserver_snapshot.snapshot <xenserver_snapshot.snapshot.id>
+terraform import xenserver_snapshot.snapshot <xenserver_snapshot.snapshot.uuid>

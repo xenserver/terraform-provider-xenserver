@@ -1,1 +1,1 @@
-terraform import xenserver_sr.local <xenserver_sr.local.id>
+terraform import xenserver_sr.local <xenserver_sr.local.uuid>

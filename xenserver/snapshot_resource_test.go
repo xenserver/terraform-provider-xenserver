@@ -24,7 +24,7 @@ resource "xenserver_vm" "vm" {
 	template_name = "Windows 11"
 	hard_drive = [
 		{
-		vdi_uuid = xenserver_vdi.vdi1.id,
+		vdi_uuid = xenserver_vdi.vdi1.uuid,
 		mode     = "RW"
 		},
 	]
@@ -32,7 +32,7 @@ resource "xenserver_vm" "vm" {
 
 resource "xenserver_snapshot" "test_snapshot" {
 	name_label = "%s"
-	vm_uuid = xenserver_vm.vm.id
+	vm_uuid = xenserver_vm.vm.uuid
 }
 `, name_label)
 }
@@ -47,7 +47,7 @@ func TestAccSnapshotResource(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("xenserver_snapshot.test_snapshot", "name_label", "Test snapshot A"),
 					resource.TestCheckResourceAttr("xenserver_snapshot.test_snapshot", "with_memory", "false"),
-					resource.TestCheckResourceAttrSet("xenserver_snapshot.test_snapshot", "id"),
+					resource.TestCheckResourceAttrSet("xenserver_snapshot.test_snapshot", "uuid"),
 				),
 			},
 			// ImportState testing

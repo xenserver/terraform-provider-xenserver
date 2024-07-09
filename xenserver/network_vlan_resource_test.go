@@ -35,7 +35,7 @@ func TestAccVlanResource(t *testing.T) {
 					resource.TestCheckResourceAttr("xenserver_network_vlan.test_vlan", "vlan_tag", "1"),
 					resource.TestCheckResourceAttr("xenserver_network_vlan.test_vlan", "nic", "NIC 0"),
 					// Verify dynamic values have any value set in the state.
-					resource.TestCheckResourceAttrSet("xenserver_network_vlan.test_vlan", "id"),
+					resource.TestCheckResourceAttrSet("xenserver_network_vlan.test_vlan", "uuid"),
 				),
 			},
 			// ImportState testing

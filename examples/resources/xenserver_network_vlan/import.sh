@@ -1,1 +1,1 @@
-terraform import xenserver_network_vlan.vlan <xenserver_network_vlan.vlan.id>
+terraform import xenserver_network_vlan.vlan <xenserver_network_vlan.vlan.uuid>

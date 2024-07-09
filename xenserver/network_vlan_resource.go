@@ -81,8 +81,15 @@ func (r *vlanResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 				MarkdownDescription: "The NIC used by the network",
 				Required:            true,
 			},
-			"id": schema.StringAttribute{
+			"uuid": schema.StringAttribute{
 				MarkdownDescription: "The UUID of the network",
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"id": schema.StringAttribute{
+				MarkdownDescription: "The test id of the network",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -318,5 +325,5 @@ func (r *vlanResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 }
 
 func (r *vlanResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	resource.ImportStatePassthroughID(ctx, path.Root("uuid"), req, resp)
 }

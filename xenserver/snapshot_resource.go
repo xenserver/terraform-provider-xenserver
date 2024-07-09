@@ -53,8 +53,15 @@ func (r *snapshotResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				Computed:            true,
 				Default:             booldefault.StaticBool(false),
 			},
-			"id": schema.StringAttribute{
+			"uuid": schema.StringAttribute{
 				MarkdownDescription: "The UUID of the snapshot",
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"id": schema.StringAttribute{
+				MarkdownDescription: "The test id of the snapshot",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -317,5 +324,5 @@ func (r *snapshotResource) Delete(ctx context.Context, req resource.DeleteReques
 }
 
 func (r *snapshotResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	resource.ImportStatePassthroughID(ctx, path.Root("uuid"), req, resp)
 }
