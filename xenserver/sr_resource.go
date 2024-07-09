@@ -98,7 +98,7 @@ func (r *srResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *r
 				},
 			},
 			"id": schema.StringAttribute{
-				MarkdownDescription: "The ID of the storage repository",
+				MarkdownDescription: "The test id of the storage repository",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),

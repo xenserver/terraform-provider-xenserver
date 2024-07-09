@@ -160,7 +160,7 @@ func VMSchema() map[string]schema.Attribute {
 			},
 		},
 		"id": schema.StringAttribute{
-			MarkdownDescription: "The ID of the virtual machine",
+			MarkdownDescription: "The test id of the virtual machine",
 			Computed:            true,
 			// attributes which are not configurable and that should not show updates from the existing state value
 			PlanModifiers: []planmodifier.String{

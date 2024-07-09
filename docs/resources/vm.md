@@ -65,7 +65,7 @@ output "vm_out" {
 
 ### Read-Only
 
-- `id` (String) The ID of the virtual machine
+- `id` (String) The test id of the virtual machine
 - `uuid` (String) The UUID of the virtual machine
 
 <a id="nestedatt--hard_drive"></a>

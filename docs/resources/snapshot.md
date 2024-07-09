@@ -67,7 +67,7 @@ resource "xenserver_snapshot" "snapshot" {
 
 ### Read-Only
 
-- `id` (String) The ID of the snapshot
+- `id` (String) The test id of the snapshot
 - `uuid` (String) The UUID of the snapshot
 
 ## Import

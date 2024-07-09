@@ -48,7 +48,7 @@ output "vlan_out" {
 
 ### Read-Only
 
-- `id` (String) The ID of the network
+- `id` (String) The test id of the network
 - `uuid` (String) The UUID of the network
 
 ## Import

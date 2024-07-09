@@ -74,7 +74,7 @@ output "vdi_out" {
 
 ### Read-Only
 
-- `id` (String) The ID of the virtual disk image
+- `id` (String) The test id of the virtual disk image
 - `uuid` (String) The UUID of the virtual disk image
 
 ## Import

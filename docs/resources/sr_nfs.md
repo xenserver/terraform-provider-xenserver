@@ -41,7 +41,7 @@ output "nfs_test_out" {
 
 ### Read-Only
 
-- `id` (String) The ID of the NFS storage repository
+- `id` (String) The test id of the NFS storage repository
 - `uuid` (String) The UUID of the NFS storage repository
 
 ## Import

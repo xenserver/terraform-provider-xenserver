@@ -71,7 +71,7 @@ func (r *nfsResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 				},
 			},
 			"id": schema.StringAttribute{
-				MarkdownDescription: "The ID of the NFS storage repository",
+				MarkdownDescription: "The test id of the NFS storage repository",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),

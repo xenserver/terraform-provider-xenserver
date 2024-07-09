@@ -89,7 +89,7 @@ func (r *vlanResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 				},
 			},
 			"id": schema.StringAttribute{
-				MarkdownDescription: "The ID of the network",
+				MarkdownDescription: "The test id of the network",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),

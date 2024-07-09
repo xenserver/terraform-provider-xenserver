@@ -61,7 +61,7 @@ func (r *snapshotResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				},
 			},
 			"id": schema.StringAttribute{
-				MarkdownDescription: "The ID of the snapshot",
+				MarkdownDescription: "The test id of the snapshot",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),

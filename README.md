@@ -101,8 +101,8 @@ terraform state show xenserver_vm.vm
 // remove state
 terraform state rm xenserver_vm.vm
 
-// import state with id
-terraform import xenserver_vm.vm <xenserver_vm.vm.id>
+// import state with uuid
+terraform import xenserver_vm.vm <xenserver_vm.vm.uuid>
 terraform show
 
 // change resource.tf data and re-apply

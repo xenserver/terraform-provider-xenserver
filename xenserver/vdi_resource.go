@@ -94,7 +94,7 @@ func (r *vdiResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 				},
 			},
 			"id": schema.StringAttribute{
-				MarkdownDescription: "The ID of the virtual disk image",
+				MarkdownDescription: "The test id of the virtual disk image",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
