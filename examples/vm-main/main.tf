@@ -52,4 +52,11 @@ output "vm_out" {
   value = xenserver_vm.vm
 }
 
+resource "xenserver_snapshot" "snapshot" {
+  name_label = "A test snapshot with disk"
+  vm_uuid    = xenserver_vm.vm.id
+}
 
+output "snapshot_out" {
+  value = xenserver_snapshot.snapshot
+}
