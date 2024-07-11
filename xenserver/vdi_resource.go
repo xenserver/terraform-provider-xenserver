@@ -151,6 +151,13 @@ func (r *vdiResource) Create(ctx context.Context, req resource.CreateRequest, re
 			"Unable to get VDI record",
 			err.Error(),
 		)
+		err = cleanupVDIResource(r.session, vdiRef)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error cleaning up VDI resource",
+				err.Error(),
+			)
+		}
 		return
 	}
 	err = updateVDIResourceModelComputed(ctx, vdiRecord, &data)
@@ -159,6 +166,13 @@ func (r *vdiResource) Create(ctx context.Context, req resource.CreateRequest, re
 			"Unable to update the computed fields of VDIResourceModel",
 			err.Error(),
 		)
+		err = cleanupVDIResource(r.session, vdiRef)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error cleaning up VDI resource",
+				err.Error(),
+			)
+		}
 		return
 	}
 	tflog.Debug(ctx, "VDI created")
@@ -275,10 +289,10 @@ func (r *vdiResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 		)
 		return
 	}
-	err = xenapi.VDI.Destroy(r.session, vdiRef)
+	err = cleanupVDIResource(r.session, vdiRef)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to destroy VDI",
+			"Unable to delete VDI resource",
 			err.Error(),
 		)
 		return

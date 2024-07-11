@@ -324,6 +324,28 @@ func vlanResourceModelUpdate(ctx context.Context, session *xenapi.Session, ref x
 	return nil
 }
 
+func cleanupVlanResource(session *xenapi.Session, ref xenapi.NetworkRef) error {
+	networkRecord, err := xenapi.Network.GetRecord(session, ref)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	for _, pifRef := range networkRecord.PIFs {
+		pifRecord, err := xenapi.PIF.GetRecord(session, pifRef)
+		if err != nil {
+			return errors.New(err.Error())
+		}
+		err = xenapi.VLAN.Destroy(session, pifRecord.VLANMasterOf)
+		if err != nil {
+			return errors.New(err.Error())
+		}
+	}
+	err = xenapi.Network.Destroy(session, ref)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	return nil
+}
+
 type nicDataSourceModel struct {
 	NetworkType types.String `tfsdk:"network_type"`
 	DataItems   []string     `tfsdk:"data_items"`

@@ -145,6 +145,13 @@ func (r *vlanResource) Create(ctx context.Context, req resource.CreateRequest, r
 			"Unable to get network record",
 			err.Error(),
 		)
+		err = cleanupVlanResource(r.session, networkRef)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error cleaning up network resource",
+				err.Error(),
+			)
+		}
 		return
 	}
 	err = updateVlanResourceModelComputed(ctx, networkRecord, &data)
@@ -153,6 +160,13 @@ func (r *vlanResource) Create(ctx context.Context, req resource.CreateRequest, r
 			"Unable to update the computed fields of vlanResourceModel",
 			err.Error(),
 		)
+		err = cleanupVlanResource(r.session, networkRef)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error cleaning up network resource",
+				err.Error(),
+			)
+		}
 		return
 	}
 
@@ -163,6 +177,13 @@ func (r *vlanResource) Create(ctx context.Context, req resource.CreateRequest, r
 			"Unable to get vlan create params",
 			err.Error(),
 		)
+		err = cleanupVlanResource(r.session, networkRef)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error cleaning up network resource",
+				err.Error(),
+			)
+		}
 		return
 	}
 	_, err = xenapi.Pool.CreateVLANFromPIF(r.session, params.PifRef, params.NetworkRef, params.Tag)
@@ -171,6 +192,13 @@ func (r *vlanResource) Create(ctx context.Context, req resource.CreateRequest, r
 			"Unable to create vlan",
 			err.Error(),
 		)
+		err = cleanupVlanResource(r.session, networkRef)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error cleaning up network resource",
+				err.Error(),
+			)
+		}
 		return
 	}
 
@@ -288,36 +316,10 @@ func (r *vlanResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 		)
 		return
 	}
-	networkRecord, err := xenapi.Network.GetRecord(r.session, networkRef)
+	err = cleanupVlanResource(r.session, networkRef)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to get network record",
-			err.Error(),
-		)
-		return
-	}
-	for _, pifRef := range networkRecord.PIFs {
-		pifRecord, err := xenapi.PIF.GetRecord(r.session, pifRef)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Unable to get PIF record",
-				err.Error(),
-			)
-			return
-		}
-		err = xenapi.VLAN.Destroy(r.session, pifRecord.VLANMasterOf)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Unable to destroy vlan",
-				err.Error(),
-			)
-			return
-		}
-	}
-	err = xenapi.Network.Destroy(r.session, networkRef)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Unable to destroy network",
+			"Unable to delete network resource",
 			err.Error(),
 		)
 		return

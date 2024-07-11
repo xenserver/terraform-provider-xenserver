@@ -128,6 +128,13 @@ func (r *nfsResource) Create(ctx context.Context, req resource.CreateRequest, re
 			"Unable to get SR or PBD record",
 			err.Error(),
 		)
+		err = cleanupSRResource(r.session, srRef)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error cleaning up SR resource",
+				err.Error(),
+			)
+		}
 		return
 	}
 	err = updateNFSResourceModelComputed(srRecord, pbdRecord, &data)
@@ -136,6 +143,13 @@ func (r *nfsResource) Create(ctx context.Context, req resource.CreateRequest, re
 			"Unable to update the computed fields of NFSResourceModel",
 			err.Error(),
 		)
+		err = cleanupSRResource(r.session, srRef)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error cleaning up SR resource",
+				err.Error(),
+			)
+		}
 		return
 	}
 	tflog.Debug(ctx, "NFS SR created")
@@ -246,10 +260,18 @@ func (r *nfsResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 		return
 	}
 
-	err := srDelete(r.session, data.UUID.ValueString())
+	srRef, err := xenapi.SR.GetByUUID(r.session, data.UUID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error delete NFS SR",
+			"Unable to get SR ref",
+			err.Error(),
+		)
+		return
+	}
+	err = cleanupSRResource(r.session, srRef)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to delete NFS SR",
 			err.Error(),
 		)
 		return

@@ -112,3 +112,11 @@ func vdiResourceModelUpdate(ctx context.Context, session *xenapi.Session, ref xe
 	}
 	return nil
 }
+
+func cleanupVDIResource(session *xenapi.Session, ref xenapi.VDIRef) error {
+	err := xenapi.VDI.Destroy(session, ref)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	return nil
+}

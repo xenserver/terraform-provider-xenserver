@@ -127,5 +127,5 @@ resource "xenserver_network_vlan" "vlan" {
 }
 
 output "vlan_output" {
-  value = data.xenserver_network_vlan.vlan
+  value = xenserver_network_vlan.vlan
 }

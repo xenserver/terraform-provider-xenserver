@@ -255,13 +255,8 @@ func srResourceModelUpdate(ctx context.Context, session *xenapi.Session, ref xen
 	return nil
 }
 
-func srDelete(session *xenapi.Session, srUUID string) error {
-	// unplug all PBDs on SR before destroying the SR
-	srRef, err := xenapi.SR.GetByUUID(session, srUUID)
-	if err != nil {
-		return errors.New(err.Error())
-	}
-	pbdRefs, err := xenapi.SR.GetPBDs(session, srRef)
+func cleanupSRResource(session *xenapi.Session, ref xenapi.SRRef) error {
+	pbdRefs, err := xenapi.SR.GetPBDs(session, ref)
 	if err != nil {
 		return errors.New(err.Error())
 	}
@@ -277,7 +272,7 @@ func srDelete(session *xenapi.Session, srUUID string) error {
 			}
 		}
 	}
-	err = xenapi.SR.Destroy(session, srRef)
+	err = xenapi.SR.Destroy(session, ref)
 	if err != nil {
 		return errors.New(err.Error())
 	}
