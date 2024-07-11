@@ -32,11 +32,25 @@ jobs:
           go-version-file: "go.mod"
           go-version: "1.22.0"
           cache: true
-      - name: Download and extract XenServer SDK
-        uses: ./.github/actions/setup-xenserver-sdk
-        with:
-          # TODO: Update the URL
-          XENSERVER_SDK_URL: https://github.com/initisan/terraform-provider-hashicups/raw/main/XenServer-SDK.zip
+      - name: Download and extract SDK
+        shell: bash
+        # If "XENSERVER_SDK_URL" is setup in the repository variable, will use it
+        # as SDK URL, otherwise, will extract the SDK version from https://www.xenserver.com/downloads.
+        # and download the SDK from https://github.com/xapi-project/xen-api/releases accordingly.
+        # it will help to ignore the "Download Agreement" from the official XenServer SDK download page.
+        run: |
+          url=${{ vars.XENSERVER_SDK_URL }}
+          if [ -z "$url" ]; then
+            version=$(curl -s 'https://www.xenserver.com/downloads' | \
+              grep -oE 'Software Development Kit \(SDK\) [0-9]+\.[0-9]+\.[0-9]+' | \
+              grep -oE '[0-9]+\.[0-9]+\.[0-9]+$')
+            url="https://github.com/xapi-project/xen-api/releases/download/v${version}/Go-SDK-prerelease-unsigned.zip"
+          fi
+          curl -L "$url" -o xenserver-sdk.zip
+          unzip xenserver-sdk.zip -d sdk_temp
+          mkdir -p goSDK
+          mv sdk_temp/sdk_go/src/* goSDK/
+          rm -rf sdk_temp xenserver-sdk.zip
       - name: Run linters
         uses: golangci/golangci-lint-action@v6
         with:
@@ -52,11 +66,25 @@ jobs:
           go-version-file: "go.mod"
           go-version: "1.22.0"
           cache: true
-      - name: Download and extract XenServer SDK
-        uses: ./.github/actions/setup-xenserver-sdk
-        with:
-          # TODO: Update the URL
-          XENSERVER_SDK_URL: https://github.com/initisan/terraform-provider-hashicups/raw/main/XenServer-SDK.zip
+      - name: Download and extract SDK
+        shell: bash
+        # If "XENSERVER_SDK_URL" is setup in the repository variable, will use it
+        # as SDK URL, otherwise, will extract the SDK version from https://www.xenserver.com/downloads.
+        # and download the SDK from https://github.com/xapi-project/xen-api/releases accordingly.
+        # it will help to ignore the "Download Agreement" from the official XenServer SDK download page.
+        run: |
+          url=${{ vars.XENSERVER_SDK_URL }}
+          if [ -z "$url" ]; then
+            version=$(curl -s 'https://www.xenserver.com/downloads' | \
+              grep -oE 'Software Development Kit \(SDK\) [0-9]+\.[0-9]+\.[0-9]+' | \
+              grep -oE '[0-9]+\.[0-9]+\.[0-9]+$')
+            url="https://github.com/xapi-project/xen-api/releases/download/v${version}/Go-SDK-prerelease-unsigned.zip"
+          fi
+          curl -L "$url" -o xenserver-sdk.zip
+          unzip xenserver-sdk.zip -d sdk_temp
+          mkdir -p goSDK
+          mv sdk_temp/sdk_go/src/* goSDK/
+          rm -rf sdk_temp xenserver-sdk.zip
       - run: go mod download
       - run: go build -v .
       - run: go generate ./...
