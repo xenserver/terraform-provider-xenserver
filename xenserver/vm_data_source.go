@@ -494,6 +494,14 @@ func (d *vmDataSource) Read(ctx context.Context, req datasource.ReadRequest, res
 			continue
 		}
 
+		if vmRecord.IsATemplate || vmRecord.IsDefaultTemplate {
+			continue
+		}
+
+		if vmRecord.SnapshotOf != "OpaqueRef:NULL" {
+			continue
+		}
+
 		var vmItem vmRecordData
 		err := updateVMRecordData(ctx, vmRecord, &vmItem)
 		if err != nil {
