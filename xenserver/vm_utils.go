@@ -3,12 +3,15 @@ package xenserver
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int32default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -123,6 +126,12 @@ type vmRecordData struct {
 type vmResourceModel struct {
 	NameLabel        types.String `tfsdk:"name_label"`
 	TemplateName     types.String `tfsdk:"template_name"`
+	StaticMemMin     types.Int64  `tfsdk:"static_mem_min"`
+	StaticMemMax     types.Int64  `tfsdk:"static_mem_max"`
+	DynamicMemMin    types.Int64  `tfsdk:"dynamic_mem_min"`
+	DynamicMemMax    types.Int64  `tfsdk:"dynamic_mem_max"`
+	VCPUs            types.Int32  `tfsdk:"vcpus"`
+	CorePerSocket    types.Int32  `tfsdk:"cores_per_socket"`
 	OtherConfig      types.Map    `tfsdk:"other_config"`
 	HardDrive        types.Set    `tfsdk:"hard_drive"`
 	NetworkInterface types.Set    `tfsdk:"network_interface"`
@@ -139,6 +148,35 @@ func VMSchema() map[string]schema.Attribute {
 		"template_name": schema.StringAttribute{
 			MarkdownDescription: "The template name of the virtual machine which cloned from",
 			Required:            true,
+		},
+		"static_mem_min": schema.Int64Attribute{
+			MarkdownDescription: "Statically-set (i.e. absolute) mininum memory (bytes). The least amount of memory this VM can boot with without crashing.",
+			Optional:            true,
+			Computed:            true,
+		},
+		"static_mem_max": schema.Int64Attribute{
+			MarkdownDescription: "Statically-set (i.e. absolute) maximum memory (bytes). This value acts as a hard limit of the amount of memory a guest can use at VM start time. New values only take effect on reboot.",
+			Required:            true,
+		},
+		"dynamic_mem_min": schema.Int64Attribute{
+			MarkdownDescription: "Dynamic minimum memory (bytes).",
+			Optional:            true,
+			Computed:            true,
+		},
+		"dynamic_mem_max": schema.Int64Attribute{
+			MarkdownDescription: "Dynamic maximum memory (bytes).",
+			Optional:            true,
+			Computed:            true,
+		},
+		"vcpus": schema.Int32Attribute{
+			MarkdownDescription: "The number of VCPUs for the virtual machine",
+			Required:            true,
+		},
+		"cores_per_socket": schema.Int32Attribute{
+			MarkdownDescription: "The number of core pre socket for the virtual machine",
+			Optional:            true,
+			Computed:            true,
+			Default:             int32default.StaticInt32(1),
 		},
 		"hard_drive": schema.SetNestedAttribute{
 			MarkdownDescription: "A set of hard drive attributes to attach to the virtual machine",
@@ -424,6 +462,9 @@ func updateVMResourceModelComputed(ctx context.Context, session *xenapi.Session,
 	var err error
 	data.UUID = types.StringValue(vmRecord.UUID)
 	data.ID = types.StringValue(vmRecord.UUID)
+	data.StaticMemMin = types.Int64Value(int64(vmRecord.MemoryStaticMin))
+	data.DynamicMemMin = types.Int64Value(int64(vmRecord.MemoryDynamicMin))
+	data.DynamicMemMax = types.Int64Value(int64(vmRecord.MemoryDynamicMax))
 	data.HardDrive, err = getVBDsFromVMRecord(ctx, session, vmRecord)
 	if err != nil {
 		return err
@@ -447,6 +488,18 @@ func updateVMResourceModelComputed(ctx context.Context, session *xenapi.Session,
 func updateVMResourceModel(ctx context.Context, session *xenapi.Session, vmRecord xenapi.VMRecord, data *vmResourceModel) error {
 	data.NameLabel = types.StringValue(vmRecord.NameLabel)
 	data.TemplateName = types.StringValue(vmRecord.OtherConfig["tf_template_name"])
+	data.StaticMemMax = types.Int64Value(int64(vmRecord.MemoryStaticMax))
+	data.VCPUs = types.Int32Value(int32(vmRecord.VCPUsMax))
+	socket, ok := vmRecord.Platform["cores-per-socket"]
+	if !ok {
+		return errors.New("unable to read VM platform cores-per-socket")
+	}
+	socketInt, err := strconv.Atoi(socket)
+	if err != nil {
+		return errors.New("unable to convert cores-per-socket to an int value")
+	}
+	data.CorePerSocket = types.Int32Value(int32(socketInt)) // #nosec G109
+
 	return updateVMResourceModelComputed(ctx, session, vmRecord, data)
 }
 
@@ -542,6 +595,74 @@ func getVIFsFromVMRecord(ctx context.Context, session *xenapi.Session, vmRecord 
 	return setValue, nil
 }
 
+func updateVMMemory(session *xenapi.Session, vmRef xenapi.VMRef, data vmResourceModel) error {
+	staticMemMax := int(data.StaticMemMax.ValueInt64())
+	staticMemMin := staticMemMax
+	dynamicMemMin := staticMemMax
+	dynamicMemMax := staticMemMax
+	if !data.StaticMemMin.IsUnknown() {
+		staticMemMin = int(data.StaticMemMin.ValueInt64())
+	}
+	if !data.DynamicMemMin.IsUnknown() {
+		dynamicMemMin = int(data.DynamicMemMin.ValueInt64())
+	}
+	if !data.DynamicMemMax.IsUnknown() {
+		dynamicMemMax = int(data.DynamicMemMax.ValueInt64())
+	}
+	err := xenapi.VM.SetMemoryLimits(session, vmRef, staticMemMin, staticMemMax, dynamicMemMin, dynamicMemMax)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+
+	return nil
+}
+
+func updateVMCPUs(session *xenapi.Session, vmRef xenapi.VMRef, data vmResourceModel) error {
+	originVCPUsMax, err := xenapi.VM.GetVCPUsMax(session, vmRef)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	vcpus := int(data.VCPUs.ValueInt32())
+	// VCPU values must satisfy: 0 < VCPUs_at_startup ≤ VCPUs_max
+	if vcpus < originVCPUsMax {
+		err = xenapi.VM.SetVCPUsAtStartup(session, vmRef, vcpus)
+		if err != nil {
+			return errors.New(err.Error())
+		}
+		err := xenapi.VM.SetVCPUsMax(session, vmRef, vcpus)
+		if err != nil {
+			return errors.New(err.Error())
+		}
+	} else {
+		err := xenapi.VM.SetVCPUsMax(session, vmRef, vcpus)
+		if err != nil {
+			return errors.New(err.Error())
+		}
+		err = xenapi.VM.SetVCPUsAtStartup(session, vmRef, vcpus)
+		if err != nil {
+			return errors.New(err.Error())
+		}
+	}
+	coresPerSocket := int(data.CorePerSocket.ValueInt32())
+	if vcpus%coresPerSocket != 0 {
+		return fmt.Errorf("%d cores could not fit to %d cores-per-socket topology", vcpus, coresPerSocket)
+	}
+	platform, err := xenapi.VM.GetPlatform(session, vmRef)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	if platform == nil {
+		platform = make(map[string]string)
+	}
+	platform["cores-per-socket"] = strconv.Itoa(coresPerSocket)
+	err = xenapi.VM.SetPlatform(session, vmRef, platform)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+
+	return nil
+}
+
 func vmResourceModelUpdate(ctx context.Context, session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel, state vmResourceModel) error {
 	err := xenapi.VM.SetNameLabel(session, vmRef, plan.NameLabel.ValueString())
 	if err != nil {
@@ -559,6 +680,16 @@ func vmResourceModelUpdate(ctx context.Context, session *xenapi.Session, vmRef x
 	}
 
 	err = updateVIFs(ctx, plan, state, vmRef, session)
+	if err != nil {
+		return err
+	}
+
+	err = updateVMMemory(session, vmRef, plan)
+	if err != nil {
+		return err
+	}
+
+	err = updateVMCPUs(session, vmRef, plan)
 	if err != nil {
 		return err
 	}

@@ -31,8 +31,11 @@ resource "xenserver_vdi" "vdi2" {
 data "xenserver_network" "network" {}
 
 resource "xenserver_vm" "vm" {
-  name_label    = "A test virtual-machine"
-  template_name = "Windows 11"
+  name_label       = "A test virtual-machine"
+  template_name    = "Windows 11"
+  static_mem_max   = 4 * 1024 * 1024 * 1024
+  vcpus            = 4
+  cores_per_socket = 2
 
   hard_drive = [
     {
@@ -80,12 +83,18 @@ output "vm_out" {
 
 - `name_label` (String) The name of the virtual machine
 - `network_interface` (Attributes Set) A set of network interface attributes to attach to the virtual machine (see [below for nested schema](#nestedatt--network_interface))
+- `static_mem_max` (Number) Statically-set (i.e. absolute) maximum memory (bytes). This value acts as a hard limit of the amount of memory a guest can use at VM start time. New values only take effect on reboot.
 - `template_name` (String) The template name of the virtual machine which cloned from
+- `vcpus` (Number) The number of VCPUs for the virtual machine
 
 ### Optional
 
+- `cores_per_socket` (Number) The number of core pre socket for the virtual machine
+- `dynamic_mem_max` (Number) Dynamic maximum memory (bytes).
+- `dynamic_mem_min` (Number) Dynamic minimum memory (bytes).
 - `hard_drive` (Attributes Set) A set of hard drive attributes to attach to the virtual machine (see [below for nested schema](#nestedatt--hard_drive))
 - `other_config` (Map of String) The other config of the virtual machine
+- `static_mem_min` (Number) Statically-set (i.e. absolute) mininum memory (bytes). The least amount of memory this VM can boot with without crashing.
 
 ### Read-Only
 
