@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-func testAccVMResourceConfig(name_label string, bootable string, mode string, mtu string, mac string, device string) string {
+func testAccVMResourceConfig(name_label string, memory int, vcpu int, bootable string, mode string, mtu string, mac string, device string) string {
 	return fmt.Sprintf(`
 data "xenserver_sr" "sr" {
   name_label = "Local storage"
@@ -25,6 +25,8 @@ data "xenserver_network" "network" {}
 resource "xenserver_vm" "test_vm" {
   name_label = "%s"
   template_name = "Windows 11"
+  static_mem_max = %d * 1024 * 1024 * 1024
+  vcpus         = %d
   hard_drive = [
     { 
       vdi_uuid = xenserver_vdi.vdi.uuid,
@@ -47,7 +49,7 @@ resource "xenserver_vm" "test_vm" {
   	"flag" = "1"
   }
 }
-`, name_label, bootable, mode, mtu, mac, device)
+`, name_label, memory, vcpu, bootable, mode, mtu, mac, device)
 }
 
 func TestAccVMResource(t *testing.T) {
@@ -56,19 +58,25 @@ func TestAccVMResource(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Testing with expected failure
 			{
-				Config:      providerConfig + testAccVMResourceConfig("invalid vm config", "true", "RW", "1600", "invalid mac address", "0"),
+				Config:      providerConfig + testAccVMResourceConfig("invalid vm config", 4, 4, "true", "RW", "1600", "invalid mac address", "0"),
 				ExpectError: regexp.MustCompile("Input is not a valid MAC address"),
 			},
 			{
-				Config:      providerConfig + testAccVMResourceConfig("invalid vm config", "false", "invalid mode", "1600", "11:22:33:44:55:66", "1"),
+				Config:      providerConfig + testAccVMResourceConfig("invalid vm config", 4, 4, "false", "invalid mode", "1600", "11:22:33:44:55:66", "1"),
 				ExpectError: regexp.MustCompile(`mode value must be one of:\n\["RO" "RW"\]`),
 			},
 			// Create and Read testing
 			{
-				Config: providerConfig + testAccVMResourceConfig("test vm 1", "true", "RW", "1600", "11:22:33:44:55:66", "0"),
+				Config: providerConfig + testAccVMResourceConfig("test vm 1", 4, 4, "true", "RW", "1600", "11:22:33:44:55:66", "0"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "name_label", "test vm 1"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "template_name", "Windows 11"),
+					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "static_mem_min", "4294967296"),
+					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "static_mem_max", "4294967296"),
+					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "dynamic_mem_min", "4294967296"),
+					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "dynamic_mem_max", "4294967296"),
+					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "vcpus", "4"),
+					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "cores_per_socket", "1"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "hard_drive.#", "1"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "hard_drive.0.%", "4"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "hard_drive.0.mode", "RW"),
@@ -87,20 +95,26 @@ func TestAccVMResource(t *testing.T) {
 			},
 			// Update with expected failure
 			{
-				Config:      providerConfig + testAccVMResourceConfig("test vm 1", "true", "RW", "1600", "44:55:66:11:22:33", "0"),
+				Config:      providerConfig + testAccVMResourceConfig("test vm 1", 3, 3, "true", "RW", "1600", "44:55:66:11:22:33", "0"),
 				ExpectError: regexp.MustCompile(`"network_interface.mac" doesn't expected to be updated.*`),
 			},
 			{
-				Config:      providerConfig + testAccVMResourceConfig("test vm 1", "true", "RW", "1500", "11:22:33:44:55:66", "0"),
+				Config:      providerConfig + testAccVMResourceConfig("test vm 1", 3, 3, "true", "RW", "1500", "11:22:33:44:55:66", "0"),
 				ExpectError: regexp.MustCompile(`"network_interface.mtu" doesn't expected to be updated.*`),
 			},
 			// Update and Read testing
 			// change the network_interface device
 			{
-				Config: providerConfig + testAccVMResourceConfig("test vm 1", "false", "RO", "1600", "11:22:33:44:55:66", "1"),
+				Config: providerConfig + testAccVMResourceConfig("test vm 1", 3, 3, "false", "RO", "1600", "11:22:33:44:55:66", "1"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "name_label", "test vm 1"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "template_name", "Windows 11"),
+					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "static_mem_min", "3221225472"),
+					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "static_mem_max", "3221225472"),
+					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "dynamic_mem_min", "3221225472"),
+					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "dynamic_mem_max", "3221225472"),
+					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "vcpus", "3"),
+					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "cores_per_socket", "1"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "network_interface.#", "1"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "network_interface.0.device", "1"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "network_interface.0.mac", "11:22:33:44:55:66"),

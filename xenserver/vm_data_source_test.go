@@ -22,8 +22,10 @@ resource "xenserver_vdi" "vdi" {
 data "xenserver_network" "network" {}
 
 resource "xenserver_vm" "test_vm" {
-  name_label = "%s"
-  template_name = "Windows 11"
+  name_label     = "%s"
+  template_name  = "Windows 11"
+  static_mem_max = 4 * 1024 * 1024 * 1024
+  vcpus          = 2
   hard_drive = [ 
     { 
       vdi_uuid = xenserver_vdi.vdi.id,

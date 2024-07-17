@@ -119,6 +119,26 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 		return
 	}
 
+	// Set memory
+	err = updateVMMemory(r.session, vmRef, plan)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to set VM memory",
+			err.Error(),
+		)
+		return
+	}
+
+	// Set VCPUs
+	err = updateVMCPUs(r.session, vmRef, plan)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to set VM VCPUs",
+			err.Error(),
+		)
+		return
+	}
+
 	// Overwrite data with refreshed resource state
 	vmRecord, err := xenapi.VM.GetRecord(r.session, vmRef)
 	if err != nil {
