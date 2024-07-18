@@ -125,8 +125,7 @@ func createVIF(ctx context.Context, vif vifResourceModel, vmRef xenapi.VMRef, se
 	}
 
 	if vmPowerState == xenapi.VMPowerStateRunning {
-		err = xenapi.VIF.Plug(session, vifRef)
-		if err != nil {
+		if err = xenapi.VIF.Plug(session, vifRef); err != nil {
 			return errors.New(err.Error())
 		}
 	}
@@ -134,17 +133,28 @@ func createVIF(ctx context.Context, vif vifResourceModel, vmRef xenapi.VMRef, se
 	return nil
 }
 
-func createVIFs(ctx context.Context, data vmResourceModel, vmRef xenapi.VMRef, session *xenapi.Session) error {
+func createVIFs(ctx context.Context, session *xenapi.Session, vmRef xenapi.VMRef, data vmResourceModel) error {
 	elements := make([]vifResourceModel, 0, len(data.NetworkInterface.Elements()))
 	diags := data.NetworkInterface.ElementsAs(ctx, &elements, false)
 	if diags.HasError() {
 		return errors.New("unable to get Network Interface elements")
 	}
 
+	// removed existing VIFs in VM template
+	existingVIFs, err := xenapi.VM.GetVIFs(session, vmRef)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+
+	for _, vif := range existingVIFs {
+		if err = xenapi.VIF.Destroy(session, vif); err != nil {
+			return errors.New(err.Error())
+		}
+	}
+
 	for _, vif := range elements {
-		err := createVIF(ctx, vif, vmRef, session)
-		if err != nil {
-			return err
+		if err = createVIF(ctx, vif, vmRef, session); err != nil {
+			return errors.New(err.Error())
 		}
 	}
 	return nil
