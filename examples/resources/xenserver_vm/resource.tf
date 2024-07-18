@@ -21,6 +21,9 @@ resource "xenserver_vm" "vm" {
   static_mem_max   = 4 * 1024 * 1024 * 1024
   vcpus            = 4
   cores_per_socket = 2
+  cdrom            = "win11-x64_uefi.iso"
+  boot_mode        = "uefi_security"
+  boot_order       = "cdn"
 
   hard_drive = [
     {

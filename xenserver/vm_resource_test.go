@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-func testAccVMResourceConfig(name_label string, memory int, vcpu int, bootable string, mode string, mac string, device string) string {
+func testAccVMResourceConfig(name_label string, memory int, vcpu int, boot_mode string, boot_order string, bootable string, mode string, mac string, device string) string {
 	return fmt.Sprintf(`
 data "xenserver_sr" "sr" {
   name_label = "Local storage"
@@ -27,6 +27,8 @@ resource "xenserver_vm" "test_vm" {
   template_name = "Windows 11"
   static_mem_max = %d * 1024 * 1024 * 1024
   vcpus         = %d
+  boot_mode     = "%s"
+  boot_order    = "%s"
   hard_drive = [
     { 
       vdi_uuid = xenserver_vdi.vdi.uuid,
@@ -48,7 +50,7 @@ resource "xenserver_vm" "test_vm" {
   	"flag" = "1"
   }
 }
-`, name_label, memory, vcpu, bootable, mode, mac, device)
+`, name_label, memory, vcpu, boot_mode, boot_order, bootable, mode, mac, device)
 }
 
 func TestAccVMResource(t *testing.T) {
@@ -57,16 +59,24 @@ func TestAccVMResource(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Testing with expected failure
 			{
-				Config:      providerConfig + testAccVMResourceConfig("invalid vm config", 4, 4, "true", "RW", "invalid mac address", "0"),
+				Config:      providerConfig + testAccVMResourceConfig("invalid vm config", 4, 4, "uefi", "ncd", "true", "RW", "invalid mac address", "0"),
 				ExpectError: regexp.MustCompile("Input is not a valid MAC address"),
 			},
 			{
-				Config:      providerConfig + testAccVMResourceConfig("invalid vm config", 4, 4, "false", "invalid mode", "11:22:33:44:55:66", "1"),
+				Config:      providerConfig + testAccVMResourceConfig("invalid vm config", 4, 4, "uefi", "ncd", "false", "invalid mode", "11:22:33:44:55:66", "1"),
 				ExpectError: regexp.MustCompile(`mode value must be one of:\n\["RO" "RW"\]`),
+			},
+			{
+				Config:      providerConfig + testAccVMResourceConfig("invalid vm config", 4, 4, "invalid mode", "ncd", "false", "RW", "11:22:33:44:55:66", "1"),
+				ExpectError: regexp.MustCompile(`boot_mode value must be one of: \["bios" "uefi" "uefi_security"\]`),
+			},
+			{
+				Config:      providerConfig + testAccVMResourceConfig("invalid vm config", 4, 4, "uefi", "invalid order", "false", "RW", "11:22:33:44:55:66", "1"),
+				ExpectError: regexp.MustCompile(`boot_order the value is combination string of \['c', 'd', 'n'\]`),
 			},
 			// Create and Read testing
 			{
-				Config: providerConfig + testAccVMResourceConfig("test vm 1", 4, 4, "true", "RW", "11:22:33:44:55:66", "0"),
+				Config: providerConfig + testAccVMResourceConfig("test vm 1", 4, 4, "uefi", "ncd", "true", "RW", "11:22:33:44:55:66", "0"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "name_label", "test vm 1"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "template_name", "Windows 11"),
@@ -76,6 +86,8 @@ func TestAccVMResource(t *testing.T) {
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "dynamic_mem_max", "4294967296"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "vcpus", "4"),
 					resource.TestCheckResourceAttrSet("xenserver_vm.test_vm", "cores_per_socket"),
+					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "boot_mode", "uefi"),
+					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "boot_order", "ncd"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "hard_drive.#", "1"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "hard_drive.0.%", "4"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "hard_drive.0.mode", "RW"),
@@ -93,17 +105,17 @@ func TestAccVMResource(t *testing.T) {
 			},
 			// Update with expected failure
 			{
-				Config:      providerConfig + testAccVMResourceConfig("test vm 1", 3, 4, "true", "RW", "44:55:66:11:22:33", "0"),
+				Config:      providerConfig + testAccVMResourceConfig("test vm 1", 3, 4, "uefi", "ncd", "true", "RW", "44:55:66:11:22:33", "0"),
 				ExpectError: regexp.MustCompile(`"network_interface.mac" doesn't expected to be updated.*`),
 			},
 			{
-				Config:      providerConfig + testAccVMResourceConfig("test vm 1", 3, 3, "false", "RO", "11:22:33:44:55:66", "1"),
+				Config:      providerConfig + testAccVMResourceConfig("test vm 1", 3, 3, "uefi", "ncd", "false", "RO", "11:22:33:44:55:66", "1"),
 				ExpectError: regexp.MustCompile("3 cores could not fit to 2 cores-per-socket topology*"),
 			},
 			// Update and Read testing
 			// change the network_interface device
 			{
-				Config: providerConfig + testAccVMResourceConfig("test vm 1", 3, 2, "false", "RO", "11:22:33:44:55:66", "1"),
+				Config: providerConfig + testAccVMResourceConfig("test vm 1", 3, 2, "uefi_security", "cnd", "false", "RO", "11:22:33:44:55:66", "1"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "name_label", "test vm 1"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "template_name", "Windows 11"),
@@ -116,6 +128,8 @@ func TestAccVMResource(t *testing.T) {
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "hard_drive.#", "1"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "hard_drive.0.mode", "RO"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "hard_drive.0.bootable", "false"),
+					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "boot_mode", "uefi_security"),
+					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "boot_order", "cnd"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "network_interface.#", "1"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "network_interface.0.device", "1"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "network_interface.0.mac", "11:22:33:44:55:66"),

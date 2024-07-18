@@ -4,15 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -124,16 +127,20 @@ type vmRecordData struct {
 // vmResourceModel describes the resource data model.
 type vmResourceModel struct {
 	NameLabel        types.String `tfsdk:"name_label"`
+	NameDescription  types.String `tfsdk:"name_description"`
 	TemplateName     types.String `tfsdk:"template_name"`
 	StaticMemMin     types.Int64  `tfsdk:"static_mem_min"`
 	StaticMemMax     types.Int64  `tfsdk:"static_mem_max"`
 	DynamicMemMin    types.Int64  `tfsdk:"dynamic_mem_min"`
 	DynamicMemMax    types.Int64  `tfsdk:"dynamic_mem_max"`
 	VCPUs            types.Int32  `tfsdk:"vcpus"`
+	BootMode         types.String `tfsdk:"boot_mode"`
+	BootOrder        types.String `tfsdk:"boot_order"`
 	CorePerSocket    types.Int32  `tfsdk:"cores_per_socket"`
 	OtherConfig      types.Map    `tfsdk:"other_config"`
 	HardDrive        types.Set    `tfsdk:"hard_drive"`
 	NetworkInterface types.Set    `tfsdk:"network_interface"`
+	CDROM            types.String `tfsdk:"cdrom"`
 	UUID             types.String `tfsdk:"uuid"`
 	ID               types.String `tfsdk:"id"`
 }
@@ -141,11 +148,17 @@ type vmResourceModel struct {
 func VMSchema() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"name_label": schema.StringAttribute{
-			MarkdownDescription: "The name of the virtual machine",
+			MarkdownDescription: "The name of the virtual machine.",
 			Required:            true,
 		},
+		"name_description": schema.StringAttribute{
+			MarkdownDescription: "The description of the virtual machine.",
+			Optional:            true,
+			Computed:            true,
+			Default:             stringdefault.StaticString(""),
+		},
 		"template_name": schema.StringAttribute{
-			MarkdownDescription: "The template name of the virtual machine which cloned from",
+			MarkdownDescription: "The template name of the virtual machine which cloned from.",
 			Required:            true,
 		},
 		"static_mem_min": schema.Int64Attribute{
@@ -168,7 +181,7 @@ func VMSchema() map[string]schema.Attribute {
 			Computed:            true,
 		},
 		"vcpus": schema.Int32Attribute{
-			MarkdownDescription: "The number of VCPUs for the virtual machine",
+			MarkdownDescription: "The number of VCPUs for the virtual machine.",
 			Required:            true,
 		},
 		"cores_per_socket": schema.Int32Attribute{
@@ -176,18 +189,40 @@ func VMSchema() map[string]schema.Attribute {
 			Optional:            true,
 			Computed:            true,
 		},
+		"boot_mode": schema.StringAttribute{
+			MarkdownDescription: "The boot mode of the virtual machine, the value is one of ['bios', 'uefi', 'uefi_security'].",
+			Optional:            true,
+			Computed:            true,
+			Validators: []validator.String{
+				stringvalidator.OneOf("bios", "uefi", "uefi_security"),
+			},
+		},
+		"boot_order": schema.StringAttribute{
+			MarkdownDescription: "The boot order of the virtual machine, the value is combination string of ['c', 'd', 'n'], please find the details in [Setting boot order for domUs](https://wiki.xenproject.org/wiki/Setting_boot_order_for_domUs).",
+			Optional:            true,
+			Computed:            true,
+			Validators: []validator.String{
+				stringvalidator.RegexMatches(regexp.MustCompile(`^[cdn]{1,3}$`), "the value is combination string of ['c', 'd', 'n']"),
+			},
+		},
+		"cdrom": schema.StringAttribute{
+			MarkdownDescription: "The VDI Name in ISO Library to attach to the virtual machine, if not set, use the default value from the template.",
+			Optional:            true,
+			Computed:            true,
+		},
 		"hard_drive": schema.SetNestedAttribute{
-			MarkdownDescription: "A set of hard drive attributes to attach to the virtual machine",
+			MarkdownDescription: "A set of hard drive attributes to attach to the virtual machine, if not set, use the default value from the template.",
 			NestedObject: schema.NestedAttributeObject{
 				Attributes: VBDSchema(),
 			},
 			Optional: true,
+			Computed: true,
 			Validators: []validator.Set{
 				setvalidator.SizeAtLeast(1),
 			},
 		},
 		"network_interface": schema.SetNestedAttribute{
-			MarkdownDescription: "A set of network interface attributes to attach to the virtual machine",
+			MarkdownDescription: "A set of network interface attributes to attach to the virtual machine.",
 			NestedObject: schema.NestedAttributeObject{
 				Attributes: VIFSchema(),
 			},
@@ -197,7 +232,7 @@ func VMSchema() map[string]schema.Attribute {
 			},
 		},
 		"other_config": schema.MapAttribute{
-			MarkdownDescription: "The other config of the virtual machine",
+			MarkdownDescription: "The other config of the virtual machine.",
 			Optional:            true,
 			Computed:            true,
 			ElementType:         types.StringType,
@@ -415,7 +450,7 @@ func getFirstTemplate(session *xenapi.Session, templateName string) (xenapi.VMRe
 	return vmRef, errors.New("unable to find VM template ref")
 }
 
-func setOtherConfigFromPlan(ctx context.Context, session *xenapi.Session, plan vmResourceModel, vmRef xenapi.VMRef) error {
+func setOtherConfigFromPlan(ctx context.Context, session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel) error {
 	planOtherConfig := make(map[string]string)
 	if !plan.OtherConfig.IsUnknown() {
 		diags := plan.OtherConfig.ElementsAs(ctx, &planOtherConfig, false)
@@ -439,8 +474,9 @@ func setOtherConfigFromPlan(ctx context.Context, session *xenapi.Session, plan v
 
 	originalTFOtherConfigKeys := vmOtherConfig["tf_other_config_keys"]
 	// To compare originalTFOtherConfigKeys with tfOtherConfigKeys, if the key is not in tfOtherConfigKeys, delete it
-	for key := range vmOtherConfig {
-		if !strings.Contains(tfOtherConfigKeys, key+",") && strings.Contains(originalTFOtherConfigKeys, key+",") {
+	originalKeys := strings.Split(originalTFOtherConfigKeys, ",")
+	for _, key := range originalKeys {
+		if !strings.Contains(tfOtherConfigKeys, key+",") {
 			delete(vmOtherConfig, key)
 		}
 	}
@@ -456,23 +492,58 @@ func setOtherConfigFromPlan(ctx context.Context, session *xenapi.Session, plan v
 	return nil
 }
 
+func getBootModeFromVMRecord(vmRecord xenapi.VMRecord) (string, error) {
+	var bootMode string
+	bootMode, ok := vmRecord.HVMBootParams["firmware"]
+	if !ok {
+		return bootMode, errors.New("unable to read VM HVM boot firmware")
+	}
+	secureBoot, ok := vmRecord.Platform["secureboot"]
+	if !ok {
+		return bootMode, errors.New("unable to read VM platform secureboot")
+	}
+	if secureBoot == "true" {
+		bootMode = "uefi_security"
+	}
+
+	return bootMode, nil
+}
+
+func getCorePerSocket(vmRecord xenapi.VMRecord) (int32, error) {
+	socket, ok := vmRecord.Platform["cores-per-socket"]
+	if !ok {
+		return 0, errors.New("unable to read VM platform cores-per-socket")
+	}
+	socketInt, err := strconv.Atoi(socket)
+	if err != nil {
+		return 0, errors.New("unable to convert cores-per-socket to an int value")
+	}
+
+	return int32(socketInt), nil // #nosec G109
+}
+
 func updateVMResourceModelComputed(ctx context.Context, session *xenapi.Session, vmRecord xenapi.VMRecord, data *vmResourceModel) error {
 	var err error
+	data.NameDescription = types.StringValue(vmRecord.NameDescription)
 	data.UUID = types.StringValue(vmRecord.UUID)
 	data.ID = types.StringValue(vmRecord.UUID)
 	data.StaticMemMin = types.Int64Value(int64(vmRecord.MemoryStaticMin))
 	data.DynamicMemMin = types.Int64Value(int64(vmRecord.MemoryDynamicMin))
 	data.DynamicMemMax = types.Int64Value(int64(vmRecord.MemoryDynamicMax))
-	socket, ok := vmRecord.Platform["cores-per-socket"]
-	if !ok {
-		return errors.New("unable to read VM platform cores-per-socket")
-	}
-	socketInt, err := strconv.Atoi(socket)
+
+	socketInt, err := getCorePerSocket(vmRecord)
 	if err != nil {
-		return errors.New("unable to convert cores-per-socket to an int value")
+		return err
 	}
-	data.CorePerSocket = types.Int32Value(int32(socketInt)) // #nosec G109
-	data.HardDrive, err = getVBDsFromVMRecord(ctx, session, vmRecord)
+	data.CorePerSocket = types.Int32Value(socketInt)
+
+	isoName, _, err := getISOFromVMRecord(ctx, session, vmRecord)
+	if err != nil {
+		return err
+	}
+	data.CDROM = types.StringValue(isoName)
+
+	data.HardDrive, _, err = getVBDsFromVMRecord(ctx, session, vmRecord, xenapi.VbdTypeDisk)
 	if err != nil {
 		return err
 	}
@@ -480,6 +551,19 @@ func updateVMResourceModelComputed(ctx context.Context, session *xenapi.Session,
 	if err != nil {
 		return err
 	}
+
+	bootMode, err := getBootModeFromVMRecord(vmRecord)
+	if err != nil {
+		return err
+	}
+	data.BootMode = types.StringValue(bootMode)
+
+	bootOrder, ok := vmRecord.HVMBootParams["order"]
+	if !ok {
+		return errors.New("unable to read VM HVM boot order")
+	}
+	data.BootOrder = types.StringValue(bootOrder)
+
 	// only keep the key which configured by user
 	data.OtherConfig, err = getOtherConfigFromVMRecord(ctx, vmRecord)
 	if err != nil {
@@ -499,18 +583,22 @@ func updateVMResourceModel(ctx context.Context, session *xenapi.Session, vmRecor
 	return updateVMResourceModelComputed(ctx, session, vmRecord, data)
 }
 
-func getVBDsFromVMRecord(ctx context.Context, session *xenapi.Session, vmRecord xenapi.VMRecord) (basetypes.SetValue, error) {
+func getVBDsFromVMRecord(ctx context.Context, session *xenapi.Session, vmRecord xenapi.VMRecord, vbdType xenapi.VbdType) (basetypes.SetValue, []vbdResourceModel, error) {
 	var vbdSet []vbdResourceModel
 	var setValue basetypes.SetValue
 	for _, vbdRef := range vmRecord.VBDs {
 		vbdRecord, err := xenapi.VBD.GetRecord(session, vbdRef)
 		if err != nil {
-			return setValue, errors.New("unable to get VBD record")
+			return setValue, vbdSet, errors.New("unable to get VBD record")
+		}
+
+		if vbdRecord.Type != vbdType {
+			continue
 		}
 
 		vdiRecord, err := xenapi.VDI.GetRecord(session, vbdRecord.VDI)
 		if err != nil {
-			return setValue, errors.New("unable to get VDI record")
+			return setValue, vbdSet, errors.New("unable to get VDI record")
 		}
 
 		vbd := vbdResourceModel{
@@ -525,11 +613,11 @@ func getVBDsFromVMRecord(ctx context.Context, session *xenapi.Session, vmRecord 
 
 	setValue, diags := types.SetValueFrom(ctx, types.ObjectType{AttrTypes: vbdResourceModelAttrTypes}, vbdSet)
 	if diags.HasError() {
-		return setValue, errors.New("unable to get VBD set value")
+		return setValue, vbdSet, errors.New("unable to get VBD set value")
 	}
 
 	tflog.Debug(ctx, "-----> setVaule VDB "+setValue.String())
-	return setValue, nil
+	return setValue, vbdSet, nil
 }
 
 func getOtherConfigFromVMRecord(ctx context.Context, vmRecord xenapi.VMRecord) (basetypes.MapValue, error) {
@@ -674,18 +762,111 @@ func updateVMCPUs(session *xenapi.Session, vmRef xenapi.VMRef, data vmResourceMo
 	return nil
 }
 
+func updateBootOrder(session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel) error {
+	var err error
+	bootOrder := plan.BootOrder.ValueString()
+	if bootOrder == "" {
+		return err
+	}
+
+	// if bootOrder is not empty, set the value to the VM
+	err = setHVMBootParams(session, vmRef, map[string]string{"order": bootOrder})
+	if err != nil {
+		return err
+	}
+
+	return err
+}
+
+func updateBootMode(session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel) error {
+	var err error
+	bootMode := plan.BootMode.ValueString()
+	// if bootmode is empty, get the value from the template
+	if bootMode == "" {
+		return err
+	}
+
+	// if bootmode is not empty, set the value to the VM
+	secureBoot := "false"
+	if bootMode == "uefi_security" {
+		bootMode = "uefi"
+		secureBoot = "true"
+	}
+
+	err = setPlatform(session, vmRef, map[string]string{"secureboot": secureBoot})
+	if err != nil {
+		return err
+	}
+
+	err = setHVMBootParams(session, vmRef, map[string]string{"firmware": bootMode})
+	if err != nil {
+		return err
+	}
+
+	return err
+}
+
+func setPlatform(session *xenapi.Session, vmRef xenapi.VMRef, params map[string]string) error {
+	originalValue, err := xenapi.VM.GetPlatform(session, vmRef)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+
+	platform := originalValue
+	for key, value := range params {
+		platform[key] = value
+	}
+
+	err = xenapi.VM.SetPlatform(session, vmRef, platform)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+
+	return nil
+}
+
+func setHVMBootParams(session *xenapi.Session, vmRef xenapi.VMRef, params map[string]string) error {
+	originalValue, err := xenapi.VM.GetHVMBootParams(session, vmRef)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+
+	hvmBootParams := originalValue
+	for key, value := range params {
+		hvmBootParams[key] = value
+	}
+
+	err = xenapi.VM.SetHVMBootParams(session, vmRef, hvmBootParams)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+
+	return nil
+}
+
 func vmResourceModelUpdate(ctx context.Context, session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel, state vmResourceModel) error {
 	err := xenapi.VM.SetNameLabel(session, vmRef, plan.NameLabel.ValueString())
 	if err != nil {
 		return errors.New(err.Error())
 	}
 
-	err = setOtherConfigFromPlan(ctx, session, plan, vmRef)
+	err = xenapi.VM.SetNameDescription(session, vmRef, plan.NameDescription.ValueString())
+	if err != nil {
+		return errors.New(err.Error())
+	}
+
+	err = setOtherConfigFromPlan(ctx, session, vmRef, plan)
 	if err != nil {
 		return err
 	}
 
 	err = updateVBDs(ctx, plan, state, vmRef, session)
+	if err != nil {
+		return err
+	}
+
+	// set CDROM and it should be set after hard_drive to keep device order
+	err = updateCDROM(ctx, session, vmRef, plan)
 	if err != nil {
 		return err
 	}
@@ -703,6 +884,114 @@ func vmResourceModelUpdate(ctx context.Context, session *xenapi.Session, vmRef x
 	err = updateVMCPUs(session, vmRef, plan)
 	if err != nil {
 		return err
+	}
+
+	err = updateBootMode(session, vmRef, plan)
+	if err != nil {
+		return err
+	}
+
+	err = updateBootOrder(session, vmRef, plan)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func setVMResourceModel(ctx context.Context, session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel) error {
+	err := xenapi.VM.SetNameLabel(session, vmRef, plan.NameLabel.ValueString())
+	if err != nil {
+		return errors.New(err.Error())
+	}
+
+	// set name description
+	err = xenapi.VM.SetNameDescription(session, vmRef, plan.NameDescription.ValueString())
+	if err != nil {
+		return errors.New(err.Error())
+	}
+
+	// set memory
+	err = updateVMMemory(session, vmRef, plan)
+	if err != nil {
+		return err
+	}
+
+	// set VCPUs
+	err = updateVMCPUs(session, vmRef, plan)
+	if err != nil {
+		return err
+	}
+
+	// add other_config
+	err = setOtherConfigFromPlan(ctx, session, vmRef, plan)
+	if err != nil {
+		return err
+	}
+
+	// set boot mode
+	err = updateBootMode(session, vmRef, plan)
+	if err != nil {
+		return err
+	}
+
+	// set boot order
+	err = updateBootOrder(session, vmRef, plan)
+	if err != nil {
+		return err
+	}
+
+	// add hard_drive
+	err = createVBDs(ctx, session, vmRef, plan, xenapi.VbdTypeDisk)
+	if err != nil {
+		return err
+	}
+
+	// set CDROM and it should be set after hard_drive to keep device order
+	err = updateCDROM(ctx, session, vmRef, plan)
+	if err != nil {
+		return err
+	}
+
+	// add network_interface
+	err = createVIFs(ctx, session, vmRef, plan)
+	if err != nil {
+		return err
+	}
+
+	// reset template flag
+	err = xenapi.VM.SetIsATemplate(session, vmRef, false)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+
+	return nil
+}
+
+func cleanupVMResource(session *xenapi.Session, vmRef xenapi.VMRef) error {
+	// delete VIFs and VBDs, then destroy VM
+	vmRecord, err := xenapi.VM.GetRecord(session, vmRef)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+
+	for _, vifRef := range vmRecord.VIFs {
+		err := xenapi.VIF.Destroy(session, vifRef)
+		if err != nil {
+			return errors.New(err.Error())
+		}
+	}
+
+	for _, vbdRef := range vmRecord.VBDs {
+		err := xenapi.VBD.Destroy(session, vbdRef)
+		if err != nil {
+			return errors.New(err.Error())
+		}
+	}
+
+	err = xenapi.VM.Destroy(session, vmRef)
+	if err != nil {
+		return errors.New(err.Error())
 	}
 
 	return nil

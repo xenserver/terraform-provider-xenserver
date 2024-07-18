@@ -79,63 +79,21 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 		return
 	}
 
-	// add some extra configure field to vm ----------------
-	err = xenapi.VM.SetIsATemplate(r.session, vmRef, false)
+	err = setVMResourceModel(ctx, r.session, vmRef, plan)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			`Unable to set VM as "non template"`,
+			"Unable to set VM resource model",
 			err.Error(),
 		)
-		return
-	}
 
-	// add other_config
-	err = setOtherConfigFromPlan(ctx, r.session, plan, vmRef)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Unable to set other config",
-			err.Error(),
-		)
-		return
-	}
+		err = cleanupVMResource(r.session, vmRef)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Unable to destroy VM",
+				err.Error(),
+			)
+		}
 
-	// add hard_drive
-	err = createVBDs(ctx, plan, vmRef, r.session)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Unable to create VBDs",
-			err.Error(),
-		)
-		return
-	}
-
-	// add network_interface
-	err = createVIFs(ctx, plan, vmRef, r.session)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Unable to create VIFs",
-			err.Error(),
-		)
-		return
-	}
-
-	// Set memory
-	err = updateVMMemory(r.session, vmRef, plan)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Unable to set VM memory",
-			err.Error(),
-		)
-		return
-	}
-
-	// Set VCPUs
-	err = updateVMCPUs(r.session, vmRef, plan)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Unable to set VM VCPUs",
-			err.Error(),
-		)
 		return
 	}
 
@@ -146,6 +104,14 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 			"Unable to get VM record",
 			err.Error(),
 		)
+
+		err = cleanupVMResource(r.session, vmRef)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Unable to destroy VM",
+				err.Error(),
+			)
+		}
 		return
 	}
 
@@ -155,6 +121,15 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 			"Unable to update VM resource model state",
 			err.Error(),
 		)
+
+		err = cleanupVMResource(r.session, vmRef)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Unable to destroy VM",
+				err.Error(),
+			)
+		}
+
 		return
 	}
 
@@ -281,7 +256,7 @@ func (r *vmResource) Delete(ctx context.Context, req resource.DeleteRequest, res
 		return
 	}
 
-	err = xenapi.VM.Destroy(r.session, vmRef)
+	err = cleanupVMResource(r.session, vmRef)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to destroy VM",
