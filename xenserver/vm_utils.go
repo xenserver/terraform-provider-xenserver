@@ -11,7 +11,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int32default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -150,7 +149,7 @@ func VMSchema() map[string]schema.Attribute {
 			Required:            true,
 		},
 		"static_mem_min": schema.Int64Attribute{
-			MarkdownDescription: "Statically-set (i.e. absolute) mininum memory (bytes). The least amount of memory this VM can boot with without crashing.",
+			MarkdownDescription: "Statically-set (i.e. absolute) minimum memory (bytes). The least amount of memory this VM can boot with without crashing.",
 			Optional:            true,
 			Computed:            true,
 		},
@@ -173,10 +172,9 @@ func VMSchema() map[string]schema.Attribute {
 			Required:            true,
 		},
 		"cores_per_socket": schema.Int32Attribute{
-			MarkdownDescription: "The number of core pre socket for the virtual machine",
+			MarkdownDescription: "The number of core pre socket for the virtual machine, default inherited from the template",
 			Optional:            true,
 			Computed:            true,
-			Default:             int32default.StaticInt32(1),
 		},
 		"hard_drive": schema.SetNestedAttribute{
 			MarkdownDescription: "A set of hard drive attributes to attach to the virtual machine",
@@ -465,16 +463,23 @@ func updateVMResourceModelComputed(ctx context.Context, session *xenapi.Session,
 	data.StaticMemMin = types.Int64Value(int64(vmRecord.MemoryStaticMin))
 	data.DynamicMemMin = types.Int64Value(int64(vmRecord.MemoryDynamicMin))
 	data.DynamicMemMax = types.Int64Value(int64(vmRecord.MemoryDynamicMax))
+	socket, ok := vmRecord.Platform["cores-per-socket"]
+	if !ok {
+		return errors.New("unable to read VM platform cores-per-socket")
+	}
+	socketInt, err := strconv.Atoi(socket)
+	if err != nil {
+		return errors.New("unable to convert cores-per-socket to an int value")
+	}
+	data.CorePerSocket = types.Int32Value(int32(socketInt)) // #nosec G109
 	data.HardDrive, err = getVBDsFromVMRecord(ctx, session, vmRecord)
 	if err != nil {
 		return err
 	}
-
 	data.NetworkInterface, err = getVIFsFromVMRecord(ctx, session, vmRecord)
 	if err != nil {
 		return err
 	}
-
 	// only keep the key which configured by user
 	data.OtherConfig, err = getOtherConfigFromVMRecord(ctx, vmRecord)
 	if err != nil {
@@ -490,15 +495,6 @@ func updateVMResourceModel(ctx context.Context, session *xenapi.Session, vmRecor
 	data.TemplateName = types.StringValue(vmRecord.OtherConfig["tf_template_name"])
 	data.StaticMemMax = types.Int64Value(int64(vmRecord.MemoryStaticMax))
 	data.VCPUs = types.Int32Value(int32(vmRecord.VCPUsMax))
-	socket, ok := vmRecord.Platform["cores-per-socket"]
-	if !ok {
-		return errors.New("unable to read VM platform cores-per-socket")
-	}
-	socketInt, err := strconv.Atoi(socket)
-	if err != nil {
-		return errors.New("unable to convert cores-per-socket to an int value")
-	}
-	data.CorePerSocket = types.Int32Value(int32(socketInt)) // #nosec G109
 
 	return updateVMResourceModelComputed(ctx, session, vmRecord, data)
 }
@@ -622,6 +618,14 @@ func updateVMCPUs(session *xenapi.Session, vmRef xenapi.VMRef, data vmResourceMo
 	if err != nil {
 		return errors.New(err.Error())
 	}
+	platform, err := xenapi.VM.GetPlatform(session, vmRef)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	if platform == nil {
+		platform = make(map[string]string)
+	}
+
 	vcpus := int(data.VCPUs.ValueInt32())
 	// VCPU values must satisfy: 0 < VCPUs_at_startup ≤ VCPUs_max
 	if vcpus < originVCPUsMax {
@@ -643,21 +647,29 @@ func updateVMCPUs(session *xenapi.Session, vmRef xenapi.VMRef, data vmResourceMo
 			return errors.New(err.Error())
 		}
 	}
-	coresPerSocket := int(data.CorePerSocket.ValueInt32())
-	if vcpus%coresPerSocket != 0 {
-		return fmt.Errorf("%d cores could not fit to %d cores-per-socket topology", vcpus, coresPerSocket)
-	}
-	platform, err := xenapi.VM.GetPlatform(session, vmRef)
-	if err != nil {
-		return errors.New(err.Error())
-	}
-	if platform == nil {
-		platform = make(map[string]string)
-	}
-	platform["cores-per-socket"] = strconv.Itoa(coresPerSocket)
-	err = xenapi.VM.SetPlatform(session, vmRef, platform)
-	if err != nil {
-		return errors.New(err.Error())
+
+	if !data.CorePerSocket.IsUnknown() {
+		coresPerSocket := int(data.CorePerSocket.ValueInt32())
+		if vcpus%coresPerSocket != 0 {
+			return fmt.Errorf("%d cores could not fit to %d cores-per-socket topology", vcpus, coresPerSocket)
+		}
+		platform["cores-per-socket"] = strconv.Itoa(coresPerSocket)
+		err = xenapi.VM.SetPlatform(session, vmRef, platform)
+		if err != nil {
+			return errors.New(err.Error())
+		}
+	} else {
+		originSocket, ok := platform["cores-per-socket"]
+		if !ok {
+			return errors.New("unable to read VM platform cores-per-socket")
+		}
+		socketInt, err := strconv.Atoi(originSocket)
+		if err != nil {
+			return errors.New("unable to convert cores-per-socket to an int value")
+		}
+		if vcpus%socketInt != 0 {
+			return fmt.Errorf("%d cores could not fit to %d cores-per-socket topology", vcpus, socketInt)
+		}
 	}
 
 	return nil
