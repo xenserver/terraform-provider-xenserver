@@ -494,11 +494,7 @@ func (d *vmDataSource) Read(ctx context.Context, req datasource.ReadRequest, res
 			continue
 		}
 
-		if vmRecord.IsATemplate || vmRecord.IsDefaultTemplate {
-			continue
-		}
-
-		if vmRecord.SnapshotOf != "OpaqueRef:NULL" {
+		if vmRecord.IsATemplate || vmRecord.IsDefaultTemplate || vmRecord.SnapshotOf != "OpaqueRef:NULL" || vmRecord.Domid == 0 {
 			continue
 		}
 
