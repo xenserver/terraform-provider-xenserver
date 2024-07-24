@@ -63,7 +63,7 @@ func vmSchema() map[string]schema.Attribute {
 			MarkdownDescription: "The current power state of the virtual machine",
 			Computed:            true,
 		},
-		"user_version": schema.Int64Attribute{
+		"user_version": schema.Int32Attribute{
 			MarkdownDescription: "Creators of VMs and templates may store version information here",
 			Computed:            true,
 		},
@@ -138,11 +138,11 @@ func vmSchema() map[string]schema.Attribute {
 			MarkdownDescription: "Statically-set (i.e. absolute) mininum (bytes). The value of this field indicates the least amount of memory this VM can boot with without crashing",
 			Computed:            true,
 		},
-		"vcpus_max": schema.Int64Attribute{
+		"vcpus_max": schema.Int32Attribute{
 			MarkdownDescription: "Max number of VCPUs",
 			Computed:            true,
 		},
-		"vcpus_at_startup": schema.Int64Attribute{
+		"vcpus_at_startup": schema.Int32Attribute{
 			MarkdownDescription: "Boot number of VCPUs",
 			Computed:            true,
 		},
@@ -229,7 +229,7 @@ func vmSchema() map[string]schema.Attribute {
 			MarkdownDescription: "Multiplier applied to the amount of shadow that will be made available to the guest",
 			Computed:            true,
 		},
-		"domid": schema.Int64Attribute{
+		"domid": schema.Int32Attribute{
 			MarkdownDescription: "Domain ID (if available, -1 otherwise)",
 			Computed:            true,
 		},
@@ -358,7 +358,7 @@ func vmSchema() map[string]schema.Attribute {
 			MarkdownDescription: "The delay to wait before proceeding to the next order in the shutdown sequence (seconds)",
 			Computed:            true,
 		},
-		"order": schema.Int64Attribute{
+		"order": schema.Int32Attribute{
 			MarkdownDescription: "The point in the startup or shutdown sequence at which this VM will be started",
 			Computed:            true,
 		},
@@ -376,7 +376,7 @@ func vmSchema() map[string]schema.Attribute {
 			MarkdownDescription: "The SR on which a suspend image is stored",
 			Computed:            true,
 		},
-		"version": schema.Int64Attribute{
+		"version": schema.Int32Attribute{
 			MarkdownDescription: "The number of times this VM has been recovered",
 			Computed:            true,
 		},
@@ -384,7 +384,7 @@ func vmSchema() map[string]schema.Attribute {
 			MarkdownDescription: "Generation ID of the VM",
 			Computed:            true,
 		},
-		"hardware_platform_version": schema.Int64Attribute{
+		"hardware_platform_version": schema.Int32Attribute{
 			MarkdownDescription: "The host virtual hardware platform version the VM can run on",
 			Computed:            true,
 		},

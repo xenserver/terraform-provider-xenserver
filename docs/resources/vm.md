@@ -59,7 +59,6 @@ resource "xenserver_vm" "vm" {
       other_config = {
         ethtool-gso = "off"
       }
-      mtu          = 1600
       device       = "0"
       mac          = "11:22:33:44:55:66"
       network_uuid = data.xenserver_network.network.data_items[1].uuid,
@@ -112,7 +111,6 @@ Required:
 Optional:
 
 - `mac` (String) MAC address of the VIF, if not provided, XenServer will generate a random MAC address.
-- `mtu` (Number) MTU in octets, default: 1500
 - `other_config` (Map of String) The additional configuration, default to be {}
 
 Read-Only:

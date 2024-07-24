@@ -84,7 +84,7 @@ func (d *networkDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 							Computed:            true,
 							ElementType:         types.StringType,
 						},
-						"mtu": schema.Int64Attribute{
+						"mtu": schema.Int32Attribute{
 							MarkdownDescription: "The MTU in octets",
 							Computed:            true,
 						},

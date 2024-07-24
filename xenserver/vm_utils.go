@@ -35,7 +35,7 @@ type vmRecordData struct {
 	NameLabel                   types.String  `tfsdk:"name_label"`
 	NameDescription             types.String  `tfsdk:"name_description"`
 	PowerState                  types.String  `tfsdk:"power_state"`
-	UserVersion                 types.Int64   `tfsdk:"user_version"`
+	UserVersion                 types.Int32   `tfsdk:"user_version"`
 	IsATemplate                 types.Bool    `tfsdk:"is_a_template"`
 	IsDefaultTemplate           types.Bool    `tfsdk:"is_default_template"`
 	SuspendVDI                  types.String  `tfsdk:"suspend_vdi"`
@@ -49,8 +49,8 @@ type vmRecordData struct {
 	MemoryDynamicMin            types.Int64   `tfsdk:"memory_dynamic_min"`
 	MemoryStaticMin             types.Int64   `tfsdk:"memory_static_min"`
 	VCPUsParams                 types.Map     `tfsdk:"vcpus_params"`
-	VCPUsMax                    types.Int64   `tfsdk:"vcpus_max"`
-	VCPUsAtStartup              types.Int64   `tfsdk:"vcpus_at_startup"`
+	VCPUsMax                    types.Int32   `tfsdk:"vcpus_max"`
+	VCPUsAtStartup              types.Int32   `tfsdk:"vcpus_at_startup"`
 	ActionsAfterSoftreboot      types.String  `tfsdk:"actions_after_softreboot"`
 	ActionsAfterShutdown        types.String  `tfsdk:"actions_after_shutdown"`
 	ActionsAfterReboot          types.String  `tfsdk:"actions_after_reboot"`
@@ -73,7 +73,7 @@ type vmRecordData struct {
 	Platform                    types.Map     `tfsdk:"platform"`
 	PCIBus                      types.String  `tfsdk:"pci_bus"`
 	OtherConfig                 types.Map     `tfsdk:"other_config"`
-	Domid                       types.Int64   `tfsdk:"domid"`
+	Domid                       types.Int32   `tfsdk:"domid"`
 	Domarch                     types.String  `tfsdk:"domarch"`
 	LastBootCPUFlags            types.Map     `tfsdk:"last_boot_cpu_flags"`
 	IsControlDomain             types.Bool    `tfsdk:"is_control_domain"`
@@ -104,13 +104,13 @@ type vmRecordData struct {
 	Appliance                   types.String  `tfsdk:"appliance"`
 	StartDelay                  types.Int64   `tfsdk:"start_delay"`
 	ShutdownDelay               types.Int64   `tfsdk:"shutdown_delay"`
-	Order                       types.Int64   `tfsdk:"order"`
+	Order                       types.Int32   `tfsdk:"order"`
 	VGPUs                       types.List    `tfsdk:"vgpus"`
 	AttachedPCIs                types.List    `tfsdk:"attached_pcis"`
 	SuspendSR                   types.String  `tfsdk:"suspend_sr"`
-	Version                     types.Int64   `tfsdk:"version"`
+	Version                     types.Int32   `tfsdk:"version"`
 	GenerationID                types.String  `tfsdk:"generation_id"`
-	HardwarePlatformVersion     types.Int64   `tfsdk:"hardware_platform_version"`
+	HardwarePlatformVersion     types.Int32   `tfsdk:"hardware_platform_version"`
 	HasVendorDevice             types.Bool    `tfsdk:"has_vendor_device"`
 	RequiresReboot              types.Bool    `tfsdk:"requires_reboot"`
 	ReferenceLabel              types.String  `tfsdk:"reference_label"`
@@ -236,7 +236,7 @@ func updateVMRecordData(ctx context.Context, record xenapi.VMRecord, data *vmRec
 	data.NameLabel = types.StringValue(record.NameLabel)
 	data.NameDescription = types.StringValue(record.NameDescription)
 	data.PowerState = types.StringValue(string(record.PowerState))
-	data.UserVersion = types.Int64Value(int64(record.UserVersion))
+	data.UserVersion = types.Int32Value(int32(record.UserVersion))
 	data.IsATemplate = types.BoolValue(record.IsATemplate)
 	data.IsDefaultTemplate = types.BoolValue(record.IsDefaultTemplate)
 	data.SuspendVDI = types.StringValue(string(record.SuspendVDI))
@@ -253,8 +253,8 @@ func updateVMRecordData(ctx context.Context, record xenapi.VMRecord, data *vmRec
 	if diags.HasError() {
 		return errors.New("unable to read VM VCPUs params")
 	}
-	data.VCPUsMax = types.Int64Value(int64(record.VCPUsMax))
-	data.VCPUsAtStartup = types.Int64Value(int64(record.VCPUsAtStartup))
+	data.VCPUsMax = types.Int32Value(int32(record.VCPUsMax))
+	data.VCPUsAtStartup = types.Int32Value(int32(record.VCPUsAtStartup))
 	data.ActionsAfterSoftreboot = types.StringValue(string(record.ActionsAfterSoftreboot))
 	data.ActionsAfterShutdown = types.StringValue(string(record.ActionsAfterShutdown))
 	data.ActionsAfterReboot = types.StringValue(string(record.ActionsAfterReboot))
@@ -304,7 +304,7 @@ func updateVMRecordData(ctx context.Context, record xenapi.VMRecord, data *vmRec
 	if diags.HasError() {
 		return errors.New("unable to read VM other config")
 	}
-	data.Domid = types.Int64Value(int64(record.Domid))
+	data.Domid = types.Int32Value(int32(record.Domid))
 	data.Domarch = types.StringValue(record.Domarch)
 	data.LastBootCPUFlags, diags = types.MapValueFrom(ctx, types.StringType, record.LastBootCPUFlags)
 	if diags.HasError() {
@@ -363,7 +363,7 @@ func updateVMRecordData(ctx context.Context, record xenapi.VMRecord, data *vmRec
 	data.Appliance = types.StringValue(string(record.Appliance))
 	data.StartDelay = types.Int64Value(int64(record.StartDelay))
 	data.ShutdownDelay = types.Int64Value(int64(record.ShutdownDelay))
-	data.Order = types.Int64Value(int64(record.Order))
+	data.Order = types.Int32Value(int32(record.Order))
 	data.VGPUs, diags = types.ListValueFrom(ctx, types.StringType, record.VGPUs)
 	if diags.HasError() {
 		return errors.New("unable to read VM VGPUs")
@@ -373,9 +373,9 @@ func updateVMRecordData(ctx context.Context, record xenapi.VMRecord, data *vmRec
 		return errors.New("unable to read VM attached PCIs")
 	}
 	data.SuspendSR = types.StringValue(string(record.SuspendSR))
-	data.Version = types.Int64Value(int64(record.Version))
+	data.Version = types.Int32Value(int32(record.Version))
 	data.GenerationID = types.StringValue(record.GenerationID)
-	data.HardwarePlatformVersion = types.Int64Value(int64(record.HardwarePlatformVersion))
+	data.HardwarePlatformVersion = types.Int32Value(int32(record.HardwarePlatformVersion))
 	data.HasVendorDevice = types.BoolValue(record.HasVendorDevice)
 	data.RequiresReboot = types.BoolValue(record.RequiresReboot)
 	data.ReferenceLabel = types.StringValue(record.ReferenceLabel)
@@ -569,7 +569,6 @@ func getVIFsFromVMRecord(ctx context.Context, session *xenapi.Session, vmRecord 
 		vif := vifResourceModel{
 			Network: types.StringValue(networkRecord.UUID),
 			VIF:     types.StringValue(string(vifRef)),
-			MTU:     types.Int32Value(int32(vifRecord.MTU)),
 			MAC:     types.StringValue(vifRecord.MAC),
 			Device:  types.StringValue(vifRecord.Device),
 		}

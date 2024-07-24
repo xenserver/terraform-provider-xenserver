@@ -104,22 +104,82 @@ func (r *snapshotResource) Create(ctx context.Context, req resource.CreateReques
 		)
 		return
 	}
-	vmPowerState, err := xenapi.VM.GetPowerState(r.session, vmRef)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Unable to get VM power state",
-			err.Error(),
-		)
-		return
-	}
 	var snapshotRef xenapi.VMRef
 	if !data.WithMemory.IsNull() && data.WithMemory.ValueBool() {
+		vmPowerState, err := xenapi.VM.GetPowerState(r.session, vmRef)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Unable to get VM power state",
+				err.Error(),
+			)
+			return
+		}
 		if vmPowerState != xenapi.VMPowerStateRunning {
 			resp.Diagnostics.AddError(
 				"VM in wrong state",
 				"VM must be in running state to create snapshot with memory",
 			)
 			return
+		}
+		srRef, err := xenapi.VM.GetSuspendSR(r.session, vmRef)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Unable to get VM suspend SR",
+				err.Error(),
+			)
+			return
+		}
+		// Set the suspend SR to default SR if it is not set
+		if srRef == "OpaqueRef:NULL" {
+			poolRefs, err := xenapi.Pool.GetAll(r.session)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Unable to get pool refs",
+					err.Error(),
+				)
+				return
+			}
+			defaultSRRef, err := xenapi.Pool.GetDefaultSR(r.session, poolRefs[0])
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Unable to get default SR",
+					err.Error(),
+				)
+				return
+			}
+			srRef = defaultSRRef
+			// Set the suspend SR to available SR if default SR is not set
+			if defaultSRRef == "OpaqueRef:NULL" {
+				srRecords, err := xenapi.SR.GetAllRecords(r.session)
+				if err != nil {
+					resp.Diagnostics.AddError(
+						"Unable to get SR records",
+						err.Error(),
+					)
+					return
+				}
+				for _, srRecord := range srRecords {
+					if srRecord.Type == "nfs" || srRecord.Type == "lvm" {
+						srRef, err = xenapi.SR.GetByUUID(r.session, srRecord.UUID)
+						if err != nil {
+							resp.Diagnostics.AddError(
+								"Unable to get SR UUID",
+								err.Error(),
+							)
+							return
+						}
+						break
+					}
+				}
+			}
+			err = xenapi.VM.SetSuspendSR(r.session, vmRef, srRef)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Unable to set VM suspend SR",
+					err.Error(),
+				)
+				return
+			}
 		}
 		snapshotRef, err = xenapi.VM.Checkpoint(r.session, vmRef, data.NameLabel.ValueString())
 		if err != nil {

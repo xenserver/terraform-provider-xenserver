@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"xenapi"
@@ -56,6 +58,9 @@ func (r *nfsResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 			"version": schema.StringAttribute{
 				MarkdownDescription: `The version of NFS storage repository, for example: "3"`,
 				Required:            true,
+				Validators: []validator.String{
+					stringvalidator.OneOf("3", "4"),
+				},
 			},
 			"advanced_options": schema.StringAttribute{
 				MarkdownDescription: `The advanced options of the NFS storage repository, default to be ""`,

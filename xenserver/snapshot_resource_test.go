@@ -38,7 +38,6 @@ resource "xenserver_vm" "vm" {
 			ethtool-gso = "off"
 		}
 		device		 = "0"
-		mtu          = 1600
 		mac          = "11:22:33:44:55:66"
 		network_uuid = data.xenserver_network.network.data_items[1].uuid,
 		},
