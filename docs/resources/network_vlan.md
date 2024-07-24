@@ -42,7 +42,7 @@ output "vlan_out" {
 ### Optional
 
 - `managed` (Boolean) True if the bridge is managed by xapi, default to be true
-- `mtu` (Number) MTU in octets, default to be 1500, range limit to [1500, 9216]
+- `mtu` (Number) The MTU of the network, default to be 1500, minimum value is 0
 - `name_description` (String) The description of the network, default to be empty string
 - `other_config` (Map of String) The additional configuration, default to be {}
 

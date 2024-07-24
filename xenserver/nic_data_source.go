@@ -44,7 +44,7 @@ func (d *nicDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, re
 				Optional:            true,
 			},
 			"data_items": schema.ListAttribute{
-				MarkdownDescription: "The return list of available NICs for selected network type",
+				MarkdownDescription: `The return list of available NICs for selected network type, the NIC name eg. "NIC 0", "Bond 0+1", "NIC-SR-IOV 0"`,
 				Computed:            true,
 				ElementType:         types.StringType,
 			},

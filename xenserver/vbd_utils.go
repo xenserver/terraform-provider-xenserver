@@ -153,6 +153,17 @@ func updateVBDs(ctx context.Context, plan vmResourceModel, state vmResourceModel
 		stateHardDrivesMap[vbd.VDI.ValueString()] = vbd
 	}
 
+	// Destroy VBDs that are not in plan
+	for vdiUUID, stateVBD := range stateHardDrivesMap {
+		if _, ok := planHardDrivesMap[vdiUUID]; !ok {
+			tflog.Debug(ctx, "---> Destroy VBD:	"+stateVBD.VBD.String())
+			err = xenapi.VBD.Destroy(session, xenapi.VBDRef(stateVBD.VBD.ValueString()))
+			if err != nil {
+				return errors.New(err.Error())
+			}
+		}
+	}
+
 	// Create VBDs that are in plan but not in state, Update VBDs if already exists and attributes changed
 	for vdiUUID, planVBD := range planHardDrivesMap {
 		stateVBD, ok := stateHardDrivesMap[vdiUUID]
@@ -180,17 +191,6 @@ func updateVBDs(ctx context.Context, plan vmResourceModel, state vmResourceModel
 				if err != nil {
 					return errors.New(err.Error())
 				}
-			}
-		}
-	}
-
-	// Destroy VBDs that are not in plan
-	for vdiUUID, stateVBD := range stateHardDrivesMap {
-		if _, ok := planHardDrivesMap[vdiUUID]; !ok {
-			tflog.Debug(ctx, "---> Destroy VBD:	"+stateVBD.VBD.String())
-			err = xenapi.VBD.Destroy(session, xenapi.VBDRef(stateVBD.VBD.ValueString()))
-			if err != nil {
-				return errors.New(err.Error())
 			}
 		}
 	}

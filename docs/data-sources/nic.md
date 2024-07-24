@@ -31,4 +31,4 @@ output "nic_output" {
 
 ### Read-Only
 
-- `data_items` (List of String) The return list of available NICs for selected network type
+- `data_items` (List of String) The return list of available NICs for selected network type, the NIC name eg. "NIC 0", "Bond 0+1", "NIC-SR-IOV 0"

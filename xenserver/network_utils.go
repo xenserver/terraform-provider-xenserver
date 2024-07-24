@@ -27,7 +27,7 @@ type networkRecordData struct {
 	CurrentOperations  types.Map    `tfsdk:"current_operations"`
 	VIFs               types.List   `tfsdk:"vifs"`
 	PIFs               types.List   `tfsdk:"pifs"`
-	MTU                types.Int64  `tfsdk:"mtu"`
+	MTU                types.Int32  `tfsdk:"mtu"`
 	OtherConfig        types.Map    `tfsdk:"other_config"`
 	Bridge             types.String `tfsdk:"bridge"`
 	Managed            types.Bool   `tfsdk:"managed"`
@@ -59,7 +59,7 @@ func updateNetworkRecordData(ctx context.Context, record xenapi.NetworkRecord, d
 	if diags.HasError() {
 		return errors.New("unable to read network PIFs")
 	}
-	data.MTU = types.Int64Value(int64(record.MTU))
+	data.MTU = types.Int32Value(int32(record.MTU))
 	data.OtherConfig, diags = types.MapValueFrom(ctx, types.StringType, record.OtherConfig)
 	if diags.HasError() {
 		return errors.New("unable to read network other config")
@@ -90,10 +90,10 @@ func updateNetworkRecordData(ctx context.Context, record xenapi.NetworkRecord, d
 type vlanResourceModel struct {
 	NameLabel       types.String `tfsdk:"name_label"`
 	NameDescription types.String `tfsdk:"name_description"`
-	MTU             types.Int64  `tfsdk:"mtu"`
+	MTU             types.Int32  `tfsdk:"mtu"`
 	Managed         types.Bool   `tfsdk:"managed"`
 	OtherConfig     types.Map    `tfsdk:"other_config"`
-	Tag             types.Int64  `tfsdk:"vlan_tag"`
+	Tag             types.Int32  `tfsdk:"vlan_tag"`
 	NIC             types.String `tfsdk:"nic"`
 	UUID            types.String `tfsdk:"uuid"`
 	ID              types.String `tfsdk:"id"`
@@ -105,22 +105,11 @@ type vlanCreateParams struct {
 	Tag        int
 }
 
-func checkMTU(mtu int) error {
-	if mtu <= 0 {
-		return errors.New("MTU value must above 0 ")
-	}
-	return nil
-}
-
 func getNetworkCreateParams(ctx context.Context, data vlanResourceModel) (xenapi.NetworkRecord, error) {
 	var record xenapi.NetworkRecord
 	record.NameLabel = data.NameLabel.ValueString()
 	record.NameDescription = data.NameDescription.ValueString()
-	record.MTU = int(data.MTU.ValueInt64())
-	err := checkMTU(record.MTU)
-	if err != nil {
-		return record, err
-	}
+	record.MTU = int(data.MTU.ValueInt32())
 	record.Managed = data.Managed.ValueBool()
 	diags := data.OtherConfig.ElementsAs(ctx, &record.OtherConfig, false)
 	if diags.HasError() {
@@ -203,7 +192,7 @@ func getVlanCreateParams(session *xenapi.Session, data vlanResourceModel, networ
 	}
 	params.PifRef = pifRefs[0]
 	params.NetworkRef = networkRef
-	params.Tag = int(data.Tag.ValueInt64())
+	params.Tag = int(data.Tag.ValueInt32())
 
 	return params, nil
 }
@@ -256,7 +245,7 @@ func updateVlanResourceModel(ctx context.Context, session *xenapi.Session, recor
 	if err != nil {
 		return errors.New(err.Error())
 	}
-	data.Tag = types.Int64Value(int64(pifRecord.VLAN))
+	data.Tag = types.Int32Value(int32(pifRecord.VLAN))
 	nicName, err := getNICFromPIF(session, pifRecord)
 	if err != nil {
 		return err
@@ -270,7 +259,7 @@ func updateVlanResourceModelComputed(ctx context.Context, record xenapi.NetworkR
 	data.UUID = types.StringValue(record.UUID)
 	data.ID = types.StringValue(record.UUID)
 	data.NameDescription = types.StringValue(record.NameDescription)
-	data.MTU = types.Int64Value(int64(record.MTU))
+	data.MTU = types.Int32Value(int32(record.MTU))
 	data.Managed = types.BoolValue(record.Managed)
 	var diags diag.Diagnostics
 	data.OtherConfig, diags = types.MapValueFrom(ctx, types.StringType, record.OtherConfig)
@@ -303,11 +292,7 @@ func vlanResourceModelUpdate(ctx context.Context, session *xenapi.Session, ref x
 	if err != nil {
 		return errors.New(err.Error())
 	}
-	mtu := int(data.MTU.ValueInt64())
-	err = checkMTU(mtu)
-	if err != nil {
-		return err
-	}
+	mtu := int(data.MTU.ValueInt32())
 	err = xenapi.Network.SetMTU(session, ref, mtu)
 	if err != nil {
 		return errors.New(err.Error())

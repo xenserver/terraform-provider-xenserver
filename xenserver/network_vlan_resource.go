@@ -3,17 +3,21 @@ package xenserver
 import (
 	"context"
 	"fmt"
+	"regexp"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/int32validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int32default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
@@ -54,11 +58,14 @@ func (r *vlanResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 				Computed:            true,
 				Default:             stringdefault.StaticString(""),
 			},
-			"mtu": schema.Int64Attribute{
-				MarkdownDescription: "MTU in octets, default to be 1500, range limit to [1500, 9216]",
+			"mtu": schema.Int32Attribute{
+				MarkdownDescription: "The MTU of the network, default to be 1500, minimum value is 0",
 				Optional:            true,
 				Computed:            true,
-				Default:             int64default.StaticInt64(1500),
+				Default:             int32default.StaticInt32(1500),
+				Validators: []validator.Int32{
+					int32validator.AtLeast(0),
+				},
 			},
 			"managed": schema.BoolAttribute{
 				MarkdownDescription: "True if the bridge is managed by xapi, default to be true",
@@ -73,13 +80,19 @@ func (r *vlanResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 				Default:             mapdefault.StaticValue(types.MapValueMust(types.StringType, map[string]attr.Value{})),
 				ElementType:         types.StringType,
 			},
-			"vlan_tag": schema.Int64Attribute{
+			"vlan_tag": schema.Int32Attribute{
 				MarkdownDescription: "The vlan tag of the network",
 				Required:            true,
 			},
 			"nic": schema.StringAttribute{
 				MarkdownDescription: "The NIC used by the network",
 				Required:            true,
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(
+						regexp.MustCompile(`^NIC|^Bond|^NIC-SR-IOV`),
+						`must start with "NIC", "Bond" or "NIC-SR-IOV", eg. "NIC 0", "Bond 0+1", "NIC-SR-IOV 0"`,
+					),
+				},
 			},
 			"uuid": schema.StringAttribute{
 				MarkdownDescription: "The UUID of the network",

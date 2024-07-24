@@ -24,8 +24,8 @@ type pifRecordData struct {
 	Network               types.String `tfsdk:"network"`
 	Host                  types.String `tfsdk:"host"`
 	MAC                   types.String `tfsdk:"mac"`
-	MTU                   types.Int64  `tfsdk:"mtu"`
-	VLAN                  types.Int64  `tfsdk:"vlan"`
+	MTU                   types.Int32  `tfsdk:"mtu"`
+	VLAN                  types.Int32  `tfsdk:"vlan"`
 	Physical              types.Bool   `tfsdk:"physical"`
 	CurrentlyAttached     types.Bool   `tfsdk:"currently_attached"`
 	IPConfigurationMode   types.String `tfsdk:"ip_configuration_mode"`
@@ -61,8 +61,8 @@ func updatePIFRecordData(ctx context.Context, record xenapi.PIFRecord, data *pif
 	data.Network = types.StringValue(string(record.Network))
 	data.Host = types.StringValue(string(record.Host))
 	data.MAC = types.StringValue(record.MAC)
-	data.MTU = types.Int64Value(int64(record.MTU))
-	data.VLAN = types.Int64Value(int64(record.VLAN))
+	data.MTU = types.Int32Value(int32(record.MTU))
+	data.VLAN = types.Int32Value(int32(record.VLAN))
 	data.Physical = types.BoolValue(record.Physical)
 	data.CurrentlyAttached = types.BoolValue(record.CurrentlyAttached)
 	data.IPConfigurationMode = types.StringValue(string(record.IPConfigurationMode))
