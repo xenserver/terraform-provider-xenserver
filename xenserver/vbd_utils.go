@@ -3,6 +3,7 @@ package xenserver
 import (
 	"context"
 	"errors"
+	"sort"
 	"strings"
 	"xenapi"
 
@@ -126,6 +127,12 @@ func createVBDs(ctx context.Context, session *xenapi.Session, vmRef xenapi.VMRef
 			return errors.New("unable to get HardDrive elements")
 		}
 	}
+
+	// Sort based on the `Bootable` field, with `true` values coming first.
+	sort.Slice(elements, func(i, j int) bool {
+		return elements[i].Bootable.ValueBool() && !elements[j].Bootable.ValueBool()
+	})
+
 	for _, vbd := range elements {
 		tflog.Debug(ctx, "---> Create VBD with VDI: "+vbd.VDI.String()+"  Mode: "+vbd.Mode.String()+"  Bootable: "+vbd.Bootable.String())
 		err := createVBD(session, vmRef, vbd, vbdType)
@@ -234,7 +241,7 @@ func checkHardDriveExist(session *xenapi.Session, vmRef xenapi.VMRef) error {
 		return err
 	}
 	if len(hardDrives) < 1 {
-		return errors.New("No hard drive on VM, please set at least one to VM")
+		return errors.New("no hard drive found on VM, please set at least one to VM")
 	}
 	return nil
 }
