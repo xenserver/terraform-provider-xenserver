@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -450,7 +451,7 @@ func getFirstTemplate(session *xenapi.Session, templateName string) (xenapi.VMRe
 	return vmRef, errors.New("unable to find VM template ref")
 }
 
-func setOtherConfigFromPlan(ctx context.Context, session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel) error {
+func setOtherConfigFromPlan(ctx context.Context, session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel, templateVBDs string) error {
 	planOtherConfig := make(map[string]string)
 	if !plan.OtherConfig.IsUnknown() {
 		diags := plan.OtherConfig.ElementsAs(ctx, &planOtherConfig, false)
@@ -483,6 +484,10 @@ func setOtherConfigFromPlan(ctx context.Context, session *xenapi.Session, vmRef 
 
 	vmOtherConfig["tf_other_config_keys"] = tfOtherConfigKeys
 	vmOtherConfig["tf_template_name"] = plan.TemplateName.ValueString()
+	// set the template VBD refs only once after the VM is cloned from a template
+	if templateVBDs != "" {
+		vmOtherConfig["tf_template_vbds"] = templateVBDs
+	}
 
 	err = xenapi.VM.SetOtherConfig(session, vmRef, vmOtherConfig)
 	if err != nil {
@@ -586,28 +591,32 @@ func updateVMResourceModel(ctx context.Context, session *xenapi.Session, vmRecor
 func getVBDsFromVMRecord(ctx context.Context, session *xenapi.Session, vmRecord xenapi.VMRecord, vbdType xenapi.VbdType) (basetypes.SetValue, []vbdResourceModel, error) {
 	var vbdSet []vbdResourceModel
 	var setValue basetypes.SetValue
+
 	for _, vbdRef := range vmRecord.VBDs {
 		vbdRecord, err := xenapi.VBD.GetRecord(session, vbdRef)
 		if err != nil {
 			return setValue, vbdSet, errors.New("unable to get VBD record")
 		}
 
-		if vbdRecord.Type != vbdType {
+		if vbdRecord.Type != vbdType || slices.Contains(getTemplateVBDRefListFromVMRecord(vmRecord), vbdRef) {
 			continue
 		}
 
-		vdiRecord, err := xenapi.VDI.GetRecord(session, vbdRecord.VDI)
-		if err != nil {
-			return setValue, vbdSet, errors.New("unable to get VDI record")
+		// for CD type VBD, VDI can be NULL
+		vdiUUID := ""
+		if vbdRecord.VDI != "OpaqueRef:NULL" {
+			vdiRecord, err := xenapi.VDI.GetRecord(session, vbdRecord.VDI)
+			if err != nil {
+				return setValue, vbdSet, errors.New("!!!!!!unable to get VDI record")
+			}
+			vdiUUID = vdiRecord.UUID
 		}
-
 		vbd := vbdResourceModel{
-			VDI:      types.StringValue(vdiRecord.UUID),
+			VDI:      types.StringValue(vdiUUID),
 			VBD:      types.StringValue(string(vbdRef)),
 			Bootable: types.BoolValue(vbdRecord.Bootable),
 			Mode:     types.StringValue(string(vbdRecord.Mode)),
 		}
-
 		vbdSet = append(vbdSet, vbd)
 	}
 
@@ -616,7 +625,7 @@ func getVBDsFromVMRecord(ctx context.Context, session *xenapi.Session, vmRecord 
 		return setValue, vbdSet, errors.New("unable to get VBD set value")
 	}
 
-	tflog.Debug(ctx, "-----> setVaule VDB "+setValue.String())
+	tflog.Debug(ctx, "-----> setVaule VBD "+setValue.String())
 	return setValue, vbdSet, nil
 }
 
@@ -845,7 +854,12 @@ func setHVMBootParams(session *xenapi.Session, vmRef xenapi.VMRef, params map[st
 }
 
 func vmResourceModelUpdate(ctx context.Context, session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel, state vmResourceModel) error {
-	err := xenapi.VM.SetNameLabel(session, vmRef, plan.NameLabel.ValueString())
+	err := setOtherConfigFromPlan(ctx, session, vmRef, plan, "")
+	if err != nil {
+		return err
+	}
+
+	err = xenapi.VM.SetNameLabel(session, vmRef, plan.NameLabel.ValueString())
 	if err != nil {
 		return errors.New(err.Error())
 	}
@@ -855,18 +869,12 @@ func vmResourceModelUpdate(ctx context.Context, session *xenapi.Session, vmRef x
 		return errors.New(err.Error())
 	}
 
-	err = setOtherConfigFromPlan(ctx, session, vmRef, plan)
-	if err != nil {
-		return err
-	}
-
 	err = updateVBDs(ctx, plan, state, vmRef, session)
 	if err != nil {
 		return err
 	}
 
-	// set CDROM and it should be set after hard_drive to keep device order
-	err = updateCDROM(ctx, session, vmRef, plan)
+	err = updateCDROM(ctx, session, vmRef, plan, state)
 	if err != nil {
 		return err
 	}
@@ -900,7 +908,18 @@ func vmResourceModelUpdate(ctx context.Context, session *xenapi.Session, vmRef x
 }
 
 func setVMResourceModel(ctx context.Context, session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel) error {
-	err := xenapi.VM.SetNameLabel(session, vmRef, plan.NameLabel.ValueString())
+	// Get VM template Disk Type VBDs (which are not managed by the TF)
+	templateHardDrives, err := getAllDiskTypeVBDs(session, vmRef)
+	if err != nil {
+		return err
+	}
+	// add other_config
+	err = setOtherConfigFromPlan(ctx, session, vmRef, plan, strings.Join(templateHardDrives, ","))
+	if err != nil {
+		return err
+	}
+
+	err = xenapi.VM.SetNameLabel(session, vmRef, plan.NameLabel.ValueString())
 	if err != nil {
 		return errors.New(err.Error())
 	}
@@ -919,12 +938,6 @@ func setVMResourceModel(ctx context.Context, session *xenapi.Session, vmRef xena
 
 	// set VCPUs
 	err = updateVMCPUs(session, vmRef, plan)
-	if err != nil {
-		return err
-	}
-
-	// add other_config
-	err = setOtherConfigFromPlan(ctx, session, vmRef, plan)
 	if err != nil {
 		return err
 	}
@@ -948,7 +961,7 @@ func setVMResourceModel(ctx context.Context, session *xenapi.Session, vmRef xena
 	}
 
 	// set CDROM and it should be set after hard_drive to keep device order
-	err = updateCDROM(ctx, session, vmRef, plan)
+	err = setCDROM(ctx, session, vmRef, plan)
 	if err != nil {
 		return err
 	}
@@ -982,8 +995,23 @@ func cleanupVMResource(session *xenapi.Session, vmRef xenapi.VMRef) error {
 		}
 	}
 
+	var vdiRefs []xenapi.VDIRef
 	for _, vbdRef := range vmRecord.VBDs {
+		if slices.Contains(getTemplateVBDRefListFromVMRecord(vmRecord), vbdRef) {
+			vdiRef, err := xenapi.VBD.GetVDI(session, vbdRef)
+			if err != nil {
+				return errors.New(err.Error())
+			}
+			vdiRefs = append(vdiRefs, vdiRef)
+		}
 		err := xenapi.VBD.Destroy(session, vbdRef)
+		if err != nil {
+			return errors.New(err.Error())
+		}
+	}
+
+	for _, vdiRef := range vdiRefs {
+		err := xenapi.VDI.Destroy(session, vdiRef)
 		if err != nil {
 			return errors.New(err.Error())
 		}

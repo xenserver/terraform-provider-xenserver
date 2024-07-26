@@ -3,6 +3,7 @@ package xenserver
 import (
 	"context"
 	"errors"
+	"strings"
 	"xenapi"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -119,11 +120,12 @@ func createVBD(session *xenapi.Session, vmRef xenapi.VMRef, vbd vbdResourceModel
 
 func createVBDs(ctx context.Context, session *xenapi.Session, vmRef xenapi.VMRef, data vmResourceModel, vbdType xenapi.VbdType) error {
 	elements := make([]vbdResourceModel, 0, len(data.HardDrive.Elements()))
-	diags := data.HardDrive.ElementsAs(ctx, &elements, false)
-	if diags.HasError() {
-		return errors.New("unable to get HardDrive elements")
+	if !data.HardDrive.IsUnknown() {
+		diags := data.HardDrive.ElementsAs(ctx, &elements, false)
+		if diags.HasError() {
+			return errors.New("unable to get HardDrive elements")
+		}
 	}
-
 	for _, vbd := range elements {
 		tflog.Debug(ctx, "---> Create VBD with VDI: "+vbd.VDI.String()+"  Mode: "+vbd.Mode.String()+"  Bootable: "+vbd.Bootable.String())
 		err := createVBD(session, vmRef, vbd, vbdType)
@@ -131,20 +133,25 @@ func createVBDs(ctx context.Context, session *xenapi.Session, vmRef xenapi.VMRef
 			return err
 		}
 	}
-	return nil
+
+	return checkHardDriveExist(session, vmRef)
 }
 
 func updateVBDs(ctx context.Context, plan vmResourceModel, state vmResourceModel, vmRef xenapi.VMRef, session *xenapi.Session) error {
 	planHardDrives := make([]vbdResourceModel, 0, len(state.HardDrive.Elements()))
-	diags := plan.HardDrive.ElementsAs(ctx, &planHardDrives, false)
-	if diags.HasError() {
-		return errors.New("unable to get HardDrives in plan data")
+	if !plan.HardDrive.IsUnknown() {
+		diags := plan.HardDrive.ElementsAs(ctx, &planHardDrives, false)
+		if diags.HasError() {
+			return errors.New("unable to get HardDrives in plan data")
+		}
 	}
 
 	stateHardDrives := make([]vbdResourceModel, 0, len(state.HardDrive.Elements()))
-	diags = state.HardDrive.ElementsAs(ctx, &stateHardDrives, false)
-	if diags.HasError() {
-		return errors.New("unable to get HardDrives in state data")
+	if !state.HardDrive.IsUnknown() && !state.HardDrive.IsNull() {
+		diags := state.HardDrive.ElementsAs(ctx, &stateHardDrives, false)
+		if diags.HasError() {
+			return errors.New("unable to get HardDrives in state data")
+		}
 	}
 
 	var err error
@@ -200,7 +207,51 @@ func updateVBDs(ctx context.Context, plan vmResourceModel, state vmResourceModel
 		}
 	}
 
+	return checkHardDriveExist(session, vmRef)
+}
+
+func getAllDiskTypeVBDs(session *xenapi.Session, vmRef xenapi.VMRef) ([]string, error) {
+	var diskRefs []string
+	vbdRefs, err := xenapi.VM.GetVBDs(session, vmRef)
+	if err != nil {
+		return diskRefs, errors.New(err.Error())
+	}
+	for _, vbdRef := range vbdRefs {
+		vbdtype, err := xenapi.VBD.GetType(session, vbdRef)
+		if err != nil {
+			return diskRefs, errors.New(err.Error())
+		}
+		if vbdtype == xenapi.VbdTypeDisk {
+			diskRefs = append(diskRefs, string(vbdRef))
+		}
+	}
+	return diskRefs, nil
+}
+
+func checkHardDriveExist(session *xenapi.Session, vmRef xenapi.VMRef) error {
+	hardDrives, err := getAllDiskTypeVBDs(session, vmRef)
+	if err != nil {
+		return err
+	}
+	if len(hardDrives) < 1 {
+		return errors.New("No hard drive on VM, please set at least one to VM")
+	}
 	return nil
+}
+
+func getTemplateVBDRefListFromVMRecord(vmRecord xenapi.VMRecord) []xenapi.VBDRef {
+	templateVBDRefs, ok := vmRecord.OtherConfig["tf_template_vbds"]
+	if !ok {
+		templateVBDRefs = ""
+	}
+	templateVBDRefList := []xenapi.VBDRef{}
+	if templateVBDRefs != "" {
+		refs := strings.Split(templateVBDRefs, ",")
+		for _, ref := range refs {
+			templateVBDRefList = append(templateVBDRefList, xenapi.VBDRef(ref))
+		}
+	}
+	return templateVBDRefList
 }
 
 func getVDIUUIDFromISOName(session *xenapi.Session, isoName string) (string, error) {
@@ -230,33 +281,28 @@ func getVDIUUIDFromISOName(session *xenapi.Session, isoName string) (string, err
 	return vdiUUID, nil
 }
 
-func updateCDROM(ctx context.Context, session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel) error {
-	if plan.CDROM.ValueString() == "" {
-		tflog.Debug(ctx, "---> CDROM is not set, use the default value from the VM template")
+func setCDROM(ctx context.Context, session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel) error {
+	if plan.CDROM.IsUnknown() {
+		tflog.Debug(ctx, "---> CD-ROM is not set, use the default value from the VM template")
 		return nil
 	}
-
+	planCDROM := plan.CDROM.ValueString()
 	vmRecord, err := xenapi.VM.GetRecord(session, vmRef)
 	if err != nil {
 		return errors.New(err.Error())
 	}
-
-	ISOName, ISOVBDRef, err := getISOFromVMRecord(ctx, session, vmRecord)
+	templateCDROM, templateVBDRef, err := getISOFromVMRecord(ctx, session, vmRecord)
 	if err != nil {
 		return err
 	}
-
-	if ISOName != plan.CDROM.ValueString() {
-		if ISOVBDRef != "" {
-			tflog.Debug(ctx, "---> Destroy CDROM: "+ISOName)
-			err := xenapi.VBD.Destroy(session, ISOVBDRef)
-			if err != nil {
-				return errors.New(err.Error())
-			}
+	if templateVBDRef != "" && (planCDROM == "" || planCDROM != templateCDROM) {
+		err := xenapi.VBD.Destroy(session, templateVBDRef)
+		if err != nil {
+			return errors.New(err.Error())
 		}
-
-		tflog.Debug(ctx, "---> Set CDROM: "+plan.CDROM.ValueString())
-		err = setCDROM(session, vmRef, plan.CDROM.ValueString())
+	}
+	if planCDROM != "" && (templateVBDRef == "" || planCDROM != templateCDROM) {
+		err = createCDROM(session, vmRef, planCDROM)
 		if err != nil {
 			return err
 		}
@@ -265,7 +311,46 @@ func updateCDROM(ctx context.Context, session *xenapi.Session, vmRef xenapi.VMRe
 	return nil
 }
 
-func setCDROM(session *xenapi.Session, vmRef xenapi.VMRef, isoName string) error {
+func updateCDROM(ctx context.Context, session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel, state vmResourceModel) error {
+	if plan.CDROM.IsUnknown() {
+		tflog.Debug(ctx, "---> use default CD-ROM, continue")
+		return nil
+	}
+	stateCDROM := state.CDROM.ValueString()
+	planCDROM := plan.CDROM.ValueString()
+
+	if planCDROM == "" && stateCDROM == "" {
+		tflog.Debug(ctx, "---> CD-ROM is not set, continue")
+		return nil
+	}
+
+	if stateCDROM != "" && (planCDROM == "" || planCDROM != stateCDROM) {
+		tflog.Debug(ctx, "---> Clean the exist CD-ROM")
+		vmRecord, err := xenapi.VM.GetRecord(session, vmRef)
+		if err != nil {
+			return errors.New(err.Error())
+		}
+		_, vbdRef, err := getISOFromVMRecord(ctx, session, vmRecord)
+		if err != nil {
+			return err
+		}
+		err = xenapi.VBD.Destroy(session, vbdRef)
+		if err != nil {
+			return errors.New(err.Error())
+		}
+	}
+	if planCDROM != "" && (stateCDROM == "" || planCDROM != stateCDROM) {
+		tflog.Debug(ctx, "---> Create new CD-ROM: "+planCDROM)
+		err := createCDROM(session, vmRef, planCDROM)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func createCDROM(session *xenapi.Session, vmRef xenapi.VMRef, isoName string) error {
 	vdiUUID, err := getVDIUUIDFromISOName(session, isoName)
 	if err != nil {
 		return err
@@ -294,19 +379,20 @@ func getISOFromVMRecord(ctx context.Context, session *xenapi.Session, vmRecord x
 
 	// if vbdSet is not empty, but it should only have one CDROM
 	if len(vbdSet) != 0 && len(vbdSet) > 1 {
-		return isoName, vbdRef, errors.New("multiple CDROMs found")
+		return isoName, vbdRef, errors.New("multiple CD-ROMs found")
 	}
 
 	vbdRef = xenapi.VBDRef(vbdSet[0].VBD.ValueString())
-
-	vdiRef, err := xenapi.VDI.GetByUUID(session, vbdSet[0].VDI.ValueString())
-	if err != nil {
-		return isoName, vbdRef, errors.New(err.Error())
-	}
-
-	isoName, err = xenapi.VDI.GetNameLabel(session, vdiRef)
-	if err != nil {
-		return isoName, vbdRef, errors.New(err.Error())
+	vdiUUID := vbdSet[0].VDI.ValueString()
+	if vdiUUID != "" {
+		vdiRef, err := xenapi.VDI.GetByUUID(session, vdiUUID)
+		if err != nil {
+			return isoName, vbdRef, errors.New(err.Error())
+		}
+		isoName, err = xenapi.VDI.GetNameLabel(session, vdiRef)
+		if err != nil {
+			return isoName, vbdRef, errors.New(err.Error())
+		}
 	}
 
 	return isoName, vbdRef, nil
