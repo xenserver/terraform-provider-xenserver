@@ -23,12 +23,12 @@ data "xenserver_sr" "sr" {
 resource "xenserver_vdi" "vdi1" {
   name_label   = "local-storage-vdi-1"
   sr_uuid      = data.xenserver_sr.sr.data_items[0].uuid
-  virtual_size = 100 * 1024 * 1024 * 1024
+  virtual_size = 10 * 1024 * 1024 * 1024
 }
 resource "xenserver_vdi" "vdi2" {
   name_label   = "local-storage-vdi-2"
   sr_uuid      = data.xenserver_sr.sr.data_items[0].uuid
-  virtual_size = 100 * 1024 * 1024 * 1024
+  virtual_size = 10 * 1024 * 1024 * 1024
 }
 
 data "xenserver_network" "network" {}

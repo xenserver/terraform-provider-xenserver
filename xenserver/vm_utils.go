@@ -607,7 +607,7 @@ func getVBDsFromVMRecord(ctx context.Context, session *xenapi.Session, vmRecord 
 		if vbdRecord.VDI != "OpaqueRef:NULL" {
 			vdiRecord, err := xenapi.VDI.GetRecord(session, vbdRecord.VDI)
 			if err != nil {
-				return setValue, vbdSet, errors.New("!!!!!!unable to get VDI record")
+				return setValue, vbdSet, errors.New("unable to get VDI record")
 			}
 			vdiUUID = vdiRecord.UUID
 		}
