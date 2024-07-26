@@ -65,11 +65,17 @@ func cleanupSnapshotResource(session *xenapi.Session, ref xenapi.VMRef) error {
 		return errors.New(err.Error())
 	}
 	for _, vbdRef := range vbdRefs {
-		vdiRef, err := xenapi.VBD.GetVDI(session, vbdRef)
+		vbdtype, err := xenapi.VBD.GetType(session, vbdRef)
 		if err != nil {
 			return errors.New(err.Error())
 		}
-		vdiRefs = append(vdiRefs, vdiRef)
+		if vbdtype == xenapi.VbdTypeDisk {
+			vdiRef, err := xenapi.VBD.GetVDI(session, vbdRef)
+			if err != nil {
+				return errors.New(err.Error())
+			}
+			vdiRefs = append(vdiRefs, vdiRef)
+		}
 	}
 	for _, vdiRef := range vdiRefs {
 		err = xenapi.VDI.Destroy(session, vdiRef)
