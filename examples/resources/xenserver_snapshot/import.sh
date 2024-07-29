@@ -1,1 +1,1 @@
-terraform import xenserver_snapshot.snapshot <xenserver_snapshot.snapshot.uuid>
+terraform import xenserver_snapshot.snapshot 00000000-0000-0000-0000-000000000000

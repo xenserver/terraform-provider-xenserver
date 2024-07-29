@@ -32,21 +32,23 @@ var vbdResourceModelAttrTypes = map[string]attr.Type{
 func VBDSchema() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"vdi_uuid": schema.StringAttribute{
-			MarkdownDescription: "VDI UUID to attach to VBD, Note that using the same VDI for multiple VBDs is not supported",
-			Required:            true,
+			MarkdownDescription: "VDI UUID to attach to VBD." + "<br />" +
+				"**Note**: Using the same VDI UUID for multiple VBDs is not supported.",
+			Required: true,
 		},
 		"vbd_ref": schema.StringAttribute{
 			Computed: true,
 		},
 		"bootable": schema.BoolAttribute{
-			MarkdownDescription: "Set VBD as bootable, Default: false",
+			MarkdownDescription: "Set VBD as bootable, default to be `false`.",
 			Optional:            true,
 			Computed:            true,
 		},
 		"mode": schema.StringAttribute{
-			MarkdownDescription: "The mode the VBD should be mounted with, Default: RW",
-			Optional:            true,
-			Computed:            true,
+			MarkdownDescription: "The mode the VBD should be mounted with, default to be `\"RW\"`." + "<br />" +
+				"Can be set as `\"RO\"` or `\"RW\"`.",
+			Optional: true,
+			Computed: true,
 			Validators: []validator.String{
 				stringvalidator.OneOf("RO", "RW"),
 			},

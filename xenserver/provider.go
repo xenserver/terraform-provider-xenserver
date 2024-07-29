@@ -50,19 +50,23 @@ func (p *xsProvider) Metadata(_ context.Context, _ provider.MetadataRequest, res
 
 func (p *xsProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		MarkdownDescription: "The XenServer provider can be used to manage and deploy XenServer resources. You must configure the provider with the proper credentials before you can use it. Documentation regarding the Data Sources and Resources supported by the XenServer Provider can be found in the navigation to the left. Note that this provider is still in development.",
 		Attributes: map[string]schema.Attribute{
 			"host": schema.StringAttribute{
-				MarkdownDescription: "The URL of target Xenserver host",
-				Required:            true,
+				MarkdownDescription: "The base URL of target XenServer host." + "<br />" +
+					"Can be set by using the environment variable **XENSERVER_HOST**.",
+				Required: true,
 			},
 			"username": schema.StringAttribute{
-				MarkdownDescription: "The user name of target Xenserver host",
-				Required:            true,
+				MarkdownDescription: "The user name of target XenServer host." + "<br />" +
+					"Can be set by using the environment variable **XENSERVER_USERNAME**.",
+				Required: true,
 			},
 			"password": schema.StringAttribute{
-				MarkdownDescription: "The password of target Xenserver host",
-				Required:            true,
-				Sensitive:           true,
+				MarkdownDescription: "The password of target XenServer host." + "<br />" +
+					"Can be set by using the environment variable **XENSERVER_PASSWORD**.",
+				Required:  true,
+				Sensitive: true,
 			},
 		},
 	}

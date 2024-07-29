@@ -36,112 +36,112 @@ func (d *srDataSource) Metadata(_ context.Context, req datasource.MetadataReques
 // Schema defines the schema for the data source.
 func (d *srDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Provides information about the storage repository of XenServer",
+		MarkdownDescription: "Provides information about the storage repository (SR).",
 
 		Attributes: map[string]schema.Attribute{
 			"name_label": schema.StringAttribute{
-				MarkdownDescription: "The name of the storage repository",
+				MarkdownDescription: "The name of the storage repository.",
 				Optional:            true,
 			},
 			"uuid": schema.StringAttribute{
-				MarkdownDescription: "The UUID of the storage repository",
+				MarkdownDescription: "The UUID of the storage repository.",
 				Optional:            true,
 			},
 			"data_items": schema.ListNestedAttribute{
-				MarkdownDescription: "The return items of storage repositories",
+				MarkdownDescription: "The return items of storage repositories.",
 				Computed:            true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"uuid": schema.StringAttribute{
-							MarkdownDescription: "The UUID of the storage repository",
+							MarkdownDescription: "The UUID of the storage repository.",
 							Computed:            true,
 						},
 						"name_label": schema.StringAttribute{
-							MarkdownDescription: "The name of the storage repository",
+							MarkdownDescription: "The name of the storage repository.",
 							Computed:            true,
 						},
 						"name_description": schema.StringAttribute{
-							MarkdownDescription: "The human-readable description of the storage repository",
+							MarkdownDescription: "The human-readable description of the storage repository.",
 							Computed:            true,
 						},
 						"allowed_operations": schema.ListAttribute{
-							MarkdownDescription: "The list of the operations allowed in this state",
+							MarkdownDescription: "The list of the operations allowed in this state.",
 							Computed:            true,
 							ElementType:         types.StringType,
 						},
 						"current_operations": schema.MapAttribute{
-							MarkdownDescription: "The links each of the running tasks using this object (by reference) to a current_operation enum which describes the nature of the task",
+							MarkdownDescription: "The links each of the running tasks using this object (by reference) to a current_operation enum which describes the nature of the task.",
 							Computed:            true,
 							ElementType:         types.StringType,
 						},
 						"vdis": schema.ListAttribute{
-							MarkdownDescription: "The all virtual disks known to this storage repository",
+							MarkdownDescription: "The all virtual disks known to this storage repository.",
 							Computed:            true,
 							ElementType:         types.StringType,
 						},
 						"pbds": schema.ListAttribute{
-							MarkdownDescription: "Describes how particular hosts can see this storage repository",
+							MarkdownDescription: "Describes how particular hosts can see this storage repository.",
 							Computed:            true,
 							ElementType:         types.StringType,
 						},
 						"virtual_allocation": schema.Int64Attribute{
-							MarkdownDescription: "The sum of virtual_sizes of all VDIs in this storage repository (in bytes)",
+							MarkdownDescription: "The sum of virtual_sizes of all VDIs in this storage repository (in bytes).",
 							Computed:            true,
 						},
 						"physical_utilisation": schema.Int64Attribute{
-							MarkdownDescription: "The physical space currently utilised on this storage repository (in bytes)",
+							MarkdownDescription: "The physical space currently utilized on this storage repository (in bytes).",
 							Computed:            true,
 						},
 						"physical_size": schema.Int64Attribute{
-							MarkdownDescription: "The total physical size of the storage repository (in bytes)",
+							MarkdownDescription: "The total physical size of the storage repository (in bytes).",
 							Computed:            true,
 						},
 						"type": schema.StringAttribute{
-							MarkdownDescription: "The type of the storage repository",
+							MarkdownDescription: "The type of the storage repository.",
 							Computed:            true,
 						},
 						"content_type": schema.StringAttribute{
-							MarkdownDescription: "The type of the SR's content, if required (e.g. ISOs)",
+							MarkdownDescription: "The type of the SR's content, if required (for example, \"ISOs\").",
 							Computed:            true,
 						},
 						"shared": schema.BoolAttribute{
-							MarkdownDescription: "True if this SR is (capable of being) shared between multiple hosts",
+							MarkdownDescription: "True if this SR is (capable of being) shared between multiple hosts.",
 							Computed:            true,
 						},
 						"other_config": schema.MapAttribute{
-							MarkdownDescription: "The additional configuration",
+							MarkdownDescription: "The additional configuration.",
 							Computed:            true,
 							ElementType:         types.StringType,
 						},
 						"tags": schema.ListAttribute{
-							MarkdownDescription: "The user-specified tags for categorization purposes",
+							MarkdownDescription: "The user-specified tags for categorization purposes.",
 							Computed:            true,
 							ElementType:         types.StringType,
 						},
 						"sm_config": schema.MapAttribute{
-							MarkdownDescription: "The SM dependent data",
+							MarkdownDescription: "The SM dependent data.",
 							Computed:            true,
 							ElementType:         types.StringType,
 						},
 						"blobs": schema.MapAttribute{
-							MarkdownDescription: "The binary blobs associated with this SR",
+							MarkdownDescription: "The binary blobs associated with this SR.",
 							Computed:            true,
 							ElementType:         types.StringType,
 						},
 						"local_cache_enabled": schema.BoolAttribute{
-							MarkdownDescription: "True if this SR is assigned to be the local cache for its host",
+							MarkdownDescription: "True if this SR is assigned to be the local cache for its host.",
 							Computed:            true,
 						},
 						"introduced_by": schema.StringAttribute{
-							MarkdownDescription: "The disaster recovery task which introduced this SR",
+							MarkdownDescription: "The disaster recovery task which introduced this SR.",
 							Computed:            true,
 						},
 						"clustered": schema.BoolAttribute{
-							MarkdownDescription: "True if the SR is using aggregated local storage",
+							MarkdownDescription: "True if the SR is using aggregated local storage.",
 							Computed:            true,
 						},
 						"is_tools_sr": schema.BoolAttribute{
-							MarkdownDescription: "True if this is the SR that contains the Tools ISO VDIs",
+							MarkdownDescription: "True if this is the SR that contains the Tools ISO VDIs.",
 							Computed:            true,
 						},
 					},

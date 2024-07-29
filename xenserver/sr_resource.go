@@ -41,64 +41,69 @@ func (r *srResource) Metadata(_ context.Context, req resource.MetadataRequest, r
 
 func (r *srResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "SR resource",
+		MarkdownDescription: "Provides a general storage repository resource.",
 		Attributes: map[string]schema.Attribute{
 			"name_label": schema.StringAttribute{
-				MarkdownDescription: "The name of the storage repository",
+				MarkdownDescription: "The name of the storage repository.",
 				Required:            true,
 			},
 			"name_description": schema.StringAttribute{
-				MarkdownDescription: `The human-readable description of the storage repository, default to be ""`,
+				MarkdownDescription: "The description of the storage repository, default to be `\"\"`.",
 				Optional:            true,
 				Computed:            true,
 				Default:             stringdefault.StaticString(""),
 			},
 			"type": schema.StringAttribute{
-				MarkdownDescription: `The type of the storage repository, default to be "dummy"`,
-				Optional:            true,
-				Computed:            true,
-				Default:             stringdefault.StaticString("dummy"),
+				MarkdownDescription: "The type of the storage repository, default to be `\"dummy\"`." +
+					"\n\n-> **Note:** `type` is not allowed to be updated.",
+				Optional: true,
+				Computed: true,
+				Default:  stringdefault.StaticString("dummy"),
 			},
 			"content_type": schema.StringAttribute{
-				MarkdownDescription: `The type of the SR's content, if required (e.g. ISOs), default to be ""`,
-				Optional:            true,
-				Computed:            true,
-				Default:             stringdefault.StaticString(""),
+				MarkdownDescription: "The type of the SR's content, if required (for example. \"ISOs\"), default to be `\"\"`." +
+					"\n\n-> **Note:** `content_type` is not allowed to be updated.",
+				Optional: true,
+				Computed: true,
+				Default:  stringdefault.StaticString(""),
 			},
 			"shared": schema.BoolAttribute{
-				MarkdownDescription: `True if this SR is (capable of being) shared between multiple hosts, default to be false`,
-				Optional:            true,
-				Computed:            true,
-				Default:             booldefault.StaticBool(false),
+				MarkdownDescription: "True if this SR is (capable of being) shared between multiple hosts, default to be `false`." +
+					"\n\n-> **Note:** `shared` is not allowed to be updated.",
+				Optional: true,
+				Computed: true,
+				Default:  booldefault.StaticBool(false),
 			},
 			"sm_config": schema.MapAttribute{
-				MarkdownDescription: "The SM dependent data, default to be {}",
+				MarkdownDescription: "The SM dependent data, default to be `{}`.",
 				Optional:            true,
 				Computed:            true,
 				Default:             mapdefault.StaticValue(types.MapValueMust(types.StringType, map[string]attr.Value{})),
 				ElementType:         types.StringType,
 			},
 			"device_config": schema.MapAttribute{
-				MarkdownDescription: "The device config that will be passed to backend SR driver, default to be {}",
-				Optional:            true,
-				Computed:            true,
-				Default:             mapdefault.StaticValue(types.MapValueMust(types.StringType, map[string]attr.Value{})),
-				ElementType:         types.StringType,
+				MarkdownDescription: "The device config that will be passed to backend SR driver, default to be `{}`." +
+					"\n\n-> **Note:** `device_config` is not allowed to be updated.",
+				Optional:    true,
+				Computed:    true,
+				Default:     mapdefault.StaticValue(types.MapValueMust(types.StringType, map[string]attr.Value{})),
+				ElementType: types.StringType,
 			},
 			"host": schema.StringAttribute{
-				MarkdownDescription: "The UUID of the host to create/make the SR on",
-				Optional:            true,
-				Computed:            true,
+				MarkdownDescription: "The UUID of the host to create/make the SR on, default to use the pool coordinator." +
+					"\n\n-> **Note:** `host` is not allowed to be updated.",
+				Optional: true,
+				Computed: true,
 			},
 			"uuid": schema.StringAttribute{
-				MarkdownDescription: "The UUID of the storage repository",
+				MarkdownDescription: "The UUID of the storage repository.",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"id": schema.StringAttribute{
-				MarkdownDescription: "The test id of the storage repository",
+				MarkdownDescription: "The test ID of the storage repository.",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),

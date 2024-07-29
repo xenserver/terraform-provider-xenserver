@@ -38,121 +38,121 @@ func (d *pifDataSource) Metadata(_ context.Context, req datasource.MetadataReque
 func pifSchema() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"uuid": schema.StringAttribute{
-			MarkdownDescription: "The UUID of the storage repository",
+			MarkdownDescription: "The UUID of the storage repository.",
 			Computed:            true,
 		},
 		"device": schema.StringAttribute{
-			MarkdownDescription: "The machine-readable name of the physical interface (PIF) (e.g. eth0)",
+			MarkdownDescription: "The machine-readable name of the physical interface (PIF). (For example, `\"eth0\"`)",
 			Computed:            true,
 		},
 		"management": schema.BoolAttribute{
-			MarkdownDescription: "Indicates whether the control software is listening for connections on this physical interface",
+			MarkdownDescription: "Indicates whether the control software is listening for connections on this physical interface.",
 			Computed:            true,
 		},
 		"network": schema.StringAttribute{
-			MarkdownDescription: "The UUID of the virtual network to which this PIF is connected",
+			MarkdownDescription: "The UUID of the virtual network to which this PIF is connected.",
 			Computed:            true,
 		},
 		"host": schema.StringAttribute{
-			MarkdownDescription: "The UUID of the physical machine to which this PIF is connected",
+			MarkdownDescription: "The UUID of the physical machine to which this PIF is connected.",
 			Computed:            true,
 		},
 		"mac": schema.StringAttribute{
-			MarkdownDescription: "Ethernet MAC address of the physical interface",
+			MarkdownDescription: "Ethernet MAC address of the physical interface.",
 			Computed:            true,
 		},
 		"mtu": schema.Int32Attribute{
-			MarkdownDescription: "MTU in octets",
+			MarkdownDescription: "MTU in octets.",
 			Computed:            true,
 		},
 		"vlan": schema.Int32Attribute{
-			MarkdownDescription: "VLAN tag for all traffic passing through this interface",
+			MarkdownDescription: "VLAN tag for all traffic passing through this interface.",
 			Computed:            true,
 		},
 		"physical": schema.BoolAttribute{
-			MarkdownDescription: "True if this represents a physical network interface",
+			MarkdownDescription: "True if this represents a physical network interface.",
 			Computed:            true,
 		},
 		"currently_attached": schema.BoolAttribute{
-			MarkdownDescription: "True if this interface is online",
+			MarkdownDescription: "True if this interface is online.",
 			Computed:            true,
 		},
 		"ip_configuration_mode": schema.StringAttribute{
-			MarkdownDescription: "Sets if and how this interface gets an IP address",
+			MarkdownDescription: "Sets if and how this interface gets an IP address.",
 			Computed:            true,
 		},
 		"ip": schema.StringAttribute{
-			MarkdownDescription: "IP address",
+			MarkdownDescription: "IP address.",
 			Computed:            true,
 		},
 		"netmask": schema.StringAttribute{
-			MarkdownDescription: "IP netmask",
+			MarkdownDescription: "IP netmask.",
 			Computed:            true,
 		},
 		"gateway": schema.StringAttribute{
-			MarkdownDescription: "IP gateway",
+			MarkdownDescription: "IP gateway.",
 			Computed:            true,
 		},
 		"dns": schema.StringAttribute{
-			MarkdownDescription: "Comma separated list of the IP addresses of the DNS servers to use",
+			MarkdownDescription: "Comma-separated list of the IP addresses of the DNS servers to use.",
 			Computed:            true,
 		},
 		"bond_slave_of": schema.StringAttribute{
-			MarkdownDescription: "Indicates which bond this interface is part of",
+			MarkdownDescription: "Indicates which bond this interface is part of.",
 			Computed:            true,
 		},
 		"bond_master_of": schema.ListAttribute{
-			MarkdownDescription: "Indicates this PIF represents the results of a bond",
+			MarkdownDescription: "Indicates this PIF represents the results of a bond.",
 			Computed:            true,
 			ElementType:         types.StringType,
 		},
 		"vlan_master_of": schema.StringAttribute{
-			MarkdownDescription: "Indicates which VLAN this interface receives untagged traffic from",
+			MarkdownDescription: "Indicates which VLAN this interface receives untagged traffic from.",
 			Computed:            true,
 		},
 		"vlan_slave_of": schema.ListAttribute{
-			MarkdownDescription: "Indicates which VLANs this interface transmits tagged traffic to",
+			MarkdownDescription: "Indicates which VLANs this interface transmits tagged traffic to.",
 			Computed:            true,
 			ElementType:         types.StringType,
 		},
 		"other_config": schema.MapAttribute{
-			MarkdownDescription: "Additional configuration",
+			MarkdownDescription: "Additional configuration.",
 			Computed:            true,
 			ElementType:         types.StringType,
 		},
 		"disallow_unplug": schema.BoolAttribute{
-			MarkdownDescription: "Prevent this PIF from being unplugged; set this to notify the management tool-stack that the PIF has a special use and should not be unplugged under any circumstances (e.g. because you're running storage traffic over it)",
+			MarkdownDescription: "Prevent this PIF from being unplugged; set this to notify the management toolstack that the PIF has a special use and should not be unplugged under any circumstances. (For example, because you're running storage traffic over it)",
 			Computed:            true,
 		},
 		"tunnel_access_pif_of": schema.ListAttribute{
-			MarkdownDescription: "Indicates to which tunnel this PIF gives access",
+			MarkdownDescription: "Indicates to which tunnel this PIF gives access.",
 			Computed:            true,
 			ElementType:         types.StringType,
 		},
 		"tunnel_transport_pif_of": schema.ListAttribute{
-			MarkdownDescription: "Indicates to which tunnel this PIF provides transport",
+			MarkdownDescription: "Indicates to which tunnel this PIF provides transport.",
 			Computed:            true,
 			ElementType:         types.StringType,
 		},
 		"ipv6_configuration_mode": schema.StringAttribute{
-			MarkdownDescription: "Sets if and how this interface gets an IPv6 address",
+			MarkdownDescription: "Sets if and how this interface gets an IPv6 address.",
 			Computed:            true,
 		},
 		"ipv6": schema.ListAttribute{
-			MarkdownDescription: "IPv6 address",
+			MarkdownDescription: "IPv6 address.",
 			Computed:            true,
 			ElementType:         types.StringType,
 		},
 		"ipv6_gateway": schema.StringAttribute{
-			MarkdownDescription: "IPv6 gateway",
+			MarkdownDescription: "IPv6 gateway.",
 			Computed:            true,
 		},
 		"primary_address_type": schema.StringAttribute{
-			MarkdownDescription: "Which protocol should define the primary address of this interface",
+			MarkdownDescription: "Which protocol should define the primary address of this interface.",
 			Computed:            true,
 		},
 		"managed": schema.BoolAttribute{
-			MarkdownDescription: "Indicates whether the interface is managed by xapi. If it is not, then xapi will not configure the interface, the commands PIF.plug/unplug/reconfigure_ip(v6) cannot be used, nor can the interface be bonded or have VLANs based on top through xapi.",
+			MarkdownDescription: "Indicates whether the interface is managed by [XAPI](https://github.com/xapi-project/xen-api). If it is not, then XAPI will not configure the interface, the commands PIF.plug/unplug/reconfigure_ip(v6) cannot be used, nor can the interface be bonded or have VLANs based on top through XAPI.",
 			Computed:            true,
 		},
 		"properties": schema.MapAttribute{
@@ -166,21 +166,21 @@ func pifSchema() map[string]schema.Attribute {
 			ElementType:         types.StringType,
 		},
 		"igmp_snooping_status": schema.StringAttribute{
-			MarkdownDescription: "The IGMP snooping status of the corresponding network bridge",
+			MarkdownDescription: "The IGMP snooping status of the corresponding network bridge.",
 			Computed:            true,
 		},
 		"sriov_physical_pif_of": schema.ListAttribute{
-			MarkdownDescription: "Indicates which network_sriov this interface is physical of",
+			MarkdownDescription: "Indicates which network_sriov this interface is the physical PIF of.",
 			Computed:            true,
 			ElementType:         types.StringType,
 		},
 		"sriov_logical_pif_of": schema.ListAttribute{
-			MarkdownDescription: "Indicates which network_sriov this interface is logical of",
+			MarkdownDescription: "Indicates which network_sriov this interface is the logical PIF of.",
 			Computed:            true,
 			ElementType:         types.StringType,
 		},
 		"pci": schema.StringAttribute{
-			MarkdownDescription: "Link to underlying PCI device",
+			MarkdownDescription: "Link to underlying PCI device.",
 			Computed:            true,
 		},
 	}
@@ -188,22 +188,22 @@ func pifSchema() map[string]schema.Attribute {
 
 func (d *pifDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Provides information about the physical network interface (PIF) of XenServer",
+		MarkdownDescription: "Provides information about the physical network interface (PIF).",
 		Attributes: map[string]schema.Attribute{
 			"device": schema.StringAttribute{
-				MarkdownDescription: "The machine-readable name of the physical interface (PIF) (e.g. eth0)",
+				MarkdownDescription: "The machine-readable name of the physical interface (PIF). (eg. `\"eth0\"`)",
 				Optional:            true,
 			},
 			"management": schema.BoolAttribute{
-				MarkdownDescription: "Indicates whether the control software is listening for connections on this physical interface",
+				MarkdownDescription: "Indicates whether the control software is listening for connections on this physical interface.",
 				Optional:            true,
 			},
 			"network": schema.StringAttribute{
-				MarkdownDescription: "The UUID of the virtual network to which this PIF is connected",
+				MarkdownDescription: "The UUID of the virtual network to which this PIF is connected.",
 				Optional:            true,
 			},
 			"data_items": schema.ListNestedAttribute{
-				MarkdownDescription: "The return items of physical network interfaces",
+				MarkdownDescription: "The return items of physical network interfaces.",
 				Computed:            true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: pifSchema(),

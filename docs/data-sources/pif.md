@@ -3,12 +3,12 @@
 page_title: "xenserver_pif Data Source - xenserver"
 subcategory: ""
 description: |-
-  Provides information about the physical network interface (PIF) of XenServer
+  Provides information about the physical network interface (PIF).
 ---
 
 # xenserver_pif (Data Source)
 
-Provides information about the physical network interface (PIF) of XenServer
+Provides information about the physical network interface (PIF).
 
 ## Example Usage
 
@@ -28,50 +28,50 @@ output "pif_data_out" {
 
 ### Optional
 
-- `device` (String) The machine-readable name of the physical interface (PIF) (e.g. eth0)
-- `management` (Boolean) Indicates whether the control software is listening for connections on this physical interface
-- `network` (String) The UUID of the virtual network to which this PIF is connected
+- `device` (String) The machine-readable name of the physical interface (PIF). (eg. `"eth0"`)
+- `management` (Boolean) Indicates whether the control software is listening for connections on this physical interface.
+- `network` (String) The UUID of the virtual network to which this PIF is connected.
 
 ### Read-Only
 
-- `data_items` (Attributes List) The return items of physical network interfaces (see [below for nested schema](#nestedatt--data_items))
+- `data_items` (Attributes List) The return items of physical network interfaces. (see [below for nested schema](#nestedatt--data_items))
 
 <a id="nestedatt--data_items"></a>
 ### Nested Schema for `data_items`
 
 Read-Only:
 
-- `bond_master_of` (List of String) Indicates this PIF represents the results of a bond
-- `bond_slave_of` (String) Indicates which bond this interface is part of
+- `bond_master_of` (List of String) Indicates this PIF represents the results of a bond.
+- `bond_slave_of` (String) Indicates which bond this interface is part of.
 - `capabilities` (List of String) Additional capabilities on the interface.
-- `currently_attached` (Boolean) True if this interface is online
-- `device` (String) The machine-readable name of the physical interface (PIF) (e.g. eth0)
-- `disallow_unplug` (Boolean) Prevent this PIF from being unplugged; set this to notify the management tool-stack that the PIF has a special use and should not be unplugged under any circumstances (e.g. because you're running storage traffic over it)
-- `dns` (String) Comma separated list of the IP addresses of the DNS servers to use
-- `gateway` (String) IP gateway
-- `host` (String) The UUID of the physical machine to which this PIF is connected
-- `igmp_snooping_status` (String) The IGMP snooping status of the corresponding network bridge
-- `ip` (String) IP address
-- `ip_configuration_mode` (String) Sets if and how this interface gets an IP address
-- `ipv6` (List of String) IPv6 address
-- `ipv6_configuration_mode` (String) Sets if and how this interface gets an IPv6 address
-- `ipv6_gateway` (String) IPv6 gateway
-- `mac` (String) Ethernet MAC address of the physical interface
-- `managed` (Boolean) Indicates whether the interface is managed by xapi. If it is not, then xapi will not configure the interface, the commands PIF.plug/unplug/reconfigure_ip(v6) cannot be used, nor can the interface be bonded or have VLANs based on top through xapi.
-- `management` (Boolean) Indicates whether the control software is listening for connections on this physical interface
-- `mtu` (Number) MTU in octets
-- `netmask` (String) IP netmask
-- `network` (String) The UUID of the virtual network to which this PIF is connected
-- `other_config` (Map of String) Additional configuration
-- `pci` (String) Link to underlying PCI device
-- `physical` (Boolean) True if this represents a physical network interface
-- `primary_address_type` (String) Which protocol should define the primary address of this interface
+- `currently_attached` (Boolean) True if this interface is online.
+- `device` (String) The machine-readable name of the physical interface (PIF). (For example, `"eth0"`)
+- `disallow_unplug` (Boolean) Prevent this PIF from being unplugged; set this to notify the management toolstack that the PIF has a special use and should not be unplugged under any circumstances. (For example, because you're running storage traffic over it)
+- `dns` (String) Comma-separated list of the IP addresses of the DNS servers to use.
+- `gateway` (String) IP gateway.
+- `host` (String) The UUID of the physical machine to which this PIF is connected.
+- `igmp_snooping_status` (String) The IGMP snooping status of the corresponding network bridge.
+- `ip` (String) IP address.
+- `ip_configuration_mode` (String) Sets if and how this interface gets an IP address.
+- `ipv6` (List of String) IPv6 address.
+- `ipv6_configuration_mode` (String) Sets if and how this interface gets an IPv6 address.
+- `ipv6_gateway` (String) IPv6 gateway.
+- `mac` (String) Ethernet MAC address of the physical interface.
+- `managed` (Boolean) Indicates whether the interface is managed by [XAPI](https://github.com/xapi-project/xen-api). If it is not, then XAPI will not configure the interface, the commands PIF.plug/unplug/reconfigure_ip(v6) cannot be used, nor can the interface be bonded or have VLANs based on top through XAPI.
+- `management` (Boolean) Indicates whether the control software is listening for connections on this physical interface.
+- `mtu` (Number) MTU in octets.
+- `netmask` (String) IP netmask.
+- `network` (String) The UUID of the virtual network to which this PIF is connected.
+- `other_config` (Map of String) Additional configuration.
+- `pci` (String) Link to underlying PCI device.
+- `physical` (Boolean) True if this represents a physical network interface.
+- `primary_address_type` (String) Which protocol should define the primary address of this interface.
 - `properties` (Map of String) Additional configuration properties for the interface.
-- `sriov_logical_pif_of` (List of String) Indicates which network_sriov this interface is logical of
-- `sriov_physical_pif_of` (List of String) Indicates which network_sriov this interface is physical of
-- `tunnel_access_pif_of` (List of String) Indicates to which tunnel this PIF gives access
-- `tunnel_transport_pif_of` (List of String) Indicates to which tunnel this PIF provides transport
-- `uuid` (String) The UUID of the storage repository
-- `vlan` (Number) VLAN tag for all traffic passing through this interface
-- `vlan_master_of` (String) Indicates which VLAN this interface receives untagged traffic from
-- `vlan_slave_of` (List of String) Indicates which VLANs this interface transmits tagged traffic to
+- `sriov_logical_pif_of` (List of String) Indicates which network_sriov this interface is the logical PIF of.
+- `sriov_physical_pif_of` (List of String) Indicates which network_sriov this interface is the physical PIF of.
+- `tunnel_access_pif_of` (List of String) Indicates to which tunnel this PIF gives access.
+- `tunnel_transport_pif_of` (List of String) Indicates to which tunnel this PIF provides transport.
+- `uuid` (String) The UUID of the storage repository.
+- `vlan` (Number) VLAN tag for all traffic passing through this interface.
+- `vlan_master_of` (String) Indicates which VLAN this interface receives untagged traffic from.
+- `vlan_slave_of` (List of String) Indicates which VLANs this interface transmits tagged traffic to.

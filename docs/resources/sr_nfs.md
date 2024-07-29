@@ -3,12 +3,12 @@
 page_title: "xenserver_sr_nfs Resource - xenserver"
 subcategory: ""
 description: |-
-  NFS SR resource
+  Provides an NFS storage repository resource.
 ---
 
 # xenserver_sr_nfs (Resource)
 
-NFS SR resource
+Provides an NFS storage repository resource.
 
 ## Example Usage
 
@@ -17,11 +17,7 @@ resource "xenserver_sr_nfs" "nfs_test" {
   name_label       = "NFS virtual disk storage"
   name_description = "A test NFS storage repository"
   version          = "3"
-  storage_location = "10.70.58.9:/xenrtnfs"
-}
-
-output "nfs_test_out" {
-  value = xenserver_sr_nfs.nfs_test
+  storage_location = "1.1.1.1:/server/path"
 }
 ```
 
@@ -30,24 +26,30 @@ output "nfs_test_out" {
 
 ### Required
 
-- `name_label` (String) The name of the NFS storage repository
-- `storage_location` (String) The server and server patch of the NFS storage repository, for example: "10.70.58.9:/xenrtnfs"
-- `version` (String) The version of NFS storage repository, for example: "3"
+- `name_label` (String) The name of the NFS storage repository.
+- `storage_location` (String) The server and server path of the NFS storage repository.<br />Follow the format `"1.1.1.1:/server/path"`.
+
+-> **Note:** `storage_location` is not allowed to be updated.
+- `version` (String) The version of NFS storage repository.<br />Can be set as `"3"` or `"4"`.
+
+-> **Note:** `version` is not allowed to be updated.
 
 ### Optional
 
-- `advanced_options` (String) The advanced options of the NFS storage repository, default to be ""
-- `name_description` (String) The human-readable description of the NFS storage repository, default to be ""
+- `advanced_options` (String) The advanced options of the NFS storage repository, default to be `""`.
+
+-> **Note:** `advanced_options` is not allowed to be updated.
+- `name_description` (String) The description of the NFS storage repository, default to be `""`.
 
 ### Read-Only
 
-- `id` (String) The test id of the NFS storage repository
-- `uuid` (String) The UUID of the NFS storage repository
+- `id` (String) The test ID of the NFS storage repository.
+- `uuid` (String) The UUID of the NFS storage repository.
 
 ## Import
 
 Import is supported using the following syntax:
 
 ```shell
-terraform import xenserver_sr_nfs.nfs_test <xenserver_sr_nfs.nfs_test.uuid>
+terraform import xenserver_sr_nfs.nfs_test 00000000-0000-0000-0000-000000000000
 ```

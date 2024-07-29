@@ -3,17 +3,17 @@
 page_title: "xenserver_sr Resource - xenserver"
 subcategory: ""
 description: |-
-  SR resource
+  Provides a general storage repository resource.
 ---
 
 # xenserver_sr (Resource)
 
-SR resource
+Provides a general storage repository resource.
 
 ## Example Usage
 
 ```terraform
-// A simple example of creating a local storage on XenServer
+# Create a local storage
 resource "xenserver_sr" "local" {
   name_label       = "Test Local SR"
   name_description = "A test local storage repository"
@@ -22,28 +22,20 @@ resource "xenserver_sr" "local" {
   host             = "cbdad2c6-b181-4047-ba2a-b4914bdecdbd"
 }
 
-output "local_out" {
-  value = xenserver_sr.local
-}
-
-// A simple example of creating a NFS SR on XenServer
+# Create a NFS SR
 resource "xenserver_sr" "nfs" {
   name_label   = "Test NFS SR"
   type         = "nfs"
   content_type = ""
   shared       = true
   device_config = {
-    server     = "10.70.58.9"
-    serverpath = "/xenrtnfs"
+    server     = "1.1.1.1"
+    serverpath = "/server/path"
     nfsversion = "3"
   }
   sm_config = {
     shared = "true"
   }
-}
-
-output "nfs_out" {
-  value = xenserver_sr.nfs
 }
 ```
 
@@ -52,27 +44,37 @@ output "nfs_out" {
 
 ### Required
 
-- `name_label` (String) The name of the storage repository
+- `name_label` (String) The name of the storage repository.
 
 ### Optional
 
-- `content_type` (String) The type of the SR's content, if required (e.g. ISOs), default to be ""
-- `device_config` (Map of String) The device config that will be passed to backend SR driver, default to be {}
-- `host` (String) The UUID of the host to create/make the SR on
-- `name_description` (String) The human-readable description of the storage repository, default to be ""
-- `shared` (Boolean) True if this SR is (capable of being) shared between multiple hosts, default to be false
-- `sm_config` (Map of String) The SM dependent data, default to be {}
-- `type` (String) The type of the storage repository, default to be "dummy"
+- `content_type` (String) The type of the SR's content, if required (for example. "ISOs"), default to be `""`.
+
+-> **Note:** `content_type` is not allowed to be updated.
+- `device_config` (Map of String) The device config that will be passed to backend SR driver, default to be `{}`.
+
+-> **Note:** `device_config` is not allowed to be updated.
+- `host` (String) The UUID of the host to create/make the SR on, default to use the pool coordinator.
+
+-> **Note:** `host` is not allowed to be updated.
+- `name_description` (String) The description of the storage repository, default to be `""`.
+- `shared` (Boolean) True if this SR is (capable of being) shared between multiple hosts, default to be `false`.
+
+-> **Note:** `shared` is not allowed to be updated.
+- `sm_config` (Map of String) The SM dependent data, default to be `{}`.
+- `type` (String) The type of the storage repository, default to be `"dummy"`.
+
+-> **Note:** `type` is not allowed to be updated.
 
 ### Read-Only
 
-- `id` (String) The test id of the storage repository
-- `uuid` (String) The UUID of the storage repository
+- `id` (String) The test ID of the storage repository.
+- `uuid` (String) The UUID of the storage repository.
 
 ## Import
 
 Import is supported using the following syntax:
 
 ```shell
-terraform import xenserver_sr.local <xenserver_sr.local.uuid>
+terraform import xenserver_sr.local 00000000-0000-0000-0000-000000000000
 ```

@@ -1,9 +1,9 @@
-// Create a VDI with a new SR
+# Create a VDI with a new SR
 resource "xenserver_sr_nfs" "nfs" {
   name_label       = "Test NFS SR"
   name_description = "A test NFS storage repository"
   version          = "3"
-  storage_location = "10.70.58.9:/xenrtnfs"
+  storage_location = "1.1.1.1:/server/path"
 }
 
 resource "xenserver_vdi" "vdi" {
@@ -17,11 +17,7 @@ resource "xenserver_vdi" "vdi" {
   }
 }
 
-output "vdi_out" {
-  value = xenserver_vdi.vdi
-}
-
-// Create a VDI with an exist SR
+# Create a VDI with an exist SR
 data "xenserver_sr" "sr" {
   name_label = "Local storage"
 }
@@ -33,8 +29,4 @@ resource "xenserver_vdi" "vdi" {
   virtual_size     = 1 * 1024 * 1024 * 1024
   read_only        = true
   type             = "system"
-}
-
-output "vdi_out" {
-  value = xenserver_vdi.vdi
 }

@@ -46,20 +46,20 @@ func (r *vlanResource) Metadata(_ context.Context, req resource.MetadataRequest,
 
 func (r *vlanResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "External network resource",
+		MarkdownDescription: "Provides an external network resource. A network that passes traffic over one of your VLANs.",
 		Attributes: map[string]schema.Attribute{
 			"name_label": schema.StringAttribute{
-				MarkdownDescription: "The name of the network",
+				MarkdownDescription: "The name of the network.",
 				Required:            true,
 			},
 			"name_description": schema.StringAttribute{
-				MarkdownDescription: "The description of the network, default to be empty string",
+				MarkdownDescription: "The description of the network, default to be `\"\"`.",
 				Optional:            true,
 				Computed:            true,
 				Default:             stringdefault.StaticString(""),
 			},
 			"mtu": schema.Int32Attribute{
-				MarkdownDescription: "The MTU of the network, default to be 1500, minimum value is 0",
+				MarkdownDescription: "The MTU of the network, default to be `1500`. The minimum value this attribute can be set is `0`.",
 				Optional:            true,
 				Computed:            true,
 				Default:             int32default.StaticInt32(1500),
@@ -68,25 +68,29 @@ func (r *vlanResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 				},
 			},
 			"managed": schema.BoolAttribute{
-				MarkdownDescription: "True if the bridge is managed by xapi, default to be true",
-				Optional:            true,
-				Computed:            true,
-				Default:             booldefault.StaticBool(true),
+				MarkdownDescription: "True if the bridge is managed by [XAPI](https://github.com/xapi-project/xen-api), default to be `true`." +
+					"\n\n-> **Note:** `managed` is not allowed to be updated.",
+				Optional: true,
+				Computed: true,
+				Default:  booldefault.StaticBool(true),
 			},
 			"other_config": schema.MapAttribute{
-				MarkdownDescription: "The additional configuration, default to be {}",
+				MarkdownDescription: "The additional configuration of the network, default to be `{}`.",
 				Optional:            true,
 				Computed:            true,
 				Default:             mapdefault.StaticValue(types.MapValueMust(types.StringType, map[string]attr.Value{})),
 				ElementType:         types.StringType,
 			},
 			"vlan_tag": schema.Int32Attribute{
-				MarkdownDescription: "The vlan tag of the network",
-				Required:            true,
+				MarkdownDescription: "The VLAN tag of the network." +
+					"\n\n-> **Note:** `vlan_tag` is not allowed to be updated.",
+				Required: true,
 			},
 			"nic": schema.StringAttribute{
-				MarkdownDescription: "The NIC used by the network",
-				Required:            true,
+				MarkdownDescription: "The NIC used by the network, for example, `\"NIC 0\"`, `\"Bond 0+1\"`, `\"NIC-SR-IOV 0\"`." + "<br />" +
+					"The NIC on target XenServer environment can be found by the `xenserver_nic` data-source." +
+					"\n\n-> **Note:** `nic` is not allowed to be updated.",
+				Required: true,
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(
 						regexp.MustCompile(`^NIC|^Bond|^NIC-SR-IOV`),
@@ -95,14 +99,14 @@ func (r *vlanResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 				},
 			},
 			"uuid": schema.StringAttribute{
-				MarkdownDescription: "The UUID of the network",
+				MarkdownDescription: "The UUID of the network.",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"id": schema.StringAttribute{
-				MarkdownDescription: "The test id of the network",
+				MarkdownDescription: "The test ID of the network.",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),

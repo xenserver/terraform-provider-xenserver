@@ -1,4 +1,4 @@
-// snapshot from an exist running VM 
+# snapshot from an exist running VM 
 data "xenserver_vm" "vm_data" {
   name_label = "Test VM"
 }
@@ -9,7 +9,7 @@ resource "xenserver_snapshot" "snapshot" {
   with_memory = true
 }
 
-// snapshot from a new VM
+# snapshot from a new VM create by terraform
 data "xenserver_sr" "sr" {
   name_label = "Local storage"
 }
@@ -28,6 +28,7 @@ resource "xenserver_vm" "vm" {
   static_mem_max   = 4 * 1024 * 1024 * 1024
   vcpus            = 4
   cores_per_socket = 2
+  cdrom            = "win11-x64_uefi.iso"
 
   hard_drive = [
     {
