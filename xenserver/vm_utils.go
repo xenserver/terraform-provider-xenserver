@@ -4,16 +4,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
@@ -144,6 +148,8 @@ type vmResourceModel struct {
 	CDROM            types.String `tfsdk:"cdrom"`
 	UUID             types.String `tfsdk:"uuid"`
 	ID               types.String `tfsdk:"id"`
+	DefaultIP        types.String `tfsdk:"default_ip"`
+	CheckIPTimeout   types.Int64  `tfsdk:"check_ip_timeout"`
 }
 
 func VMSchema() map[string]schema.Attribute {
@@ -239,10 +245,25 @@ func VMSchema() map[string]schema.Attribute {
 			ElementType:         types.StringType,
 			Default:             mapdefault.StaticValue(types.MapValueMust(types.StringType, map[string]attr.Value{})),
 		},
+		"check_ip_timeout": schema.Int64Attribute{
+			MarkdownDescription: "The duration for checking the IP address of the virtual machine. default is 0 seconds, once the value greater than 0, the provider will check the IP address of the virtual machine in the specified duration.",
+			Optional:            true,
+			Computed:            true,
+			Default:             int64default.StaticInt64(0),
+			Validators: []validator.Int64{
+				int64validator.AtLeast(0),
+			},
+		},
+		"default_ip": schema.StringAttribute{
+			MarkdownDescription: "The default IP address of the virtual machine.",
+			Computed:            true,
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.UseStateForUnknown(),
+			},
+		},
 		"uuid": schema.StringAttribute{
 			MarkdownDescription: "The UUID of the virtual machine",
 			Computed:            true,
-			// attributes which are not configurable and that should not show updates from the existing state value
 			PlanModifiers: []planmodifier.String{
 				stringplanmodifier.UseStateForUnknown(),
 			},
@@ -250,7 +271,6 @@ func VMSchema() map[string]schema.Attribute {
 		"id": schema.StringAttribute{
 			MarkdownDescription: "The test id of the virtual machine",
 			Computed:            true,
-			// attributes which are not configurable and that should not show updates from the existing state value
 			PlanModifiers: []planmodifier.String{
 				stringplanmodifier.UseStateForUnknown(),
 			},
@@ -489,6 +509,8 @@ func setOtherConfigFromPlan(ctx context.Context, session *xenapi.Session, vmRef 
 		vmOtherConfig["tf_template_vbds"] = templateVBDs
 	}
 
+	vmOtherConfig["tf_check_ip_timeout"] = plan.CheckIPTimeout.String()
+
 	err = xenapi.VM.SetOtherConfig(session, vmRef, vmOtherConfig)
 	if err != nil {
 		return errors.New(err.Error())
@@ -576,6 +598,18 @@ func updateVMResourceModelComputed(ctx context.Context, session *xenapi.Session,
 	if err != nil {
 		return err
 	}
+
+	checkIPDuration, err := strconv.Atoi(vmRecord.OtherConfig["tf_check_ip_timeout"])
+	if err != nil {
+		return errors.New("unable to convert check_ip_timeout to an int value")
+	}
+	data.CheckIPTimeout = types.Int64Value(int64(checkIPDuration))
+
+	ip, err := checkIP(ctx, session, vmRecord)
+	if err != nil {
+		return err
+	}
+	data.DefaultIP = types.StringValue(ip)
 
 	return nil
 }
@@ -868,6 +902,11 @@ func vmResourceModelUpdate(ctx context.Context, session *xenapi.Session, vmRef x
 		return err
 	}
 
+	err = startVM(session, vmRef, plan)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -943,7 +982,83 @@ func setVMResourceModel(ctx context.Context, session *xenapi.Session, vmRef xena
 		return errors.New(err.Error())
 	}
 
+	err = startVM(session, vmRef, plan)
+	if err != nil {
+		return err
+	}
 	return nil
+}
+
+func isValidIpAddress(ip net.IP) bool {
+	if ip == nil {
+		return false
+	}
+	return !(ip.IsLinkLocalMulticast() || ip.IsLinkLocalUnicast() || ip.IsLoopback() || ip.IsMulticast())
+}
+
+func startVM(session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel) error {
+	// start a VM automatically if the check_ip_timeout is set and not equal to 0
+	if plan.CheckIPTimeout.IsUnknown() || plan.CheckIPTimeout.ValueInt64() == 0 {
+		return nil
+	}
+	vmPowerState, err := xenapi.VM.GetPowerState(session, vmRef)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+
+	if vmPowerState != xenapi.VMPowerStateRunning {
+		err := xenapi.VM.Start(session, vmRef, false, true)
+		if err != nil {
+			return errors.New(err.Error())
+		}
+	}
+
+	return nil
+}
+
+func checkIP(ctx context.Context, session *xenapi.Session, vmRecord xenapi.VMRecord) (string, error) {
+	checkIPTimeout, err := strconv.Atoi(vmRecord.OtherConfig["tf_check_ip_timeout"])
+	if err != nil {
+		return "", errors.New(err.Error())
+	}
+
+	// check_ip_timeout is 0 that means won't need to checkIP, return directly
+	if checkIPTimeout == 0 {
+		return "", nil
+	}
+
+	// set timeout channel to check if IP address is available
+	timeoutChan := time.After(time.Duration(checkIPTimeout) * time.Second)
+	for {
+		select {
+		case <-timeoutChan:
+			return "", errors.New("get IP timeout in " + vmRecord.OtherConfig["tf_check_ip_timeout"] + " seconds")
+		default:
+			ip, _ := getIPAddressFromMetrics(session, vmRecord)
+			if ip != "" {
+				return ip, nil
+			}
+			tflog.Debug(ctx, "-----> Retry getIPAddressFromMetrics")
+			time.Sleep(5 * time.Second)
+		}
+	}
+}
+
+func getIPAddressFromMetrics(session *xenapi.Session, vmRecord xenapi.VMRecord) (string, error) {
+	vmGuestMetricRecord, err := xenapi.VMGuestMetrics.GetRecord(session, vmRecord.GuestMetrics)
+	if err != nil {
+		return "", errors.New(err.Error())
+	}
+
+	for k, v := range vmGuestMetricRecord.Networks {
+		if strings.HasSuffix(k, "ip") {
+			if isValidIpAddress(net.ParseIP(v)) {
+				return v, nil
+			}
+		}
+	}
+
+	return "", errors.New("unable to get IP address from metrics")
 }
 
 func cleanupVMResource(session *xenapi.Session, vmRef xenapi.VMRef) error {
@@ -951,6 +1066,14 @@ func cleanupVMResource(session *xenapi.Session, vmRef xenapi.VMRef) error {
 	vmRecord, err := xenapi.VM.GetRecord(session, vmRef)
 	if err != nil {
 		return errors.New(err.Error())
+	}
+
+	// if VM is runing, stop it first
+	if vmRecord.PowerState == xenapi.VMPowerStateRunning {
+		err := xenapi.VM.HardShutdown(session, vmRef)
+		if err != nil {
+			return errors.New(err.Error())
+		}
 	}
 
 	for _, vifRef := range vmRecord.VIFs {

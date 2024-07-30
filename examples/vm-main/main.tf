@@ -34,7 +34,7 @@ resource "xenserver_vdi" "vdi2" {
 data "xenserver_network" "network" {}
 
 resource "xenserver_vm" "vm" {
-  name_label       = "A test virtual-machine"
+  name_label       = "Windows VM"
   template_name    = "Windows 11"
   static_mem_max   = 4 * 1024 * 1024 * 1024
   vcpus            = 4
@@ -67,7 +67,7 @@ resource "xenserver_vm" "vm" {
         ethtool-gso = "off"
       }
       mac          = "11:22:33:44:55:66"
-      network_uuid = data.xenserver_network.network.data_items[0].uuid,
+      network_uuid = data.xenserver_network.network.data_items[1].uuid,
     },
   ]
 

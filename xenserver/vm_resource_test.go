@@ -87,6 +87,8 @@ func TestAccVMResource(t *testing.T) {
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "dynamic_mem_max", "4294967296"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "vcpus", "4"),
 					resource.TestCheckResourceAttrSet("xenserver_vm.test_vm", "cores_per_socket"),
+					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "check_ip_timeout", "0"),
+					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "default_ip", ""),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "boot_mode", "uefi"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "boot_order", "ncd"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "hard_drive.#", "1"),
