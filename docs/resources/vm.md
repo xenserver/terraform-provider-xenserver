@@ -30,8 +30,9 @@ resource "xenserver_vdi" "vdi2" {
 
 data "xenserver_network" "network" {}
 
-resource "xenserver_vm" "vm" {
-  name_label       = "A test virtual-machine"
+# Create a Windows 11 VM that is cloned from the base template
+resource "xenserver_vm" "windows_vm" {
+  name_label       = "Windows VM"
   template_name    = "Windows 11"
   static_mem_max   = 4 * 1024 * 1024 * 1024
   vcpus            = 4
@@ -55,14 +56,14 @@ resource "xenserver_vm" "vm" {
 
   network_interface = [
     {
-      network_uuid = data.xenserver_network.network.data_items[0].uuid,
       device       = "0"
+      network_uuid = data.xenserver_network.network.data_items[0].uuid,
     },
     {
+      device = "1"
       other_config = {
         ethtool-gso = "off"
       }
-      device       = "0"
       mac          = "11:22:33:44:55:66"
       network_uuid = data.xenserver_network.network.data_items[1].uuid,
     },
@@ -73,8 +74,42 @@ resource "xenserver_vm" "vm" {
   }
 }
 
-output "vm_out" {
-  value = xenserver_vm.vm
+# Create a Linux VM that is cloned from the custom template
+resource "xenserver_vm" "linux_vm" {
+  name_label       = "Linux VM"
+  template_name    = "CustomTemplate"
+  static_mem_max   = 4 * 1024 * 1024 * 1024
+  vcpus            = 4
+  check_ip_timeout = 60 * 5
+
+  # Don't need to set up a hard drive if the custom template includes it
+
+  # The network interfaces in the custom template would be removed, so we need to create new one by user-defined.
+  network_interface = [
+    {
+      network_uuid = data.xenserver_network.network.data_items[0].uuid,
+      device       = "0"
+    },
+  ]
+
+  connection {
+    type     = "ssh"
+    user     = "root"
+    password = var.password
+    host     = self.default_ip
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "cat /etc/os-release",
+    ]
+  }
+}
+
+variable "password" {
+  type        = string
+  description = "The password for the Linux VM"
+  sensitive   = true
 }
 ```
 
@@ -94,6 +129,7 @@ output "vm_out" {
 - `boot_mode` (String) The boot mode of the virtual machine, the value is one of ['bios', 'uefi', 'uefi_security'].
 - `boot_order` (String) The boot order of the virtual machine, the value is combination string of ['c', 'd', 'n'], please find the details in [Setting boot order for domUs](https://wiki.xenproject.org/wiki/Setting_boot_order_for_domUs).
 - `cdrom` (String) The VDI Name in ISO Library to attach to the virtual machine, if not set, use the default value from the template.
+- `check_ip_timeout` (Number) The duration for checking the IP address of the virtual machine. default is 0 seconds, once the value greater than 0, the provider will check the IP address of the virtual machine in the specified duration.
 - `cores_per_socket` (Number) The number of core pre socket for the virtual machine, default inherited from the template
 - `dynamic_mem_max` (Number) Dynamic maximum memory (bytes).
 - `dynamic_mem_min` (Number) Dynamic minimum memory (bytes).
@@ -104,6 +140,7 @@ output "vm_out" {
 
 ### Read-Only
 
+- `default_ip` (String) The default IP address of the virtual machine.
 - `id` (String) The test id of the virtual machine
 - `uuid` (String) The UUID of the virtual machine
 

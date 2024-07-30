@@ -172,6 +172,9 @@ func (d *networkDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		if !data.UUID.IsNull() && networkRecord.UUID != data.UUID.ValueString() {
 			continue
 		}
+		if networkRecord.NameLabel == "Host internal management network" {
+			continue
+		}
 
 		var networkData networkRecordData
 		err = updateNetworkRecordData(ctx, networkRecord, &networkData)
@@ -185,9 +188,9 @@ func (d *networkDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		networkItem = append(networkItem, networkData)
 	}
 
-	// sort networkItem by UUID
+	// sort networkItem by NameLabel
 	sort.Slice(networkItem, func(i, j int) bool {
-		return networkItem[i].UUID.ValueString() < networkItem[j].UUID.ValueString()
+		return networkItem[i].NameLabel.ValueString() < networkItem[j].NameLabel.ValueString()
 	})
 
 	data.DataItems = networkItem
