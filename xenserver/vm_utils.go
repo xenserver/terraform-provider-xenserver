@@ -498,14 +498,13 @@ func setOtherConfigFromPlan(ctx context.Context, session *xenapi.Session, vmRef 
 }
 
 func getBootModeFromVMRecord(vmRecord xenapi.VMRecord) (string, error) {
-	var bootMode string
 	bootMode, ok := vmRecord.HVMBootParams["firmware"]
 	if !ok {
-		return bootMode, errors.New("unable to read VM HVM boot firmware")
+		return "", errors.New("unable to read VM HVM boot firmware")
 	}
 	secureBoot, ok := vmRecord.Platform["secureboot"]
 	if !ok {
-		return bootMode, errors.New("unable to read VM platform secureboot")
+		return "", errors.New("unable to read VM platform secureboot")
 	}
 
 	// keep tf state consistent with the boot mode, especially user didn't provide the boot mode attribute
@@ -711,17 +710,19 @@ func updateVMMemory(session *xenapi.Session, vmRef xenapi.VMRef, data vmResource
 	return nil
 }
 
-func updateVMCPUs(session *xenapi.Session, vmRef xenapi.VMRef, vmRecord xenapi.VMRecord, data vmResourceModel) error {
-	var err error
-	vCPUsMax := vmRecord.VCPUsMax
+func updateVMCPUs(session *xenapi.Session, vmRef xenapi.VMRef, data vmResourceModel) error {
 	vcpus := int(data.VCPUs.ValueInt32())
+	vmRecord, err := xenapi.VM.GetRecord(session, vmRef)
+	if err != nil {
+		return errors.New(err.Error())
+	}
 	// VCPU values must satisfy: 0 < VCPUs_at_startup ≤ VCPUs_max
-	if vcpus < vCPUsMax {
-		err = xenapi.VM.SetVCPUsAtStartup(session, vmRef, vcpus)
+	if vcpus < vmRecord.VCPUsMax {
+		err := xenapi.VM.SetVCPUsAtStartup(session, vmRef, vcpus)
 		if err != nil {
 			return errors.New(err.Error())
 		}
-		err := xenapi.VM.SetVCPUsMax(session, vmRef, vcpus)
+		err = xenapi.VM.SetVCPUsMax(session, vmRef, vcpus)
 		if err != nil {
 			return errors.New(err.Error())
 		}
@@ -741,7 +742,7 @@ func updateVMCPUs(session *xenapi.Session, vmRef xenapi.VMRef, vmRecord xenapi.V
 		// if user doesn't set cores-per-socket and it is not found in template, set it to VCPUs num as the default value
 		if _, ok := platform["cores-per-socket"]; !ok {
 			platform["cores-per-socket"] = data.VCPUs.String()
-			err = xenapi.VM.SetPlatform(session, vmRef, platform)
+			err := xenapi.VM.SetPlatform(session, vmRef, platform)
 			if err != nil {
 				return errors.New(err.Error())
 			}
@@ -752,7 +753,7 @@ func updateVMCPUs(session *xenapi.Session, vmRef xenapi.VMRef, vmRecord xenapi.V
 			return fmt.Errorf("%d cores could not fit to %d cores-per-socket topology", vcpus, coresPerSocket)
 		}
 		platform["cores-per-socket"] = strconv.Itoa(coresPerSocket)
-		err = xenapi.VM.SetPlatform(session, vmRef, platform)
+		err := xenapi.VM.SetPlatform(session, vmRef, platform)
 		if err != nil {
 			return errors.New(err.Error())
 		}
@@ -761,15 +762,18 @@ func updateVMCPUs(session *xenapi.Session, vmRef xenapi.VMRef, vmRecord xenapi.V
 	return nil
 }
 
-func updateBootOrder(session *xenapi.Session, vmRef xenapi.VMRef, vmRecord xenapi.VMRecord, plan vmResourceModel) error {
+func updateBootOrder(session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel) error {
 	// don't set boot order if it is unknown, using the default value from the template
 	if plan.BootOrder.IsUnknown() {
 		return nil
 	}
 
-	hvmBootParams := vmRecord.HVMBootParams
+	hvmBootParams, err := xenapi.VM.GetHVMBootParams(session, vmRef)
+	if err != nil {
+		return errors.New(err.Error())
+	}
 	hvmBootParams["order"] = plan.BootOrder.ValueString()
-	err := xenapi.VM.SetHVMBootParams(session, vmRef, hvmBootParams)
+	err = xenapi.VM.SetHVMBootParams(session, vmRef, hvmBootParams)
 	if err != nil {
 		return errors.New(err.Error())
 	}
@@ -777,19 +781,18 @@ func updateBootOrder(session *xenapi.Session, vmRef xenapi.VMRef, vmRecord xenap
 	return nil
 }
 
-func updateBootMode(session *xenapi.Session, vmRef xenapi.VMRef, vmRecord xenapi.VMRecord, plan vmResourceModel) error {
-	var err error
-
+func updateBootMode(session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel) error {
 	// don't set boot mode if it is unknown, using the default value from the template
 	if plan.BootMode.IsUnknown() {
-		return err
+		return nil
 	}
 
-	secureBoot, ok := vmRecord.Platform["secureboot"]
-	if !ok {
-		return errors.New("unable to read VM platform secureboot from VM record")
+	vmRecord, err := xenapi.VM.GetRecord(session, vmRef)
+	if err != nil {
+		return errors.New(err.Error())
 	}
 
+	secureBoot := "false"
 	bootMode := plan.BootMode.ValueString()
 	if bootMode == "uefi_security" {
 		bootMode = "uefi"
@@ -818,11 +821,6 @@ func vmResourceModelUpdate(ctx context.Context, session *xenapi.Session, vmRef x
 	err := setOtherConfigFromPlan(ctx, session, vmRef, plan, "")
 	if err != nil {
 		return err
-	}
-
-	vmRecord, err := xenapi.VM.GetRecord(session, vmRef)
-	if err != nil {
-		return errors.New(err.Error())
 	}
 
 	err = xenapi.VM.SetNameLabel(session, vmRef, plan.NameLabel.ValueString())
@@ -855,17 +853,17 @@ func vmResourceModelUpdate(ctx context.Context, session *xenapi.Session, vmRef x
 		return err
 	}
 
-	err = updateVMCPUs(session, vmRef, vmRecord, plan)
+	err = updateVMCPUs(session, vmRef, plan)
 	if err != nil {
 		return err
 	}
 
-	err = updateBootMode(session, vmRef, vmRecord, plan)
+	err = updateBootMode(session, vmRef, plan)
 	if err != nil {
 		return err
 	}
 
-	err = updateBootOrder(session, vmRef, vmRecord, plan)
+	err = updateBootOrder(session, vmRef, plan)
 	if err != nil {
 		return err
 	}
@@ -886,12 +884,6 @@ func setVMResourceModel(ctx context.Context, session *xenapi.Session, vmRef xena
 		return err
 	}
 
-	// read VM record to get the default value from VM template
-	vmRecord, err := xenapi.VM.GetRecord(session, vmRef)
-	if err != nil {
-		return errors.New(err.Error())
-	}
-
 	err = xenapi.VM.SetNameLabel(session, vmRef, plan.NameLabel.ValueString())
 	if err != nil {
 		return errors.New(err.Error())
@@ -910,19 +902,19 @@ func setVMResourceModel(ctx context.Context, session *xenapi.Session, vmRef xena
 	}
 
 	// set VCPUs
-	err = updateVMCPUs(session, vmRef, vmRecord, plan)
+	err = updateVMCPUs(session, vmRef, plan)
 	if err != nil {
 		return err
 	}
 
 	// set boot mode
-	err = updateBootMode(session, vmRef, vmRecord, plan)
+	err = updateBootMode(session, vmRef, plan)
 	if err != nil {
 		return err
 	}
 
 	// set boot order
-	err = updateBootOrder(session, vmRef, vmRecord, plan)
+	err = updateBootOrder(session, vmRef, plan)
 	if err != nil {
 		return err
 	}
