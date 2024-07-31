@@ -471,7 +471,38 @@ func getFirstTemplate(session *xenapi.Session, templateName string) (xenapi.VMRe
 	return vmRef, errors.New("unable to find VM template ref")
 }
 
-func setOtherConfigFromPlan(ctx context.Context, session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel, templateVBDs string) error {
+func setOtherConfigWhenCreate(session *xenapi.Session, vmRef xenapi.VMRef) error {
+	vmOtherConfig, err := xenapi.VM.GetOtherConfig(session, vmRef)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+
+	// Remove "disks" from other-config for VM.Provision
+	_, ok := vmOtherConfig["disks"]
+	if ok {
+		delete(vmOtherConfig, "disks")
+	}
+
+	// Get VM template Disk Type VBDs (which are not managed by the TF)
+	templateHardDrives, err := getAllDiskTypeVBDs(session, vmRef)
+	if err != nil {
+		return err
+	}
+	templateVBDs := strings.Join(templateHardDrives, ",")
+	// Set the template VBD refs only once after the VM is cloned from a template
+	if templateVBDs != "" {
+		vmOtherConfig["tf_template_vbds"] = templateVBDs
+	}
+
+	err = xenapi.VM.SetOtherConfig(session, vmRef, vmOtherConfig)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+
+	return nil
+}
+
+func updateOtherConfigFromPlan(ctx context.Context, session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel) error {
 	planOtherConfig := make(map[string]string)
 	if !plan.OtherConfig.IsUnknown() {
 		diags := plan.OtherConfig.ElementsAs(ctx, &planOtherConfig, false)
@@ -485,31 +516,23 @@ func setOtherConfigFromPlan(ctx context.Context, session *xenapi.Session, vmRef 
 		return errors.New(err.Error())
 	}
 
-	var tfOtherConfigKeys string
+	originalTFOtherConfigKeys := vmOtherConfig["tf_other_config_keys"]
+	// Remove all originalTFOtherConfigKeys
+	originalKeys := strings.Split(originalTFOtherConfigKeys, ",")
+	for _, key := range originalKeys {
+		delete(vmOtherConfig, key)
+	}
+
+	var tfOtherConfigKeys []string
 	for key, value := range planOtherConfig {
-		tfOtherConfigKeys += key + ","
-		// if the key already exists in originalOtherConfig, update it, otherwise add it
 		vmOtherConfig[key] = value
+		tfOtherConfigKeys = append(tfOtherConfigKeys, key)
 		tflog.Debug(ctx, "-----> setOtherConfig key: "+key+" value: "+value)
 	}
 
-	originalTFOtherConfigKeys := vmOtherConfig["tf_other_config_keys"]
-	// To compare originalTFOtherConfigKeys with tfOtherConfigKeys, if the key is not in tfOtherConfigKeys, delete it
-	originalKeys := strings.Split(originalTFOtherConfigKeys, ",")
-	for _, key := range originalKeys {
-		if !strings.Contains(tfOtherConfigKeys, key+",") {
-			delete(vmOtherConfig, key)
-		}
-	}
-
-	vmOtherConfig["tf_other_config_keys"] = tfOtherConfigKeys
-	vmOtherConfig["tf_template_name"] = plan.TemplateName.ValueString()
-	// set the template VBD refs only once after the VM is cloned from a template
-	if templateVBDs != "" {
-		vmOtherConfig["tf_template_vbds"] = templateVBDs
-	}
-
+	vmOtherConfig["tf_other_config_keys"] = strings.Join(tfOtherConfigKeys, ",")
 	vmOtherConfig["tf_check_ip_timeout"] = plan.CheckIPTimeout.String()
+	vmOtherConfig["tf_template_name"] = plan.TemplateName.ValueString()
 
 	err = xenapi.VM.SetOtherConfig(session, vmRef, vmOtherConfig)
 	if err != nil {
@@ -665,11 +688,9 @@ func getVBDsFromVMRecord(ctx context.Context, session *xenapi.Session, vmRecord 
 }
 
 func getOtherConfigFromVMRecord(ctx context.Context, vmRecord xenapi.VMRecord) (basetypes.MapValue, error) {
-	tfOtherConfigKeys := vmRecord.OtherConfig["tf_other_config_keys"]
-	tflog.Debug(ctx, "-----> tfOtherConfigKeys: "+tfOtherConfigKeys)
 	otherConfig := make(map[string]string)
 	for key := range vmRecord.OtherConfig {
-		if strings.Contains(tfOtherConfigKeys, key+",") {
+		if slices.Contains(strings.Split(vmRecord.OtherConfig["tf_other_config_keys"], ","), key) {
 			otherConfig[key] = vmRecord.OtherConfig[key]
 		}
 	}
@@ -744,14 +765,30 @@ func updateVMMemory(session *xenapi.Session, vmRef xenapi.VMRef, data vmResource
 	return nil
 }
 
-func updateVMCPUs(session *xenapi.Session, vmRef xenapi.VMRef, data vmResourceModel) error {
-	vcpus := int(data.VCPUs.ValueInt32())
-	vmRecord, err := xenapi.VM.GetRecord(session, vmRef)
+func updateVMCPUs(session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel) error {
+	vcpus := int(plan.VCPUs.ValueInt32())
+	vcpusAtStartup, err := xenapi.VM.GetVCPUsAtStartup(session, vmRef)
 	if err != nil {
 		return errors.New(err.Error())
 	}
+
+	vmPowerState, err := xenapi.VM.GetPowerState(session, vmRef)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	if vmPowerState == xenapi.VMPowerStateRunning {
+		if vcpusAtStartup > vcpus {
+			return errors.New("unable to reduce VCPUs for a running VM")
+		}
+		err := xenapi.VM.SetVCPUsNumberLive(session, vmRef, vcpus)
+		if err != nil {
+			return errors.New(err.Error())
+		}
+	}
+
 	// VCPU values must satisfy: 0 < VCPUs_at_startup ≤ VCPUs_max
-	if vcpus < vmRecord.VCPUsMax {
+	if vcpusAtStartup > vcpus {
+		// reducing VCPUs_at_startup: we need to change this value first, and then the VCPUs_max
 		err := xenapi.VM.SetVCPUsAtStartup(session, vmRef, vcpus)
 		if err != nil {
 			return errors.New(err.Error())
@@ -761,6 +798,7 @@ func updateVMCPUs(session *xenapi.Session, vmRef xenapi.VMRef, data vmResourceMo
 			return errors.New(err.Error())
 		}
 	} else {
+		// increasing VCPUs_at_startup: we need to change the VCPUs_max first
 		err := xenapi.VM.SetVCPUsMax(session, vmRef, vcpus)
 		if err != nil {
 			return errors.New(err.Error())
@@ -771,18 +809,26 @@ func updateVMCPUs(session *xenapi.Session, vmRef xenapi.VMRef, data vmResourceMo
 		}
 	}
 
-	platform := vmRecord.Platform
-	if data.CorePerSocket.IsUnknown() {
+	return nil
+}
+
+func updateCorePerSocket(session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel) error {
+	platform, err := xenapi.VM.GetPlatform(session, vmRef)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	if plan.CorePerSocket.IsUnknown() {
 		// if user doesn't set cores-per-socket and it is not found in template, set it to VCPUs num as the default value
 		if _, ok := platform["cores-per-socket"]; !ok {
-			platform["cores-per-socket"] = data.VCPUs.String()
+			platform["cores-per-socket"] = plan.VCPUs.String()
 			err := xenapi.VM.SetPlatform(session, vmRef, platform)
 			if err != nil {
 				return errors.New(err.Error())
 			}
 		}
 	} else {
-		coresPerSocket := int(data.CorePerSocket.ValueInt32())
+		coresPerSocket := int(plan.CorePerSocket.ValueInt32())
+		vcpus := int(plan.VCPUs.ValueInt32())
 		if vcpus%coresPerSocket != 0 {
 			return fmt.Errorf("%d cores could not fit to %d cores-per-socket topology", vcpus, coresPerSocket)
 		}
@@ -852,7 +898,7 @@ func updateBootMode(session *xenapi.Session, vmRef xenapi.VMRef, plan vmResource
 
 func vmResourceModelUpdate(ctx context.Context, session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel, state vmResourceModel) error {
 	// set other config before getting the VM record for tf_ fields update
-	err := setOtherConfigFromPlan(ctx, session, vmRef, plan, "")
+	err := updateOtherConfigFromPlan(ctx, session, vmRef, plan)
 	if err != nil {
 		return err
 	}
@@ -892,6 +938,11 @@ func vmResourceModelUpdate(ctx context.Context, session *xenapi.Session, vmRef x
 		return err
 	}
 
+	err = updateCorePerSocket(session, vmRef, plan)
+	if err != nil {
+		return err
+	}
+
 	err = updateBootMode(session, vmRef, plan)
 	if err != nil {
 		return err
@@ -911,14 +962,13 @@ func vmResourceModelUpdate(ctx context.Context, session *xenapi.Session, vmRef x
 }
 
 func setVMResourceModel(ctx context.Context, session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel) error {
-	// Get VM template Disk Type VBDs (which are not managed by the TF)
-	templateHardDrives, err := getAllDiskTypeVBDs(session, vmRef)
+	err := setOtherConfigWhenCreate(session, vmRef)
 	if err != nil {
 		return err
 	}
 
 	// set other config before getting the VM record for tf_ fields update
-	err = setOtherConfigFromPlan(ctx, session, vmRef, plan, strings.Join(templateHardDrives, ","))
+	err = updateOtherConfigFromPlan(ctx, session, vmRef, plan)
 	if err != nil {
 		return err
 	}
@@ -942,6 +992,11 @@ func setVMResourceModel(ctx context.Context, session *xenapi.Session, vmRef xena
 
 	// set VCPUs
 	err = updateVMCPUs(session, vmRef, plan)
+	if err != nil {
+		return err
+	}
+
+	err = updateCorePerSocket(session, vmRef, plan)
 	if err != nil {
 		return err
 	}
@@ -974,6 +1029,11 @@ func setVMResourceModel(ctx context.Context, session *xenapi.Session, vmRef xena
 	err = createVIFs(ctx, session, vmRef, plan)
 	if err != nil {
 		return err
+	}
+
+	err = xenapi.VM.Provision(session, vmRef)
+	if err != nil {
+		return errors.New(err.Error())
 	}
 
 	// reset template flag
@@ -1110,5 +1170,15 @@ func cleanupVMResource(session *xenapi.Session, vmRef xenapi.VMRef) error {
 		return errors.New(err.Error())
 	}
 
+	return nil
+}
+
+func vmResourceModelUpdateCheck(plan vmResourceModel, state vmResourceModel) error {
+	if plan.TemplateName != state.TemplateName {
+		return errors.New(`"template_name" doesn't expected to be updated`)
+	}
+	if !plan.BootMode.IsUnknown() && plan.BootMode != state.BootMode {
+		return errors.New(`"boot_mode" doesn't expected to be updated`)
+	}
 	return nil
 }
