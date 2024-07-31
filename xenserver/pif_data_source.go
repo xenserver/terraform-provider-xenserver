@@ -249,8 +249,18 @@ func (d *pifDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 
 	var pifItems []pifRecordData
 	for _, pifRecord := range pifRecords {
-		if !data.Network.IsNull() && string(pifRecord.Network) != data.Network.ValueString() {
-			continue
+		if !data.Network.IsNull() {
+			NetworkRef, err := xenapi.Network.GetByUUID(d.session, data.Network.ValueString())
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Unable to get network reference",
+					err.Error(),
+				)
+				return
+			}
+			if pifRecord.Network != NetworkRef {
+				continue
+			}
 		}
 
 		if !data.Device.IsNull() && pifRecord.Device != data.Device.ValueString() {
