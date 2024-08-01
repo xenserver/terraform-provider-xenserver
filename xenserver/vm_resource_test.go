@@ -108,8 +108,16 @@ func TestAccVMResource(t *testing.T) {
 			},
 			// Update with expected failure
 			{
+				Config:      providerConfig + testAccVMResourceConfig("test vm 1", "Windows 10", 3, 4, 2, "uefi", "ncd", "true", "RW", "11:22:33:44:55:66", "0"),
+				ExpectError: regexp.MustCompile(`"template_name" doesn't expected to be updated*`),
+			},
+			{
+				Config:      providerConfig + testAccVMResourceConfig("test vm 1", "Windows 11", 3, 4, 2, "bios", "ncd", "true", "RW", "11:22:33:44:55:66", "0"),
+				ExpectError: regexp.MustCompile(`"boot_mode" doesn't expected to be updated*`),
+			},
+			{
 				Config:      providerConfig + testAccVMResourceConfig("test vm 1", "Windows 11", 3, 4, 2, "uefi", "ncd", "true", "RW", "44:55:66:11:22:33", "0"),
-				ExpectError: regexp.MustCompile(`"network_interface.mac" doesn't expected to be updated.*`),
+				ExpectError: regexp.MustCompile(`"network_interface.mac" doesn't expected to be updated*`),
 			},
 			{
 				Config:      providerConfig + testAccVMResourceConfig("test vm 1", "Windows 11", 3, 3, 2, "uefi", "ncd", "false", "RO", "11:22:33:44:55:66", "1"),
@@ -118,7 +126,7 @@ func TestAccVMResource(t *testing.T) {
 			// Update and Read testing
 			// change the network_interface device
 			{
-				Config: providerConfig + testAccVMResourceConfig("test vm 1", "Windows 11", 3, 2, 2, "uefi_security", "cnd", "false", "RO", "11:22:33:44:55:66", "1"),
+				Config: providerConfig + testAccVMResourceConfig("test vm 1", "Windows 11", 3, 2, 2, "uefi", "cnd", "false", "RO", "11:22:33:44:55:66", "1"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "name_label", "test vm 1"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "template_name", "Windows 11"),
@@ -131,7 +139,7 @@ func TestAccVMResource(t *testing.T) {
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "hard_drive.#", "1"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "hard_drive.0.mode", "RO"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "hard_drive.0.bootable", "false"),
-					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "boot_mode", "uefi_security"),
+					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "boot_mode", "uefi"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "boot_order", "cnd"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "network_interface.#", "1"),
 					resource.TestCheckResourceAttr("xenserver_vm.test_vm", "network_interface.0.device", "1"),

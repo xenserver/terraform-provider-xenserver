@@ -160,6 +160,13 @@ func createVIFs(ctx context.Context, session *xenapi.Session, vmRef xenapi.VMRef
 	return nil
 }
 
+func vifResourceModelUpdateCheck(plan vifResourceModel, state vifResourceModel) error {
+	if plan.MAC.ValueString() != "" && !plan.MAC.Equal(state.MAC) {
+		return errors.New(`"network_interface.mac" doesn't expected to be updated`)
+	}
+	return nil
+}
+
 // updateVIF updates the VIFs in the VM based on the plan and state, the logic is similar to updateVBDs
 func updateVIFs(ctx context.Context, plan vmResourceModel, state vmResourceModel, vmRef xenapi.VMRef, session *xenapi.Session) error {
 	// Get VIFs from plan and state
@@ -210,9 +217,9 @@ func updateVIFs(ctx context.Context, plan vmResourceModel, state vmResourceModel
 			setVIFDefaults(ctx, &planVIF)
 
 			tflog.Debug(ctx, "---> Update VIF "+stateVIF.VIF.String()+" <---")
-
-			if planVIF.MAC.ValueString() != "" && !planVIF.MAC.Equal(stateVIF.MAC) {
-				return errors.New(`"network_interface.mac" doesn't expected to be updated, plan: ` + planVIF.MAC.String() + " state: " + stateVIF.MAC.String())
+			err := vifResourceModelUpdateCheck(planVIF, stateVIF)
+			if err != nil {
+				return err
 			}
 
 			if !planVIF.OtherConfig.Equal(stateVIF.OtherConfig) {

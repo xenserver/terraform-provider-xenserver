@@ -187,10 +187,11 @@ func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, res
 		return
 	}
 
-	if plan.TemplateName != state.TemplateName {
+	err := vmResourceModelUpdateCheck(plan, state)
+	if err != nil {
 		resp.Diagnostics.AddError(
-			"The template name doesn't expected to be updated",
-			"plan.TemplateName: "+plan.TemplateName.ValueString()+"  state.TemplateName: "+state.TemplateName.ValueString(),
+			"Error update xenserver_vm configuration",
+			err.Error(),
 		)
 		return
 	}
