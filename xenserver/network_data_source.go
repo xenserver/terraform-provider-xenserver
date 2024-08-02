@@ -36,92 +36,92 @@ func (d *networkDataSource) Metadata(_ context.Context, req datasource.MetadataR
 // Schema defines the schema for the data source.
 func (d *networkDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Provides information about the network of XenServer",
+		MarkdownDescription: "Provides information about the network.",
 
 		Attributes: map[string]schema.Attribute{
 			"name_label": schema.StringAttribute{
-				MarkdownDescription: "The name of the network",
+				MarkdownDescription: "The name of the network.",
 				Optional:            true,
 			},
 			"uuid": schema.StringAttribute{
-				MarkdownDescription: "The UUID of the network",
+				MarkdownDescription: "The UUID of the network.",
 				Optional:            true,
 			},
 			"data_items": schema.ListNestedAttribute{
-				MarkdownDescription: "The return items of networks",
+				MarkdownDescription: "The return items of networks.",
 				Computed:            true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"uuid": schema.StringAttribute{
-							MarkdownDescription: "The UUID of the network",
+							MarkdownDescription: "The UUID of the network.",
 							Computed:            true,
 						},
 						"name_label": schema.StringAttribute{
-							MarkdownDescription: "The name of the network",
+							MarkdownDescription: "The name of the network.",
 							Computed:            true,
 						},
 						"name_description": schema.StringAttribute{
-							MarkdownDescription: "The human-readable description of the network",
+							MarkdownDescription: "The human-readable description of the network.",
 							Computed:            true,
 						},
 						"allowed_operations": schema.ListAttribute{
-							MarkdownDescription: "The list of the operations allowed in this state",
+							MarkdownDescription: "The list of the operations allowed in this state.",
 							Computed:            true,
 							ElementType:         types.StringType,
 						},
 						"current_operations": schema.MapAttribute{
-							MarkdownDescription: "The links each of the running tasks using this object (by reference) to a current_operation enum which describes the nature of the task",
+							MarkdownDescription: "The links each of the running tasks using this object (by reference) to a current_operation enum which describes the nature of the task.",
 							Computed:            true,
 							ElementType:         types.StringType,
 						},
 						"vifs": schema.ListAttribute{
-							MarkdownDescription: "The list of connected vifs",
+							MarkdownDescription: "The list of connected VIFs.",
 							Computed:            true,
 							ElementType:         types.StringType,
 						},
 						"pifs": schema.ListAttribute{
-							MarkdownDescription: "The list of connected pifs",
+							MarkdownDescription: "The list of connected PIFs.",
 							Computed:            true,
 							ElementType:         types.StringType,
 						},
 						"mtu": schema.Int32Attribute{
-							MarkdownDescription: "The MTU in octets",
+							MarkdownDescription: "The MTU in octets.",
 							Computed:            true,
 						},
 						"other_config": schema.MapAttribute{
-							MarkdownDescription: "The additional configuration",
+							MarkdownDescription: "The additional configuration.",
 							Computed:            true,
 							ElementType:         types.StringType,
 						},
 						"bridge": schema.StringAttribute{
-							MarkdownDescription: "The name of the bridge corresponding to this network on the local host",
+							MarkdownDescription: "The name of the bridge corresponding to this network on the local host.",
 							Computed:            true,
 						},
 						"managed": schema.BoolAttribute{
-							MarkdownDescription: "True if the bridge is managed by xapi",
+							MarkdownDescription: "True if the bridge is managed by [XAPI](https://github.com/xapi-project/xen-api).",
 							Computed:            true,
 						},
 						"blobs": schema.MapAttribute{
-							MarkdownDescription: "The binary blobs associated with this SR",
+							MarkdownDescription: "The binary blobs associated with this SR.",
 							Computed:            true,
 							ElementType:         types.StringType,
 						},
 						"tags": schema.ListAttribute{
-							MarkdownDescription: "The user-specified tags for categorization purposes",
+							MarkdownDescription: "The user-specified tags for categorization purposes.",
 							Computed:            true,
 							ElementType:         types.StringType,
 						},
 						"default_locking_mode": schema.StringAttribute{
-							MarkdownDescription: "The network will use this value to determine the behavior of all VIFs where locking_mode = default",
+							MarkdownDescription: "The network will use this value to determine the behavior of all VIFs where `locking_mode = default`.",
 							Computed:            true,
 						},
 						"assigned_ips": schema.MapAttribute{
-							MarkdownDescription: "The IP addresses assigned to VIFs on networks that have active xapi-managed DHCP",
+							MarkdownDescription: "The IP addresses assigned to VIFs on networks that have active [xapi-managed](https://github.com/xapi-project/xen-api) DHCP.",
 							Computed:            true,
 							ElementType:         types.StringType,
 						},
 						"purpose": schema.ListAttribute{
-							MarkdownDescription: "Set of purposes for which the server will use this network",
+							MarkdownDescription: "Set of purposes for which the server will use this network.",
 							Computed:            true,
 							ElementType:         types.StringType,
 						},

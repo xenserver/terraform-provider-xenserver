@@ -3,12 +3,12 @@
 page_title: "xenserver_vm Resource - xenserver"
 subcategory: ""
 description: |-
-  VM resource
+  Provides a virtual machine resource.
 ---
 
 # xenserver_vm (Resource)
 
-VM resource
+Provides a virtual machine resource.
 
 ## Example Usage
 
@@ -120,42 +120,48 @@ variable "password" {
 
 - `name_label` (String) The name of the virtual machine.
 - `network_interface` (Attributes Set) A set of network interface attributes to attach to the virtual machine. (see [below for nested schema](#nestedatt--network_interface))
-- `static_mem_max` (Number) Statically-set (i.e. absolute) maximum memory (bytes). This value acts as a hard limit of the amount of memory a guest can use at VM start time. New values only take effect on reboot.
+- `static_mem_max` (Number) Statically-set (absolute) maximum memory (bytes). This value acts as a hard limit of the amount of memory a guest can use at VM start time. New values only take effect on reboot.
 - `template_name` (String) The template name of the virtual machine which cloned from.
+
+-> **Note:** `template_name` is not allowed to be updated.
 - `vcpus` (Number) The number of VCPUs for the virtual machine.
 
 ### Optional
 
-- `boot_mode` (String) The boot mode of the virtual machine, the value is one of ['bios', 'uefi', 'uefi_security'].
-- `boot_order` (String) The boot order of the virtual machine, the value is combination string of ['c', 'd', 'n'], please find the details in [Setting boot order for domUs](https://wiki.xenproject.org/wiki/Setting_boot_order_for_domUs).
-- `cdrom` (String) The VDI Name in ISO Library to attach to the virtual machine, if not set, use the default value from the template.
+- `boot_mode` (String) The boot mode of the virtual machine, default inherited from the template.<br />This value can be one of [`"bios", "uefi", "uefi_security"`].
+
+-> **Note:** `boot_mode` is not allowed to be updated.
+- `boot_order` (String) The boot order of the virtual machine, default inherited from the template.<br />This value is a combination string of [`"c", "d", "n"`]. Find more details in [Setting boot order for domUs](https://wiki.xenproject.org/wiki/Setting_boot_order_for_domUs).
+- `cdrom` (String) The VDI name in ISO library to attach to the virtual machine, default inherited from the template.
 - `check_ip_timeout` (Number) The duration for checking the IP address of the virtual machine. default is 0 seconds, once the value greater than 0, the provider will check the IP address of the virtual machine in the specified duration.
-- `cores_per_socket` (Number) The number of core pre socket for the virtual machine, default inherited from the template
-- `dynamic_mem_max` (Number) Dynamic maximum memory (bytes).
-- `dynamic_mem_min` (Number) Dynamic minimum memory (bytes).
-- `hard_drive` (Attributes Set) A set of hard drive attributes to attach to the virtual machine, if not set, use the default value from the template. (see [below for nested schema](#nestedatt--hard_drive))
-- `name_description` (String) The description of the virtual machine.
-- `other_config` (Map of String) The other config of the virtual machine.
-- `static_mem_min` (Number) Statically-set (i.e. absolute) minimum memory (bytes). The least amount of memory this VM can boot with without crashing.
+- `cores_per_socket` (Number) The number of core pre socket for the virtual machine, default inherited from the template.
+- `dynamic_mem_max` (Number) Dynamic maximum memory (bytes), default same with `static_mem_max`.
+- `dynamic_mem_min` (Number) Dynamic minimum memory (bytes), default same with `static_mem_max`.
+- `hard_drive` (Attributes Set) A set of hard drive attributes to attach to the virtual machine, default inherited from the template. (see [below for nested schema](#nestedatt--hard_drive))
+- `name_description` (String) The description of the virtual machine, default to be `""`.
+- `other_config` (Map of String) The additional configuration of the virtual machine, default to be `{}`.
+- `static_mem_min` (Number) Statically-set (absolute) minimum memory (bytes), default same with `static_mem_max`. The least amount of memory this VM can boot with without crashing.
 
 ### Read-Only
 
 - `default_ip` (String) The default IP address of the virtual machine.
-- `id` (String) The test id of the virtual machine
-- `uuid` (String) The UUID of the virtual machine
+- `id` (String) The test ID of the virtual machine.
+- `uuid` (String) The UUID of the virtual machine.
 
 <a id="nestedatt--network_interface"></a>
 ### Nested Schema for `network_interface`
 
 Required:
 
-- `device` (String) Order in which VIF backends are created by xapi, default to be 0. if changed, the network will be recreated
-- `network_uuid` (String) Network UUID to attach to VIF
+- `device` (String) Order in which VIF backends are created by [XAPI](https://github.com/xapi-project/xen-api), default to be `"0"`.<br />If this value is changed, the VIF will be recreated.
+- `network_uuid` (String) Network UUID to attach to VIF.
 
 Optional:
 
-- `mac` (String) MAC address of the VIF, if not provided, XenServer will generate a random MAC address.
-- `other_config` (Map of String) The additional configuration, default to be {}
+- `mac` (String) MAC address of the VIF, default to be a random MAC address generated by XenServer.
+
+-> **Note:** `mac` is not allowed to be updated.
+- `other_config` (Map of String) The additional configuration of the network interface, default to be `{}`.Find more details in [advanced-settings-for-network-interfaces](https://docs.xenserver.com/en-us/xenserver/developer/sdk-guide/xs-api-extensions#advanced-settings-for-network-interfaces).
 
 Read-Only:
 
@@ -167,12 +173,12 @@ Read-Only:
 
 Required:
 
-- `vdi_uuid` (String) VDI UUID to attach to VBD, Note that using the same VDI for multiple VBDs is not supported
+- `vdi_uuid` (String) VDI UUID to attach to VBD.<br />**Note**: Using the same VDI UUID for multiple VBDs is not supported.
 
 Optional:
 
-- `bootable` (Boolean) Set VBD as bootable, Default: false
-- `mode` (String) The mode the VBD should be mounted with, Default: RW
+- `bootable` (Boolean) Set VBD as bootable, default to be `false`.
+- `mode` (String) The mode the VBD should be mounted with, default to be `"RW"`.<br />Can be set as `"RO"` or `"RW"`.
 
 Read-Only:
 
@@ -183,5 +189,5 @@ Read-Only:
 Import is supported using the following syntax:
 
 ```shell
-terraform import xenserver_vm.vm <xenserver_vm.vm.uuid>
+terraform import xenserver_vm.vm 00000000-0000-0000-0000-000000000000
 ```

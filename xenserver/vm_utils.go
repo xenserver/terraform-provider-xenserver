@@ -159,31 +159,32 @@ func VMSchema() map[string]schema.Attribute {
 			Required:            true,
 		},
 		"name_description": schema.StringAttribute{
-			MarkdownDescription: "The description of the virtual machine.",
+			MarkdownDescription: "The description of the virtual machine, default to be `\"\"`.",
 			Optional:            true,
 			Computed:            true,
 			Default:             stringdefault.StaticString(""),
 		},
 		"template_name": schema.StringAttribute{
-			MarkdownDescription: "The template name of the virtual machine which cloned from.",
-			Required:            true,
+			MarkdownDescription: "The template name of the virtual machine which cloned from." +
+				"\n\n-> **Note:** `template_name` is not allowed to be updated.",
+			Required: true,
 		},
 		"static_mem_min": schema.Int64Attribute{
-			MarkdownDescription: "Statically-set (i.e. absolute) minimum memory (bytes). The least amount of memory this VM can boot with without crashing.",
+			MarkdownDescription: "Statically-set (absolute) minimum memory (bytes), default same with `static_mem_max`. The least amount of memory this VM can boot with without crashing.",
 			Optional:            true,
 			Computed:            true,
 		},
 		"static_mem_max": schema.Int64Attribute{
-			MarkdownDescription: "Statically-set (i.e. absolute) maximum memory (bytes). This value acts as a hard limit of the amount of memory a guest can use at VM start time. New values only take effect on reboot.",
+			MarkdownDescription: "Statically-set (absolute) maximum memory (bytes). This value acts as a hard limit of the amount of memory a guest can use at VM start time. New values only take effect on reboot.",
 			Required:            true,
 		},
 		"dynamic_mem_min": schema.Int64Attribute{
-			MarkdownDescription: "Dynamic minimum memory (bytes).",
+			MarkdownDescription: "Dynamic minimum memory (bytes), default same with `static_mem_max`.",
 			Optional:            true,
 			Computed:            true,
 		},
 		"dynamic_mem_max": schema.Int64Attribute{
-			MarkdownDescription: "Dynamic maximum memory (bytes).",
+			MarkdownDescription: "Dynamic maximum memory (bytes), default same with `static_mem_max`.",
 			Optional:            true,
 			Computed:            true,
 		},
@@ -192,33 +193,36 @@ func VMSchema() map[string]schema.Attribute {
 			Required:            true,
 		},
 		"cores_per_socket": schema.Int32Attribute{
-			MarkdownDescription: "The number of core pre socket for the virtual machine, default inherited from the template",
+			MarkdownDescription: "The number of core pre socket for the virtual machine, default inherited from the template.",
 			Optional:            true,
 			Computed:            true,
 		},
 		"boot_mode": schema.StringAttribute{
-			MarkdownDescription: "The boot mode of the virtual machine, the value is one of ['bios', 'uefi', 'uefi_security'].",
-			Optional:            true,
-			Computed:            true,
+			MarkdownDescription: "The boot mode of the virtual machine, default inherited from the template." + "<br />" +
+				"This value can be one of [`\"bios\", \"uefi\", \"uefi_security\"`]." +
+				"\n\n-> **Note:** `boot_mode` is not allowed to be updated.",
+			Optional: true,
+			Computed: true,
 			Validators: []validator.String{
 				stringvalidator.OneOf("bios", "uefi", "uefi_security"),
 			},
 		},
 		"boot_order": schema.StringAttribute{
-			MarkdownDescription: "The boot order of the virtual machine, the value is combination string of ['c', 'd', 'n'], please find the details in [Setting boot order for domUs](https://wiki.xenproject.org/wiki/Setting_boot_order_for_domUs).",
-			Optional:            true,
-			Computed:            true,
+			MarkdownDescription: "The boot order of the virtual machine, default inherited from the template." + "<br />" +
+				"This value is a combination string of [`\"c\", \"d\", \"n\"`]. Find more details in [Setting boot order for domUs](https://wiki.xenproject.org/wiki/Setting_boot_order_for_domUs).",
+			Optional: true,
+			Computed: true,
 			Validators: []validator.String{
 				stringvalidator.RegexMatches(regexp.MustCompile(`^[cdn]{1,3}$`), "the value is combination string of ['c', 'd', 'n']"),
 			},
 		},
 		"cdrom": schema.StringAttribute{
-			MarkdownDescription: "The VDI Name in ISO Library to attach to the virtual machine, if not set, use the default value from the template.",
+			MarkdownDescription: "The VDI name in ISO library to attach to the virtual machine, default inherited from the template.",
 			Optional:            true,
 			Computed:            true,
 		},
 		"hard_drive": schema.SetNestedAttribute{
-			MarkdownDescription: "A set of hard drive attributes to attach to the virtual machine, if not set, use the default value from the template.",
+			MarkdownDescription: "A set of hard drive attributes to attach to the virtual machine, default inherited from the template.",
 			NestedObject: schema.NestedAttributeObject{
 				Attributes: VBDSchema(),
 			},
@@ -239,7 +243,7 @@ func VMSchema() map[string]schema.Attribute {
 			},
 		},
 		"other_config": schema.MapAttribute{
-			MarkdownDescription: "The other config of the virtual machine.",
+			MarkdownDescription: "The additional configuration of the virtual machine, default to be `{}`.",
 			Optional:            true,
 			Computed:            true,
 			ElementType:         types.StringType,
@@ -262,14 +266,14 @@ func VMSchema() map[string]schema.Attribute {
 			},
 		},
 		"uuid": schema.StringAttribute{
-			MarkdownDescription: "The UUID of the virtual machine",
+			MarkdownDescription: "The UUID of the virtual machine.",
 			Computed:            true,
 			PlanModifiers: []planmodifier.String{
 				stringplanmodifier.UseStateForUnknown(),
 			},
 		},
 		"id": schema.StringAttribute{
-			MarkdownDescription: "The test id of the virtual machine",
+			MarkdownDescription: "The test ID of the virtual machine.",
 			Computed:            true,
 			PlanModifiers: []planmodifier.String{
 				stringplanmodifier.UseStateForUnknown(),

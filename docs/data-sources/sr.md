@@ -3,12 +3,12 @@
 page_title: "xenserver_sr Data Source - xenserver"
 subcategory: ""
 description: |-
-  Provides information about the storage repository of XenServer
+  Provides information about the storage repository (SR).
 ---
 
 # xenserver_sr (Data Source)
 
-Provides information about the storage repository of XenServer
+Provides information about the storage repository (SR).
 
 ## Example Usage
 
@@ -27,36 +27,36 @@ output "local_storage_output" {
 
 ### Optional
 
-- `name_label` (String) The name of the storage repository
-- `uuid` (String) The UUID of the storage repository
+- `name_label` (String) The name of the storage repository.
+- `uuid` (String) The UUID of the storage repository.
 
 ### Read-Only
 
-- `data_items` (Attributes List) The return items of storage repositories (see [below for nested schema](#nestedatt--data_items))
+- `data_items` (Attributes List) The return items of storage repositories. (see [below for nested schema](#nestedatt--data_items))
 
 <a id="nestedatt--data_items"></a>
 ### Nested Schema for `data_items`
 
 Read-Only:
 
-- `allowed_operations` (List of String) The list of the operations allowed in this state
-- `blobs` (Map of String) The binary blobs associated with this SR
-- `clustered` (Boolean) True if the SR is using aggregated local storage
-- `content_type` (String) The type of the SR's content, if required (e.g. ISOs)
-- `current_operations` (Map of String) The links each of the running tasks using this object (by reference) to a current_operation enum which describes the nature of the task
-- `introduced_by` (String) The disaster recovery task which introduced this SR
-- `is_tools_sr` (Boolean) True if this is the SR that contains the Tools ISO VDIs
-- `local_cache_enabled` (Boolean) True if this SR is assigned to be the local cache for its host
-- `name_description` (String) The human-readable description of the storage repository
-- `name_label` (String) The name of the storage repository
-- `other_config` (Map of String) The additional configuration
-- `pbds` (List of String) Describes how particular hosts can see this storage repository
-- `physical_size` (Number) The total physical size of the storage repository (in bytes)
-- `physical_utilisation` (Number) The physical space currently utilised on this storage repository (in bytes)
-- `shared` (Boolean) True if this SR is (capable of being) shared between multiple hosts
-- `sm_config` (Map of String) The SM dependent data
-- `tags` (List of String) The user-specified tags for categorization purposes
-- `type` (String) The type of the storage repository
-- `uuid` (String) The UUID of the storage repository
-- `vdis` (List of String) The all virtual disks known to this storage repository
-- `virtual_allocation` (Number) The sum of virtual_sizes of all VDIs in this storage repository (in bytes)
+- `allowed_operations` (List of String) The list of the operations allowed in this state.
+- `blobs` (Map of String) The binary blobs associated with this SR.
+- `clustered` (Boolean) True if the SR is using aggregated local storage.
+- `content_type` (String) The type of the SR's content, if required (for example, "ISOs").
+- `current_operations` (Map of String) The links each of the running tasks using this object (by reference) to a current_operation enum which describes the nature of the task.
+- `introduced_by` (String) The disaster recovery task which introduced this SR.
+- `is_tools_sr` (Boolean) True if this is the SR that contains the Tools ISO VDIs.
+- `local_cache_enabled` (Boolean) True if this SR is assigned to be the local cache for its host.
+- `name_description` (String) The human-readable description of the storage repository.
+- `name_label` (String) The name of the storage repository.
+- `other_config` (Map of String) The additional configuration.
+- `pbds` (List of String) Describes how particular hosts can see this storage repository.
+- `physical_size` (Number) The total physical size of the storage repository (in bytes).
+- `physical_utilisation` (Number) The physical space currently utilized on this storage repository (in bytes).
+- `shared` (Boolean) True if this SR is (capable of being) shared between multiple hosts.
+- `sm_config` (Map of String) The SM dependent data.
+- `tags` (List of String) The user-specified tags for categorization purposes.
+- `type` (String) The type of the storage repository.
+- `uuid` (String) The UUID of the storage repository.
+- `vdis` (List of String) The all virtual disks known to this storage repository.
+- `virtual_allocation` (Number) The sum of virtual_sizes of all VDIs in this storage repository (in bytes).

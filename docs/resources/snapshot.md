@@ -3,17 +3,17 @@
 page_title: "xenserver_snapshot Resource - xenserver"
 subcategory: ""
 description: |-
-  VM snapshot resource
+  Provides a VM snapshot resource.
 ---
 
 # xenserver_snapshot (Resource)
 
-VM snapshot resource
+Provides a VM snapshot resource.
 
 ## Example Usage
 
 ```terraform
-// snapshot from an exist running VM 
+# snapshot from an exist running VM 
 data "xenserver_vm" "vm_data" {
   name_label = "Test VM"
 }
@@ -24,7 +24,7 @@ resource "xenserver_snapshot" "snapshot" {
   with_memory = true
 }
 
-// snapshot from a new VM
+# snapshot from a new VM create by terraform
 data "xenserver_sr" "sr" {
   name_label = "Local storage"
 }
@@ -43,6 +43,7 @@ resource "xenserver_vm" "vm" {
   static_mem_max   = 4 * 1024 * 1024 * 1024
   vcpus            = 4
   cores_per_socket = 2
+  cdrom            = "win11-x64_uefi.iso"
 
   hard_drive = [
     {
@@ -71,22 +72,26 @@ resource "xenserver_snapshot" "snapshot" {
 
 ### Required
 
-- `name_label` (String) The name of the snapshot
-- `vm_uuid` (String) Snapshot from the VM with the given UUID
+- `name_label` (String) The name of the snapshot.
+- `vm_uuid` (String) Snapshot from the VM with the given UUID.
+
+-> **Note:** `vm_uuid` is not allowed to be updated.
 
 ### Optional
 
-- `with_memory` (Boolean) True if snapshot with the VM's memory(VM must in running state), default to be false
+- `with_memory` (Boolean) True if snapshot with the VM's memory (VM must in running state), default to be `false`.
+
+-> **Note:** `with_memory` is not allowed to be updated.
 
 ### Read-Only
 
-- `id` (String) The test id of the snapshot
-- `uuid` (String) The UUID of the snapshot
+- `id` (String) The test ID of the snapshot.
+- `uuid` (String) The UUID of the snapshot.
 
 ## Import
 
 Import is supported using the following syntax:
 
 ```shell
-terraform import xenserver_snapshot.snapshot <xenserver_snapshot.snapshot.uuid>
+terraform import xenserver_snapshot.snapshot 00000000-0000-0000-0000-000000000000
 ```

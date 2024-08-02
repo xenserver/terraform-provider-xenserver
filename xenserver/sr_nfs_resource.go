@@ -39,44 +39,49 @@ func (r *nfsResource) Metadata(_ context.Context, req resource.MetadataRequest, 
 
 func (r *nfsResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "NFS SR resource",
+		MarkdownDescription: "Provides an NFS storage repository resource.",
 		Attributes: map[string]schema.Attribute{
 			"name_label": schema.StringAttribute{
-				MarkdownDescription: "The name of the NFS storage repository",
+				MarkdownDescription: "The name of the NFS storage repository.",
 				Required:            true,
 			},
 			"name_description": schema.StringAttribute{
-				MarkdownDescription: `The human-readable description of the NFS storage repository, default to be ""`,
+				MarkdownDescription: "The description of the NFS storage repository, default to be `\"\"`.",
 				Optional:            true,
 				Computed:            true,
 				Default:             stringdefault.StaticString(""),
 			},
 			"storage_location": schema.StringAttribute{
-				MarkdownDescription: `The server and server patch of the NFS storage repository, for example: "10.70.58.9:/xenrtnfs"`,
-				Required:            true,
+				MarkdownDescription: "The server and server path of the NFS storage repository." + "<br />" +
+					"Follow the format `\"1.1.1.1:/server/path\"`." +
+					"\n\n-> **Note:** `storage_location` is not allowed to be updated.",
+				Required: true,
 			},
 			"version": schema.StringAttribute{
-				MarkdownDescription: `The version of NFS storage repository, for example: "3"`,
-				Required:            true,
+				MarkdownDescription: "The version of NFS storage repository." + "<br />" +
+					"Can be set as `\"3\"` or `\"4\"`." +
+					"\n\n-> **Note:** `version` is not allowed to be updated.",
+				Required: true,
 				Validators: []validator.String{
 					stringvalidator.OneOf("3", "4"),
 				},
 			},
 			"advanced_options": schema.StringAttribute{
-				MarkdownDescription: `The advanced options of the NFS storage repository, default to be ""`,
-				Optional:            true,
-				Computed:            true,
-				Default:             stringdefault.StaticString(""),
+				MarkdownDescription: "The advanced options of the NFS storage repository, default to be `\"\"`." +
+					"\n\n-> **Note:** `advanced_options` is not allowed to be updated.",
+				Optional: true,
+				Computed: true,
+				Default:  stringdefault.StaticString(""),
 			},
 			"uuid": schema.StringAttribute{
-				MarkdownDescription: "The UUID of the NFS storage repository",
+				MarkdownDescription: "The UUID of the NFS storage repository.",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"id": schema.StringAttribute{
-				MarkdownDescription: "The test id of the NFS storage repository",
+				MarkdownDescription: "The test ID of the NFS storage repository.",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),

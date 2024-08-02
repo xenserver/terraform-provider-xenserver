@@ -32,7 +32,7 @@ func (r *vmResource) Metadata(_ context.Context, req resource.MetadataRequest, r
 
 func (r *vmResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "VM resource",
+		MarkdownDescription: "Provides a virtual machine resource.",
 		Attributes:          VMSchema(),
 	}
 }

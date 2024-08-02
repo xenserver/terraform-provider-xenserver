@@ -3,12 +3,12 @@
 page_title: "xenserver_nic Data Source - xenserver"
 subcategory: ""
 description: |-
-  Provides the available NIC list for create different types of network in XenServer
+  Provides the available NIC list for different types of network.
 ---
 
 # xenserver_nic (Data Source)
 
-Provides the available NIC list for create different types of network in XenServer
+Provides the available NIC list for different types of network.
 
 ## Example Usage
 
@@ -27,8 +27,8 @@ output "nic_output" {
 
 ### Optional
 
-- `network_type` (String) The type of the network, choose one of  [`bond` - Bonded networks | `vlan` - External networks | `sriov` - SR-IOV networks | `private` - Single-Server Private networks], learn more on [page](https://docs.xenserver.com/en-us/xenserver/8/networking.html#xenserver-networking-overview)
+- `network_type` (String) The type of the network, choose one of [`"bond"` - Bonded networks | `"vlan"` - External networks | `"sriov"` - SR-IOV networks | `"private"` - Single-Server Private networks], learn more on [page](https://docs.xenserver.com/en-us/xenserver/8/networking.html#xenserver-networking-overview).
 
 ### Read-Only
 
-- `data_items` (List of String) The return list of available NICs for selected network type, the NIC name eg. "NIC 0", "Bond 0+1", "NIC-SR-IOV 0"
+- `data_items` (List of String) The return list of available NICs for selected network type, eg. `"NIC 0"`, `"Bond 0+1"`, `"NIC-SR-IOV 0"`.

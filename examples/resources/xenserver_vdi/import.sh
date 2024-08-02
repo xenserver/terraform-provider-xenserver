@@ -1,1 +1,1 @@
-terraform import xenserver_vdi.vdi <xenserver_vdi.vdi.uuid>
+terraform import xenserver_vdi.vdi 00000000-0000-0000-0000-000000000000

@@ -37,31 +37,33 @@ func (r *snapshotResource) Metadata(_ context.Context, req resource.MetadataRequ
 
 func (r *snapshotResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "VM snapshot resource",
+		MarkdownDescription: "Provides a VM snapshot resource.",
 		Attributes: map[string]schema.Attribute{
 			"name_label": schema.StringAttribute{
-				MarkdownDescription: "The name of the snapshot",
+				MarkdownDescription: "The name of the snapshot.",
 				Required:            true,
 			},
 			"vm_uuid": schema.StringAttribute{
-				MarkdownDescription: `Snapshot from the VM with the given UUID`,
-				Required:            true,
+				MarkdownDescription: "Snapshot from the VM with the given UUID." +
+					"\n\n-> **Note:** `vm_uuid` is not allowed to be updated.",
+				Required: true,
 			},
 			"with_memory": schema.BoolAttribute{
-				MarkdownDescription: `True if snapshot with the VM's memory(VM must in running state), default to be false`,
-				Optional:            true,
-				Computed:            true,
-				Default:             booldefault.StaticBool(false),
+				MarkdownDescription: "True if snapshot with the VM's memory (VM must in running state), default to be `false`." +
+					"\n\n-> **Note:** `with_memory` is not allowed to be updated.",
+				Optional: true,
+				Computed: true,
+				Default:  booldefault.StaticBool(false),
 			},
 			"uuid": schema.StringAttribute{
-				MarkdownDescription: "The UUID of the snapshot",
+				MarkdownDescription: "The UUID of the snapshot.",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"id": schema.StringAttribute{
-				MarkdownDescription: "The test id of the snapshot",
+				MarkdownDescription: "The test ID of the snapshot.",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),

@@ -9,7 +9,3 @@ resource "xenserver_network_vlan" "vlan" {
     "flag" = "1"
   }
 }
-
-output "vlan_out" {
-  value = xenserver_network_vlan.vlan.uuid
-}

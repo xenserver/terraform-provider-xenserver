@@ -3,12 +3,12 @@
 page_title: "xenserver_network Data Source - xenserver"
 subcategory: ""
 description: |-
-  Provides information about the network of XenServer
+  Provides information about the network.
 ---
 
 # xenserver_network (Data Source)
 
-Provides information about the network of XenServer
+Provides information about the network.
 
 ## Example Usage
 
@@ -27,31 +27,31 @@ output "network_output" {
 
 ### Optional
 
-- `name_label` (String) The name of the network
-- `uuid` (String) The UUID of the network
+- `name_label` (String) The name of the network.
+- `uuid` (String) The UUID of the network.
 
 ### Read-Only
 
-- `data_items` (Attributes List) The return items of networks (see [below for nested schema](#nestedatt--data_items))
+- `data_items` (Attributes List) The return items of networks. (see [below for nested schema](#nestedatt--data_items))
 
 <a id="nestedatt--data_items"></a>
 ### Nested Schema for `data_items`
 
 Read-Only:
 
-- `allowed_operations` (List of String) The list of the operations allowed in this state
-- `assigned_ips` (Map of String) The IP addresses assigned to VIFs on networks that have active xapi-managed DHCP
-- `blobs` (Map of String) The binary blobs associated with this SR
-- `bridge` (String) The name of the bridge corresponding to this network on the local host
-- `current_operations` (Map of String) The links each of the running tasks using this object (by reference) to a current_operation enum which describes the nature of the task
-- `default_locking_mode` (String) The network will use this value to determine the behavior of all VIFs where locking_mode = default
-- `managed` (Boolean) True if the bridge is managed by xapi
-- `mtu` (Number) The MTU in octets
-- `name_description` (String) The human-readable description of the network
-- `name_label` (String) The name of the network
-- `other_config` (Map of String) The additional configuration
-- `pifs` (List of String) The list of connected pifs
-- `purpose` (List of String) Set of purposes for which the server will use this network
-- `tags` (List of String) The user-specified tags for categorization purposes
-- `uuid` (String) The UUID of the network
-- `vifs` (List of String) The list of connected vifs
+- `allowed_operations` (List of String) The list of the operations allowed in this state.
+- `assigned_ips` (Map of String) The IP addresses assigned to VIFs on networks that have active [xapi-managed](https://github.com/xapi-project/xen-api) DHCP.
+- `blobs` (Map of String) The binary blobs associated with this SR.
+- `bridge` (String) The name of the bridge corresponding to this network on the local host.
+- `current_operations` (Map of String) The links each of the running tasks using this object (by reference) to a current_operation enum which describes the nature of the task.
+- `default_locking_mode` (String) The network will use this value to determine the behavior of all VIFs where `locking_mode = default`.
+- `managed` (Boolean) True if the bridge is managed by [XAPI](https://github.com/xapi-project/xen-api).
+- `mtu` (Number) The MTU in octets.
+- `name_description` (String) The human-readable description of the network.
+- `name_label` (String) The name of the network.
+- `other_config` (Map of String) The additional configuration.
+- `pifs` (List of String) The list of connected PIFs.
+- `purpose` (List of String) Set of purposes for which the server will use this network.
+- `tags` (List of String) The user-specified tags for categorization purposes.
+- `uuid` (String) The UUID of the network.
+- `vifs` (List of String) The list of connected VIFs.

@@ -9,7 +9,7 @@ testacc: provider ## make testacc
 	source .env && TF_ACC=1 go test ./xenserver/ -v  $(TESTARGS) -timeout 120m
 
 doc:  ## make doc for terraform provider documentation
-	go generate ./...
+	go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate --provider-name xenserver
 
 provider: go.mod  ## make provider
 	if [ -z "$(GOBIN)" ]; then echo "GOBIN is not set" && exit 1; fi

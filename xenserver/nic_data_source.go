@@ -36,15 +36,15 @@ func (d *nicDataSource) Metadata(_ context.Context, req datasource.MetadataReque
 // Schema defines the schema for the data source.
 func (d *nicDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Provides the available NIC list for create different types of network in XenServer",
+		MarkdownDescription: "Provides the available NIC list for different types of network.",
 
 		Attributes: map[string]schema.Attribute{
 			"network_type": schema.StringAttribute{
-				MarkdownDescription: "The type of the network, choose one of  [`bond` - Bonded networks | `vlan` - External networks | `sriov` - SR-IOV networks | `private` - Single-Server Private networks], learn more on [page](https://docs.xenserver.com/en-us/xenserver/8/networking.html#xenserver-networking-overview) ",
+				MarkdownDescription: "The type of the network, choose one of [`\"bond\"` - Bonded networks | `\"vlan\"` - External networks | `\"sriov\"` - SR-IOV networks | `\"private\"` - Single-Server Private networks], learn more on [page](https://docs.xenserver.com/en-us/xenserver/8/networking.html#xenserver-networking-overview).",
 				Optional:            true,
 			},
 			"data_items": schema.ListAttribute{
-				MarkdownDescription: `The return list of available NICs for selected network type, the NIC name eg. "NIC 0", "Bond 0+1", "NIC-SR-IOV 0"`,
+				MarkdownDescription: "The return list of available NICs for selected network type, eg. `\"NIC 0\"`, `\"Bond 0+1\"`, `\"NIC-SR-IOV 0\"`.",
 				Computed:            true,
 				ElementType:         types.StringType,
 			},
