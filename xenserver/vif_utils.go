@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"regexp"
+	"slices"
+	"strings"
 
 	"xenapi"
 
@@ -195,13 +197,35 @@ func updateVIFs(ctx context.Context, plan vmResourceModel, state vmResourceModel
 		stateVIFsMap[vif.Device.String()+vif.Network.String()] = vif
 	}
 
+	vmState, err := xenapi.VM.GetPowerState(session, vmRef)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+
 	// Destroy VIFs that are not in plan, destroy VIFs first to avoid error "DEVICE_ALREADY_EXISTS"
 	for networkUUID, stateVIF := range stateVIFsMap {
 		if _, ok := planVIFsMap[networkUUID]; !ok {
+			vifRef := xenapi.VIFRef(stateVIF.VIF.ValueString())
+			if vmState == xenapi.VMPowerStateRunning {
+				allowedOps, err := xenapi.VIF.GetAllowedOperations(session, vifRef)
+				if err != nil {
+					return errors.New(err.Error())
+				}
+				if slices.Contains(allowedOps, xenapi.VifOperationsUnplug) {
+					tflog.Debug(ctx, "---> Unplug VIF when VM is running.")
+					err = xenapi.VIF.Unplug(session, vifRef)
+					if err != nil {
+						return errors.New(err.Error())
+					}
+				}
+			}
 			tflog.Debug(ctx, "---> Destroy VIF:	"+stateVIF.VIF.String())
-			err = xenapi.VIF.Destroy(session, xenapi.VIFRef(stateVIF.VIF.ValueString()))
+			err = xenapi.VIF.Destroy(session, vifRef)
 			if err != nil {
-				return errors.New(err.Error())
+				if !strings.Contains(err.Error(), "HANDLE_INVALID") {
+					return errors.New(err.Error())
+				}
+				tflog.Debug(ctx, "HANDLE_INVALID: VIF already been destroyed.")
 			}
 		}
 	}

@@ -174,13 +174,24 @@ func updateVBDs(ctx context.Context, plan vmResourceModel, state vmResourceModel
 		stateHardDrivesMap[vbd.VDI.ValueString()] = vbd
 	}
 
+	vmState, err := xenapi.VM.GetPowerState(session, vmRef)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+
 	// Destroy VBDs that are not in plan
 	for vdiUUID, stateVBD := range stateHardDrivesMap {
 		if _, ok := planHardDrivesMap[vdiUUID]; !ok {
+			if vmState == xenapi.VMPowerStateRunning {
+				return errors.New("unable to delete the item in hard_drive for a running VM")
+			}
 			tflog.Debug(ctx, "---> Destroy VBD:	"+stateVBD.VBD.String())
 			err = xenapi.VBD.Destroy(session, xenapi.VBDRef(stateVBD.VBD.ValueString()))
 			if err != nil {
-				return errors.New(err.Error())
+				if !strings.Contains(err.Error(), "HANDLE_INVALID") {
+					return errors.New(err.Error())
+				}
+				tflog.Debug(ctx, "HANDLE_INVALID: VBD already been destroyed.")
 			}
 		}
 	}
@@ -189,6 +200,9 @@ func updateVBDs(ctx context.Context, plan vmResourceModel, state vmResourceModel
 	for vdiUUID, planVBD := range planHardDrivesMap {
 		stateVBD, ok := stateHardDrivesMap[vdiUUID]
 		if !ok {
+			if vmState == xenapi.VMPowerStateRunning && planVBD.Mode.ValueString() == "RO" {
+				return errors.New("unable to create the item with 'RO' mode in hard_drive for a running VM")
+			}
 			tflog.Debug(ctx, "---> Create VBD for VDI: "+vdiUUID+" <---")
 			err = createVBD(session, vmRef, planVBD, xenapi.VbdTypeDisk)
 			if err != nil {
@@ -199,6 +213,9 @@ func updateVBDs(ctx context.Context, plan vmResourceModel, state vmResourceModel
 			setVBDDefaults(&planVBD)
 
 			if !planVBD.Mode.Equal(stateVBD.Mode) {
+				if vmState == xenapi.VMPowerStateRunning {
+					return errors.New("unable to update the item's mode in hard_drive for a running VM")
+				}
 				tflog.Debug(ctx, "---> VBD.SetMode:	"+planVBD.Mode.String())
 				err = xenapi.VBD.SetMode(session, xenapi.VBDRef(stateVBD.VBD.ValueString()), xenapi.VbdMode(planVBD.Mode.ValueString()))
 				if err != nil {
@@ -207,6 +224,9 @@ func updateVBDs(ctx context.Context, plan vmResourceModel, state vmResourceModel
 			}
 
 			if !planVBD.Bootable.Equal(stateVBD.Bootable) {
+				if vmState == xenapi.VMPowerStateRunning {
+					return errors.New("unable to update the item's bootable in hard_drive for a running VM")
+				}
 				tflog.Debug(ctx, "---> VBD.SetBootable:	"+planVBD.Bootable.String())
 				err = xenapi.VBD.SetBootable(session, xenapi.VBDRef(stateVBD.VBD.ValueString()), planVBD.Bootable.ValueBool())
 				if err != nil {
@@ -226,11 +246,11 @@ func getAllDiskTypeVBDs(session *xenapi.Session, vmRef xenapi.VMRef) ([]string, 
 		return diskRefs, errors.New(err.Error())
 	}
 	for _, vbdRef := range vbdRefs {
-		vbdtype, err := xenapi.VBD.GetType(session, vbdRef)
+		vbdType, err := xenapi.VBD.GetType(session, vbdRef)
 		if err != nil {
 			return diskRefs, errors.New(err.Error())
 		}
-		if vbdtype == xenapi.VbdTypeDisk {
+		if vbdType == xenapi.VbdTypeDisk {
 			diskRefs = append(diskRefs, string(vbdRef))
 		}
 	}
@@ -292,7 +312,7 @@ func getVDIUUIDFromISOName(session *xenapi.Session, isoName string) (string, err
 
 func setCDROM(ctx context.Context, session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel) error {
 	if plan.CDROM.IsUnknown() {
-		tflog.Debug(ctx, "---> CD-ROM is not set, use the default value from the VM template")
+		tflog.Debug(ctx, "---> CD-ROM is not set, use the default value")
 		return nil
 	}
 	planCDROM := plan.CDROM.ValueString()
@@ -300,62 +320,59 @@ func setCDROM(ctx context.Context, session *xenapi.Session, vmRef xenapi.VMRef, 
 	if err != nil {
 		return errors.New(err.Error())
 	}
-	templateCDROM, templateVBDRef, err := getISOFromVMRecord(ctx, session, vmRecord)
+	baseCD, err := getCDFromVMRecord(ctx, session, vmRecord)
 	if err != nil {
 		return err
 	}
-	if templateVBDRef != "" && (planCDROM == "" || planCDROM != templateCDROM) {
-		err := xenapi.VBD.Destroy(session, templateVBDRef)
-		if err != nil {
-			return errors.New(err.Error())
-		}
-	}
-	if planCDROM != "" && (templateVBDRef == "" || planCDROM != templateCDROM) {
-		err = createCDROM(session, vmRef, planCDROM)
-		if err != nil {
-			return err
-		}
-	}
 
+	if string(baseCD.vbdRef) == "OpaqueRef:NULL" || string(baseCD.vbdRef) == "" {
+		if planCDROM != "" {
+			// create the CD-ROM if not exist
+			err = createCDROM(session, vmRef, planCDROM)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		// get the new vdiUUID
+		vdiUUID := ""
+		if planCDROM != "" && planCDROM != baseCD.isoName {
+			uuid, err := getVDIUUIDFromISOName(session, planCDROM)
+			if err != nil {
+				return err
+			}
+			vdiUUID = uuid
+		}
+		if planCDROM != baseCD.isoName {
+			// change the CD-ROM
+			err = changeVMISO(ctx, session, baseCD, vdiUUID)
+			if err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 
-func updateCDROM(ctx context.Context, session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel, state vmResourceModel) error {
-	if plan.CDROM.IsUnknown() {
-		tflog.Debug(ctx, "---> use default CD-ROM, continue")
-		return nil
-	}
-	stateCDROM := state.CDROM.ValueString()
-	planCDROM := plan.CDROM.ValueString()
-
-	if planCDROM == "" && stateCDROM == "" {
-		tflog.Debug(ctx, "---> CD-ROM is not set, continue")
-		return nil
-	}
-
-	if stateCDROM != "" && (planCDROM == "" || planCDROM != stateCDROM) {
-		tflog.Debug(ctx, "---> Clean the exist CD-ROM")
-		vmRecord, err := xenapi.VM.GetRecord(session, vmRef)
-		if err != nil {
-			return errors.New(err.Error())
-		}
-		_, vbdRef, err := getISOFromVMRecord(ctx, session, vmRecord)
-		if err != nil {
-			return err
-		}
-		err = xenapi.VBD.Destroy(session, vbdRef)
+func changeVMISO(ctx context.Context, session *xenapi.Session, cd cdVBD, vdiUUID string) error {
+	if !cd.empty {
+		tflog.Debug(ctx, "---> Eject the exist ISO")
+		err := xenapi.VBD.Eject(session, cd.vbdRef)
 		if err != nil {
 			return errors.New(err.Error())
 		}
 	}
-	if planCDROM != "" && (stateCDROM == "" || planCDROM != stateCDROM) {
-		tflog.Debug(ctx, "---> Create new CD-ROM: "+planCDROM)
-		err := createCDROM(session, vmRef, planCDROM)
+	if vdiUUID != "" {
+		tflog.Debug(ctx, "---> Insert the new ISO")
+		vdiRef, err := xenapi.VDI.GetByUUID(session, vdiUUID)
 		if err != nil {
-			return err
+			return errors.New(err.Error())
+		}
+		err = xenapi.VBD.Insert(session, cd.vbdRef, vdiRef)
+		if err != nil {
+			return errors.New(err.Error())
 		}
 	}
-
 	return nil
 }
 
@@ -374,35 +391,48 @@ func createCDROM(session *xenapi.Session, vmRef xenapi.VMRef, isoName string) er
 	return nil
 }
 
-func getISOFromVMRecord(ctx context.Context, session *xenapi.Session, vmRecord xenapi.VMRecord) (string, xenapi.VBDRef, error) {
-	var isoName = ""
-	var vbdRef xenapi.VBDRef
+type cdVBD struct {
+	vbdRef  xenapi.VBDRef
+	empty   bool
+	isoName string
+}
+
+func getCDFromVMRecord(ctx context.Context, session *xenapi.Session, vmRecord xenapi.VMRecord) (cdVBD, error) {
+	var cd cdVBD
 	_, vbdSet, err := getVBDsFromVMRecord(ctx, session, vmRecord, xenapi.VbdTypeCD)
 	if err != nil {
-		return isoName, vbdRef, err
+		return cd, err
 	}
 
 	if len(vbdSet) == 0 {
-		return isoName, vbdRef, nil
+		return cd, nil
 	}
 
 	// if vbdSet is not empty, but it should only have one CDROM
 	if len(vbdSet) != 0 && len(vbdSet) > 1 {
-		return isoName, vbdRef, errors.New("multiple CD-ROMs found")
+		return cd, errors.New("multiple CD-ROMs found")
 	}
 
-	vbdRef = xenapi.VBDRef(vbdSet[0].VBD.ValueString())
+	cd.vbdRef = xenapi.VBDRef(vbdSet[0].VBD.ValueString())
+	if string(cd.vbdRef) != "OpaqueRef:NULL" {
+		empty, err := xenapi.VBD.GetEmpty(session, cd.vbdRef)
+		if err != nil {
+			return cd, errors.New(err.Error())
+		}
+		cd.empty = empty
+	}
 	vdiUUID := vbdSet[0].VDI.ValueString()
 	if vdiUUID != "" {
 		vdiRef, err := xenapi.VDI.GetByUUID(session, vdiUUID)
 		if err != nil {
-			return isoName, vbdRef, errors.New(err.Error())
+			return cd, errors.New(err.Error())
 		}
-		isoName, err = xenapi.VDI.GetNameLabel(session, vdiRef)
+		isoName, err := xenapi.VDI.GetNameLabel(session, vdiRef)
 		if err != nil {
-			return isoName, vbdRef, errors.New(err.Error())
+			return cd, errors.New(err.Error())
 		}
+		cd.isoName = isoName
 	}
 
-	return isoName, vbdRef, nil
+	return cd, nil
 }

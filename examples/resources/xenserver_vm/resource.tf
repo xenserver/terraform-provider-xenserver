@@ -96,3 +96,63 @@ variable "password" {
   description = "The password for the Linux VM"
   sensitive   = true
 }
+
+# Create multiple VMs
+locals {
+  virtual_machines = {
+    "windows-vm" = {
+      name_label       = "Windows VM"
+      template_name    = "Windows 11"
+      static_mem_max   = 8 * 1024 * 1024 * 1024
+      vcpus            = 4
+      hard_drive = [
+        {
+          vdi_uuid = xenserver_vdi.vdi1.uuid,
+          bootable = true,
+          mode     = "RW"
+        },
+      ]
+      network_interface = [
+        {
+          network_uuid = data.xenserver_network.network.data_items[0].uuid,
+          device       = "0"
+        },
+      ]
+    }
+    "linux-vm" = {
+      name_label       = "Linux VM"
+      template_name    = "Debian Bullseye 11"
+      static_mem_max   = 4 * 1024 * 1024 * 1024
+      vcpus            = 2
+      hard_drive = [
+        {
+          vdi_uuid = xenserver_vdi.vdi2.uuid,
+          bootable = true,
+          mode     = "RW"
+        },
+      ]
+      network_interface = [
+        {
+          network_uuid = data.xenserver_network.network.data_items[0].uuid,
+          device       = "0"
+        },
+      ]
+    }
+  }
+}
+
+resource "xenserver_vm" "vm" {
+  for_each = local.virtual_machines
+  name_label        = each.value.name_label
+  template_name     = each.value.template_name 
+  static_mem_max    = each.value.static_mem_max
+  vcpus             = each.value.vcpus
+  hard_drive        = each.value.hard_drive
+  network_interface = each.value.network_interface
+}
+
+output "vm_out" {
+  value = {
+    for vm in xenserver_vm.vm : vm.name_label => vm
+  }
+}
