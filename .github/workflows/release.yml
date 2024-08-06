@@ -32,9 +32,30 @@ jobs:
         with:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.PASSPHRASE }}
+      - name: Download and extract SDK
+        shell: bash
+        # If "XENSERVER_SDK_URL" is setup in the repository variable, will use it
+        # as SDK URL, otherwise, will extract the SDK version from https://www.xenserver.com/downloads.
+        # and download the SDK from https://github.com/xapi-project/xen-api/releases accordingly.
+        # it will help to ignore the "Download Agreement" from the official XenServer SDK download page.
+        run: |
+          url=${{ vars.XENSERVER_SDK_URL }}
+          if [ -z "$url" ]; then
+            version=$(curl -s 'https://www.xenserver.com/downloads' | \
+              grep -oE 'Software Development Kit \(SDK\) [0-9]+\.[0-9]+\.[0-9]+' | \
+              grep -oE '[0-9]+\.[0-9]+\.[0-9]+$')
+            url="https://github.com/xapi-project/xen-api/releases/download/v${version}/Go-SDK-prerelease-unsigned.zip"
+          fi
+          curl -L "$url" -o xenserver-sdk.zip
+          unzip xenserver-sdk.zip -d sdk_temp
+          mkdir -p goSDK
+          mv sdk_temp/sdk_go/src/* goSDK/
+          rm -rf sdk_temp xenserver-sdk.zip
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
+          distribution: goreleaser
+          version: "~> v2"
           args: release --clean
         env:
           # GitHub sets the GITHUB_TOKEN secret automatically.
