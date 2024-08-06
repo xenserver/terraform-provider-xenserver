@@ -222,7 +222,8 @@ func VMSchema() map[string]schema.Attribute {
 			Computed:            true,
 		},
 		"hard_drive": schema.SetNestedAttribute{
-			MarkdownDescription: "A set of hard drive attributes to attach to the virtual machine, default inherited from the template.",
+			MarkdownDescription: "A set of hard drive attributes to attach to the virtual machine, default inherited from the template." + "<br />" +
+				"Set at least one item in this attribute when use it.",
 			NestedObject: schema.NestedAttributeObject{
 				Attributes: VBDSchema(),
 			},
@@ -233,7 +234,8 @@ func VMSchema() map[string]schema.Attribute {
 			},
 		},
 		"network_interface": schema.SetNestedAttribute{
-			MarkdownDescription: "A set of network interface attributes to attach to the virtual machine.",
+			MarkdownDescription: "A set of network interface attributes to attach to the virtual machine." + "<br />" +
+				"Set at least one item in this attribute when use it.",
 			NestedObject: schema.NestedAttributeObject{
 				Attributes: VIFSchema(),
 			},
@@ -468,11 +470,11 @@ func getFirstTemplate(session *xenapi.Session, templateName string) (xenapi.VMRe
 
 	// Get the first VM template ref
 	for vmRef, record := range records {
-		if record.IsATemplate && strings.Contains(record.NameLabel, templateName) {
+		if record.IsATemplate && record.NameLabel == templateName {
 			return vmRef, nil
 		}
 	}
-	return vmRef, errors.New("unable to find VM template ref")
+	return vmRef, errors.New("unable to find the VM template with the name: " + templateName)
 }
 
 func setOtherConfigWhenCreate(session *xenapi.Session, vmRef xenapi.VMRef) error {
@@ -602,11 +604,11 @@ func updateVMResourceModelComputed(ctx context.Context, session *xenapi.Session,
 		return err
 	}
 
-	isoName, _, err := getISOFromVMRecord(ctx, session, vmRecord)
+	cd, err := getCDFromVMRecord(ctx, session, vmRecord)
 	if err != nil {
 		return err
 	}
-	data.CDROM = types.StringValue(isoName)
+	data.CDROM = types.StringValue(cd.isoName)
 
 	bootMode, err := getBootModeFromVMRecord(vmRecord)
 	if err != nil {
@@ -747,7 +749,14 @@ func getVIFsFromVMRecord(ctx context.Context, session *xenapi.Session, vmRecord 
 	return setValue, nil
 }
 
-func updateVMMemory(session *xenapi.Session, vmRef xenapi.VMRef, data vmResourceModel) error {
+type vmMemorySetting struct {
+	staticMemMin  int
+	staticMemMax  int
+	dynamicMemMin int
+	dynamicMemMax int
+}
+
+func getVMMemory(data vmResourceModel) vmMemorySetting {
 	staticMemMax := int(data.StaticMemMax.ValueInt64())
 	staticMemMin := staticMemMax
 	dynamicMemMin := staticMemMax
@@ -761,7 +770,13 @@ func updateVMMemory(session *xenapi.Session, vmRef xenapi.VMRef, data vmResource
 	if !data.DynamicMemMax.IsUnknown() {
 		dynamicMemMax = int(data.DynamicMemMax.ValueInt64())
 	}
-	err := xenapi.VM.SetMemoryLimits(session, vmRef, staticMemMin, staticMemMax, dynamicMemMin, dynamicMemMax)
+
+	return vmMemorySetting{staticMemMin, staticMemMax, dynamicMemMin, dynamicMemMax}
+}
+
+func setVMMemory(session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel) error {
+	memorySetting := getVMMemory(plan)
+	err := xenapi.VM.SetMemoryLimits(session, vmRef, memorySetting.staticMemMin, memorySetting.staticMemMax, memorySetting.dynamicMemMin, memorySetting.dynamicMemMax)
 	if err != nil {
 		return errors.New(err.Error())
 	}
@@ -769,27 +784,42 @@ func updateVMMemory(session *xenapi.Session, vmRef xenapi.VMRef, data vmResource
 	return nil
 }
 
-func updateVMCPUs(session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel) error {
-	vcpus := int(plan.VCPUs.ValueInt32())
-	vcpusAtStartup, err := xenapi.VM.GetVCPUsAtStartup(session, vmRef)
+func updateVMMemory(ctx context.Context, session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel, state vmResourceModel) error {
+	planMemorySetting := getVMMemory(plan)
+	stateMemorySetting := getVMMemory(state)
+	if planMemorySetting == stateMemorySetting {
+		tflog.Debug(ctx, "---> No memory change, skip update VM Memory. <---")
+		return nil
+	}
+	vmState, err := xenapi.VM.GetPowerState(session, vmRef)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	if vmState == xenapi.VMPowerStateRunning {
+		return errors.New("unable to change memory for a running VM")
+	}
+	err = xenapi.VM.SetMemoryLimits(session, vmRef, planMemorySetting.staticMemMin, planMemorySetting.staticMemMax, planMemorySetting.dynamicMemMin, planMemorySetting.dynamicMemMax)
 	if err != nil {
 		return errors.New(err.Error())
 	}
 
+	return nil
+}
+
+func changeVCPUSettings(session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel) error {
 	vmPowerState, err := xenapi.VM.GetPowerState(session, vmRef)
 	if err != nil {
 		return errors.New(err.Error())
 	}
 	if vmPowerState == xenapi.VMPowerStateRunning {
-		if vcpusAtStartup > vcpus {
-			return errors.New("unable to reduce VCPUs for a running VM")
-		}
-		err := xenapi.VM.SetVCPUsNumberLive(session, vmRef, vcpus)
-		if err != nil {
-			return errors.New(err.Error())
-		}
+		return errors.New("unable to change vcpus for a running VM")
 	}
 
+	vcpus := int(plan.VCPUs.ValueInt32())
+	vcpusAtStartup, err := xenapi.VM.GetVCPUsAtStartup(session, vmRef)
+	if err != nil {
+		return errors.New(err.Error())
+	}
 	// VCPU values must satisfy: 0 < VCPUs_at_startup ≤ VCPUs_max
 	if vcpusAtStartup > vcpus {
 		// reducing VCPUs_at_startup: we need to change this value first, and then the VCPUs_max
@@ -814,6 +844,14 @@ func updateVMCPUs(session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceMo
 	}
 
 	return nil
+}
+
+func updateVMCPUs(ctx context.Context, session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel, state vmResourceModel) error {
+	if plan.VCPUs == state.VCPUs {
+		tflog.Debug(ctx, "---> No vcpus change, skip update VM CPUs. <---")
+		return nil
+	}
+	return changeVCPUSettings(session, vmRef, plan)
 }
 
 func updateCorePerSocket(session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel) error {
@@ -922,7 +960,7 @@ func vmResourceModelUpdate(ctx context.Context, session *xenapi.Session, vmRef x
 		return err
 	}
 
-	err = updateCDROM(ctx, session, vmRef, plan, state)
+	err = setCDROM(ctx, session, vmRef, plan)
 	if err != nil {
 		return err
 	}
@@ -932,12 +970,12 @@ func vmResourceModelUpdate(ctx context.Context, session *xenapi.Session, vmRef x
 		return err
 	}
 
-	err = updateVMMemory(session, vmRef, plan)
+	err = updateVMMemory(ctx, session, vmRef, plan, state)
 	if err != nil {
 		return err
 	}
 
-	err = updateVMCPUs(session, vmRef, plan)
+	err = updateVMCPUs(ctx, session, vmRef, plan, state)
 	if err != nil {
 		return err
 	}
@@ -989,13 +1027,13 @@ func setVMResourceModel(ctx context.Context, session *xenapi.Session, vmRef xena
 	}
 
 	// set memory
-	err = updateVMMemory(session, vmRef, plan)
+	err = setVMMemory(session, vmRef, plan)
 	if err != nil {
 		return err
 	}
 
 	// set VCPUs
-	err = updateVMCPUs(session, vmRef, plan)
+	err = changeVCPUSettings(session, vmRef, plan)
 	if err != nil {
 		return err
 	}
