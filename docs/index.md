@@ -2,12 +2,12 @@
 page_title: "XenServer Provider"
 subcategory: ""
 description: |-
-  The XenServer provider can be used to manage and deploy XenServer resources. You must configure the provider with the proper credentials before you can use it. Documentation regarding the Data Sources and Resources supported by the XenServer Provider can be found in the navigation to the left. Note that this provider is still in development.
+  The XenServer provider can be used to manage and deploy XenServer resources. Before using it, you must configure the provider with the appropriate credentials. Documentation regarding the data sources and resources supported by the XenServer provider can be found in the navigation on the left.
 ---
 
 # XenServer Provider
 
-The XenServer provider can be used to manage and deploy XenServer resources. You must configure the provider with the proper credentials before you can use it. Documentation regarding the Data Sources and Resources supported by the XenServer Provider can be found in the navigation to the left. Note that this provider is still in development.
+The XenServer provider can be used to manage and deploy XenServer resources. Before using it, you must configure the provider with the appropriate credentials. Documentation regarding the data sources and resources supported by the XenServer provider can be found in the navigation on the left.
 
 ## Example Usage
 

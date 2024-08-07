@@ -1,6 +1,5 @@
 # Terraform Provider XenServer
-
-This repository the terraform provider of XenServer, using the Terraform Plugin Framework(https://developer.hashicorp.com/terraform/tutorials/providers-plugin-framework), containing:
+This repository is the [Terraform Provider of XenServer](https://registry.terraform.io/providers/xenserver/xenserver/latest/docs), using the [Terraform Plugin Framework](https://developer.hashicorp.com/terraform/tutorials/providers-plugin-framework), containing:
 
 - `docs/`      The generated documentation.
 - `examples/`  The examples of provider, resources and data sources.
@@ -37,7 +36,7 @@ To compile the provider, run `"go install"`. This will build the provider and pu
 
 ### Document
 
-To generate or update documentation, run `go generate ./...`.
+To generate or update documentation, run `make doc`.
 
 ### Log
 
