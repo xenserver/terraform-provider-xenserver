@@ -272,7 +272,7 @@ func (d *pifDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 		}
 
 		var pifData pifRecordData
-		err = updatePIFRecordData(ctx, pifRecord, &pifData)
+		err = updatePIFRecordData(ctx, d.session, pifRecord, &pifData)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Unable to update PIF record data",

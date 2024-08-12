@@ -13,6 +13,7 @@ doc:  ## make doc for terraform provider documentation
 
 provider: go.mod  ## make provider
 	if [ -z "$(GOBIN)" ]; then echo "GOBIN is not set" && exit 1; fi
+	rm -f $(GOBIN)/terraform-provider-xenserver
 	go mod tidy
 	go install .
 	ls -l $(GOBIN)/terraform-provider-xenserver
@@ -24,6 +25,9 @@ apply: .env provider  ## make apply
 
 apply_vm: .env provider  ## make apply_vm
 	$(MAKE) WORKDIR=examples/vm-main apply
+
+apply_pool: .env provider  ## make apply_pool
+	$(MAKE) WORKDIR=examples/pool-main apply
 
 show_state: .env  ## make show_state resource=xenserver_vm.vm
 	@cd $(WORKDIR) && \
@@ -47,3 +51,6 @@ destroy:
 
 destroy_vm:
 	$(MAKE) WORKDIR=examples/vm-main destroy
+
+destroy_pool:
+	$(MAKE) WORKDIR=examples/pool-main destroy

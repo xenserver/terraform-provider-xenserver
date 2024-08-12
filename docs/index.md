@@ -24,6 +24,6 @@ provider "xenserver" {
 
 ### Optional
 
-- `host` (String) The base URL of target XenServer host.<br />Can be set by using the environment variable **XENSERVER_HOST**.
+- `host` (String) The address of target XenServer host.<br />Can be set by using the environment variable **XENSERVER_HOST**.
 - `password` (String, Sensitive) The password of target XenServer host.<br />Can be set by using the environment variable **XENSERVER_PASSWORD**.
 - `username` (String) The user name of target XenServer host.<br />Can be set by using the environment variable **XENSERVER_USERNAME**.

@@ -119,17 +119,17 @@ type srResourceModel struct {
 	ID              types.String `tfsdk:"id"`
 }
 
-func getPoolCoordinateRef(session *xenapi.Session) (xenapi.HostRef, error) {
-	var coordinateRef xenapi.HostRef
+func getPoolCoordinatorRef(session *xenapi.Session) (xenapi.HostRef, error) {
+	var coordinatorRef xenapi.HostRef
 	poolRefs, err := xenapi.Pool.GetAll(session)
 	if err != nil {
-		return coordinateRef, errors.New(err.Error())
+		return coordinatorRef, errors.New(err.Error())
 	}
-	coordinateRef, err = xenapi.Pool.GetMaster(session, poolRefs[0])
+	coordinatorRef, err = xenapi.Pool.GetMaster(session, poolRefs[0])
 	if err != nil {
-		return coordinateRef, errors.New(err.Error())
+		return coordinatorRef, errors.New(err.Error())
 	}
-	return coordinateRef, nil
+	return coordinatorRef, nil
 }
 
 func getSRCreateParams(ctx context.Context, session *xenapi.Session, data srResourceModel) (srCreateParams, error) {
@@ -147,18 +147,18 @@ func getSRCreateParams(ctx context.Context, session *xenapi.Session, data srReso
 	if diags.HasError() {
 		return params, errors.New("unable to access SR SM config data")
 	}
-	coordinateRef, err := getPoolCoordinateRef(session)
+	coordinatorRef, err := getPoolCoordinatorRef(session)
 	if err != nil {
 		return params, err
 	}
-	params.Host = coordinateRef
+	params.Host = coordinatorRef
 	if !data.Host.IsUnknown() {
 		hostRef, err := xenapi.Host.GetByUUID(session, data.Host.ValueString())
 		if err != nil {
 			return params, errors.New(err.Error())
 		}
 		if params.Shared && hostRef != params.Host {
-			return params, errors.New("shared SR can only created with coordinate host")
+			return params, errors.New("shared SR can only created with coordinator host")
 		}
 		params.Host = hostRef
 	}
@@ -196,7 +196,7 @@ func updateSRResourceModelComputed(ctx context.Context, session *xenapi.Session,
 	if diags.HasError() {
 		return errors.New("unable to access SR SM config")
 	}
-	hostRef, err := getPoolCoordinateRef(session)
+	hostRef, err := getPoolCoordinatorRef(session)
 	if err != nil {
 		return err
 	}
@@ -264,7 +264,7 @@ func unplugPBDs(session *xenapi.Session, pbdRefs []xenapi.PBDRef) error {
 	var allPBDRefsToNonCoordinator []xenapi.PBDRef
 	var allPBDRefsToCoordinator []xenapi.PBDRef
 
-	coordinateRef, err := getPoolCoordinateRef(session)
+	coordinatorRef, err := getPoolCoordinatorRef(session)
 	if err != nil {
 		return err
 	}
@@ -275,7 +275,7 @@ func unplugPBDs(session *xenapi.Session, pbdRefs []xenapi.PBDRef) error {
 			return errors.New(err.Error())
 		}
 		if pbdRecord.CurrentlyAttached {
-			if string(pbdRecord.Host) != "OpaqueRef:NULL" && pbdRecord.Host == coordinateRef {
+			if string(pbdRecord.Host) != "OpaqueRef:NULL" && pbdRecord.Host == coordinatorRef {
 				allPBDRefsToCoordinator = append(allPBDRefsToCoordinator, pbdRef)
 			} else {
 				allPBDRefsToNonCoordinator = append(allPBDRefsToNonCoordinator, pbdRef)
@@ -390,11 +390,11 @@ type nfsResourceModel struct {
 
 func getNFSCreateParams(session *xenapi.Session, data nfsResourceModel) (srCreateParams, error) {
 	var params srCreateParams
-	coordinateRef, err := getPoolCoordinateRef(session)
+	coordinatorRef, err := getPoolCoordinatorRef(session)
 	if err != nil {
 		return params, err
 	}
-	params.Host = coordinateRef
+	params.Host = coordinatorRef
 	params.TypeKey = data.Type.ValueString()
 	deviceConfig := make(map[string]string)
 	storageLocation := strings.Split(data.StorageLocation.ValueString(), ":")
@@ -502,11 +502,11 @@ type smbResourceModel struct {
 
 func getSMBCreateParams(session *xenapi.Session, data smbResourceModel) (srCreateParams, error) {
 	var params srCreateParams
-	coordinateRef, err := getPoolCoordinateRef(session)
+	coordinatorRef, err := getPoolCoordinatorRef(session)
 	if err != nil {
 		return params, err
 	}
-	params.Host = coordinateRef
+	params.Host = coordinatorRef
 	deviceConfig := make(map[string]string)
 	username := strings.TrimSpace(data.Username.ValueString())
 	password := strings.TrimSpace(data.Password.ValueString())
