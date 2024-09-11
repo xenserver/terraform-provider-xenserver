@@ -50,6 +50,12 @@ output "sr_local_out" {
   value = xenserver_sr.local
 }
 
+resource "xenserver_sr_smb" "smb_test" {
+  name_label       = "SMB storage"
+  name_description = "A test SMB storage repository"
+  storage_location = local.env_vars["SMB_SERVER_PATH"]
+}
+
 resource "xenserver_sr" "nfs" {
   name_label = "Test NFS SR"
   type       = "nfs"

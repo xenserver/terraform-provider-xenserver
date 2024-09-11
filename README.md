@@ -56,6 +56,9 @@ export XENSERVER_USERNAME=<username>
 export XENSERVER_PASSWORD=<password>
 export NFS_SERVER=<nfs-server-ip>
 export NFS_SERVER_PATH=<nfs-server-path>
+export SMB_SERVER_PATH=<smb-server-path>
+export SMB_SERVER_USERNAME=<smb-server-username>
+export SMB_SERVER_PASSWORD=<smb-server-password>
 ```
 
 Run `"make testacc"`. *Note:* Acceptance tests create real resources, and often cost money to run.

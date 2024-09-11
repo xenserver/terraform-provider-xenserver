@@ -4,16 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"xenapi"
@@ -21,89 +17,63 @@ import (
 
 // Ensure provider defined types fully satisfy framework interfaces.
 var (
-	_ resource.Resource                = &srResource{}
-	_ resource.ResourceWithConfigure   = &srResource{}
-	_ resource.ResourceWithImportState = &srResource{}
+	_ resource.Resource                = &smbResource{}
+	_ resource.ResourceWithConfigure   = &smbResource{}
+	_ resource.ResourceWithImportState = &smbResource{}
 )
 
-func NewSRResource() resource.Resource {
-	return &srResource{}
+func NewSMBResource() resource.Resource {
+	return &smbResource{}
 }
 
-// srResource defines the resource implementation.
-type srResource struct {
+// smbResource defines the resource implementation.
+type smbResource struct {
 	session *xenapi.Session
 }
 
-func (r *srResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_sr"
+func (r *smbResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_sr_smb"
 }
 
-func (r *srResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *smbResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Provides a general storage repository resource.",
+		MarkdownDescription: "Provides an SMB storage repository resource.",
 		Attributes: map[string]schema.Attribute{
 			"name_label": schema.StringAttribute{
-				MarkdownDescription: "The name of the storage repository.",
+				MarkdownDescription: "The name of the SMB storage repository.",
 				Required:            true,
 			},
 			"name_description": schema.StringAttribute{
-				MarkdownDescription: "The description of the storage repository, default to be `\"\"`.",
+				MarkdownDescription: "The description of the SMB storage repository, default to be `\"\"`.",
 				Optional:            true,
 				Computed:            true,
 				Default:             stringdefault.StaticString(""),
 			},
-			"type": schema.StringAttribute{
-				MarkdownDescription: "The type of the storage repository, default to be `\"dummy\"`." +
-					"\n\n-> **Note:** `type` is not allowed to be updated.",
-				Optional: true,
-				Computed: true,
-				Default:  stringdefault.StaticString("dummy"),
+			"storage_location": schema.StringAttribute{
+				MarkdownDescription: "The server and server path of the SMB storage repository." + "<br />" +
+					"Follow the format `\"\\\\\\\\server\\\\path\"`." +
+					"\n\n-> **Note:** `storage_location` is not allowed to be updated.",
+				Required: true,
 			},
-			"content_type": schema.StringAttribute{
-				MarkdownDescription: "The type of the SR's content, if required (for example. \"ISOs\"), default to be `\"\"`." +
-					"\n\n-> **Note:** `content_type` is not allowed to be updated.",
-				Optional: true,
-				Computed: true,
-				Default:  stringdefault.StaticString(""),
-			},
-			"shared": schema.BoolAttribute{
-				MarkdownDescription: "True if this SR is (capable of being) shared between multiple hosts, default to be `false`." +
-					"\n\n-> **Note:** `shared` is not allowed to be updated.",
-				Optional: true,
-				Computed: true,
-				Default:  booldefault.StaticBool(false),
-			},
-			"sm_config": schema.MapAttribute{
-				MarkdownDescription: "The SM dependent data, default to be `{}`.",
+			"username": schema.StringAttribute{
+				MarkdownDescription: "The username of the SMB storage repository. Used when creating the SR.",
 				Optional:            true,
-				Computed:            true,
-				Default:             mapdefault.StaticValue(types.MapValueMust(types.StringType, map[string]attr.Value{})),
-				ElementType:         types.StringType,
 			},
-			"device_config": schema.MapAttribute{
-				MarkdownDescription: "The device config that will be passed to backend SR driver, default to be `{}`." +
-					"\n\n-> **Note:** `device_config` is not allowed to be updated.",
-				Optional:    true,
-				Computed:    true,
-				Default:     mapdefault.StaticValue(types.MapValueMust(types.StringType, map[string]attr.Value{})),
-				ElementType: types.StringType,
-			},
-			"host": schema.StringAttribute{
-				MarkdownDescription: "The UUID of the host to create/make the SR on, default to use the pool coordinator." +
-					"\n\n-> **Note:** `host` is not allowed to be updated.",
-				Optional: true,
-				Computed: true,
+			"password": schema.StringAttribute{
+				MarkdownDescription: "The password of the SMB storage repository. Used when creating the SR." +
+					"\n\n-> **Note:** This password will be stored in terraform state file, follow document [Sensitive values in state](https://developer.hashicorp.com/terraform/tutorials/configuration-language/sensitive-variables#sensitive-values-in-state) to protect your sensitive data.",
+				Optional:  true,
+				Sensitive: true,
 			},
 			"uuid": schema.StringAttribute{
-				MarkdownDescription: "The UUID of the storage repository.",
+				MarkdownDescription: "The UUID of the SMB storage repository.",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"id": schema.StringAttribute{
-				MarkdownDescription: "The test ID of the storage repository.",
+				MarkdownDescription: "The test ID of the SMB storage repository.",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -114,7 +84,7 @@ func (r *srResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *r
 }
 
 // Set the parameter of the resource, pass value from provider
-func (r *srResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (r *smbResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// Prevent panic if the provider has not been configured.
 	if req.ProviderData == nil {
 		return
@@ -130,15 +100,15 @@ func (r *srResource) Configure(_ context.Context, req resource.ConfigureRequest,
 	r.session = session
 }
 
-func (r *srResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data srResourceModel
+func (r *smbResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	var data smbResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	tflog.Debug(ctx, "Creating SR ...")
-	params, err := getSRCreateParams(ctx, r.session, data)
+	tflog.Debug(ctx, "Creating SMB SR...")
+	params, err := getSMBCreateParams(r.session, data)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to get SR create params",
@@ -154,10 +124,10 @@ func (r *srResource) Create(ctx context.Context, req resource.CreateRequest, res
 		)
 		return
 	}
-	srRecord, pbdRecord, err := getSRRecordAndPBDRecord(r.session, srRef)
+	srRecord, _, err := getSRRecordAndPBDRecord(r.session, srRef)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to get SR or PBDrecord",
+			"Unable to get SR or PBD record",
 			err.Error(),
 		)
 		err = cleanupSRResource(r.session, srRef)
@@ -169,10 +139,10 @@ func (r *srResource) Create(ctx context.Context, req resource.CreateRequest, res
 		}
 		return
 	}
-	err = updateSRResourceModelComputed(ctx, r.session, srRecord, pbdRecord, &data)
+	err = updateSMBResourceModelComputed(srRecord, &data)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to update the computed fields of SRResourceModel",
+			"Unable to update the computed fields of SMBResourceModel",
 			err.Error(),
 		)
 		err = cleanupSRResource(r.session, srRef)
@@ -184,15 +154,15 @@ func (r *srResource) Create(ctx context.Context, req resource.CreateRequest, res
 		}
 		return
 	}
-	tflog.Debug(ctx, "SR created")
+	tflog.Debug(ctx, "SMB SR created")
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 // Read data from State, retrieve the resource's information, update to State
 // terraform import
-func (r *srResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data srResourceModel
+func (r *smbResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var data smbResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -215,10 +185,10 @@ func (r *srResource) Read(ctx context.Context, req resource.ReadRequest, resp *r
 		)
 		return
 	}
-	err = updateSRResourceModel(ctx, r.session, srRecord, pbdRecord, &data)
+	err = updateSMBResourceModel(srRecord, pbdRecord, &data)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to update the fields of SRResourceModel",
+			"Unable to update the fields of SMBResourceModel",
 			err.Error(),
 		)
 		return
@@ -227,8 +197,8 @@ func (r *srResource) Read(ctx context.Context, req resource.ReadRequest, resp *r
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (r *srResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var plan, state srResourceModel
+func (r *smbResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var plan, state smbResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -239,10 +209,10 @@ func (r *srResource) Update(ctx context.Context, req resource.UpdateRequest, res
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	err := srResourceModelUpdateCheck(plan, state)
+	err := smbResourceModelUpdateCheck(plan, state)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error update xenserver_sr configuration",
+			"Error update xenserver_sr_smb configuration",
 			err.Error(),
 		)
 		return
@@ -257,15 +227,15 @@ func (r *srResource) Update(ctx context.Context, req resource.UpdateRequest, res
 		)
 		return
 	}
-	err = srResourceModelUpdate(ctx, r.session, srRef, plan)
+	err = smbResourceModelUpdate(r.session, srRef, plan)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to update SR resource",
+			"Unable to update SMB SR resource",
 			err.Error(),
 		)
 		return
 	}
-	srRecord, pbdRecord, err := getSRRecordAndPBDRecord(r.session, srRef)
+	srRecord, _, err := getSRRecordAndPBDRecord(r.session, srRef)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to get SR or PBDrecord",
@@ -273,10 +243,10 @@ func (r *srResource) Update(ctx context.Context, req resource.UpdateRequest, res
 		)
 		return
 	}
-	err = updateSRResourceModelComputed(ctx, r.session, srRecord, pbdRecord, &plan)
+	err = updateSMBResourceModelComputed(srRecord, &plan)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to update the computed fields of SRResourceModel",
+			"Unable to update the computed fields of SMBResourceModel",
 			err.Error(),
 		)
 		return
@@ -285,8 +255,8 @@ func (r *srResource) Update(ctx context.Context, req resource.UpdateRequest, res
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func (r *srResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data srResourceModel
+func (r *smbResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var data smbResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -303,13 +273,13 @@ func (r *srResource) Delete(ctx context.Context, req resource.DeleteRequest, res
 	err = cleanupSRResource(r.session, srRef)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to delete NFS SR",
+			"Unable to delete SMB SR",
 			err.Error(),
 		)
 		return
 	}
 }
 
-func (r *srResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+func (r *smbResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("uuid"), req, resp)
 }
