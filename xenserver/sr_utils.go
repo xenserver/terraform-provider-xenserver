@@ -279,6 +279,71 @@ func cleanupSRResource(session *xenapi.Session, ref xenapi.SRRef) error {
 	return nil
 }
 
+func createSRResource(session *xenapi.Session, params srCreateParams) (xenapi.SRRef, error) {
+	var srRef xenapi.SRRef
+	// Create secret for password
+	var secretRef xenapi.SecretRef
+	keys := []string{"cifspassword", "password", "chappassword"}
+	if params.DeviceConfig != nil {
+		for _, key := range keys {
+			value, exists := params.DeviceConfig[key]
+			if exists {
+				delete(params.DeviceConfig, key)
+				secretRecord := xenapi.SecretRecord{Value: value}
+				secretRef, err := xenapi.Secret.Create(session, secretRecord)
+				if err != nil {
+					return srRef, errors.New(err.Error())
+				}
+				secretUUID, err := xenapi.Secret.GetUUID(session, secretRef)
+				if err != nil {
+					return srRef, errors.New(err.Error())
+				}
+				params.DeviceConfig[key+"_secret"] = secretUUID
+				break
+			}
+		}
+	}
+	// Create SR
+	srRef, err := xenapi.SR.Create(session, params.Host, params.DeviceConfig, params.PhysicalSize, params.NameLabel, params.NameDescription, params.TypeKey, params.ContentType, params.Shared, params.SmConfig)
+	if err != nil {
+		errDestroy := xenapi.Secret.Destroy(session, secretRef)
+		if errDestroy != nil {
+			return srRef, errors.New(err.Error() + "\n" + errDestroy.Error())
+		}
+		return srRef, errors.New(err.Error())
+	}
+	// Checking that SR.Create actually succeeded
+	pbdRefs, err := xenapi.SR.GetPBDs(session, srRef)
+	if err != nil {
+		return srRef, errors.New(err.Error())
+	}
+	for _, pbdRef := range pbdRefs {
+		currentlyAttached, err := xenapi.PBD.GetCurrentlyAttached(session, pbdRef)
+		if err != nil {
+			return srRef, errors.New(err.Error())
+		}
+		if !currentlyAttached {
+			err = xenapi.PBD.Plug(session, pbdRef)
+			if err != nil {
+				return srRef, errors.New(err.Error())
+			}
+		}
+	}
+	otherConfig, err := xenapi.SR.GetOtherConfig(session, srRef)
+	if err != nil {
+		return srRef, errors.New(err.Error())
+	}
+	otherConfig["auto-scan"] = "false"
+	if params.ContentType == "iso" {
+		otherConfig["auto-scan"] = "true"
+	}
+	err = xenapi.SR.SetOtherConfig(session, srRef, otherConfig)
+	if err != nil {
+		return srRef, errors.New(err.Error())
+	}
+	return srRef, nil
+}
+
 type nfsResourceModel struct {
 	NameLabel       types.String `tfsdk:"name_label"`
 	NameDescription types.String `tfsdk:"name_description"`
@@ -360,6 +425,93 @@ func nfsResourceModelUpdateCheck(data nfsResourceModel, dataState nfsResourceMod
 }
 
 func nfsResourceModelUpdate(session *xenapi.Session, ref xenapi.SRRef, data nfsResourceModel) error {
+	err := xenapi.SR.SetNameLabel(session, ref, data.NameLabel.ValueString())
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	err = xenapi.SR.SetNameDescription(session, ref, data.NameDescription.ValueString())
+	if err != nil {
+		return errors.New(err.Error())
+	}
+
+	return nil
+}
+
+type smbResourceModel struct {
+	NameLabel       types.String `tfsdk:"name_label"`
+	NameDescription types.String `tfsdk:"name_description"`
+	StorageLocation types.String `tfsdk:"storage_location"`
+	Username        types.String `tfsdk:"username"`
+	Password        types.String `tfsdk:"password"`
+	UUID            types.String `tfsdk:"uuid"`
+	ID              types.String `tfsdk:"id"`
+}
+
+func getSMBCreateParams(session *xenapi.Session, data smbResourceModel) (srCreateParams, error) {
+	var params srCreateParams
+	coordinateRef, err := getPoolCoordinateRef(session)
+	if err != nil {
+		return params, err
+	}
+	params.Host = coordinateRef
+	deviceConfig := make(map[string]string)
+	storageLocation := strings.Split(strings.TrimSpace(data.StorageLocation.ValueString()), ":")
+	deviceConfig["server"] = storageLocation[0]
+	if len(storageLocation) > 1 {
+		deviceConfig["serverpath"] = storageLocation[1]
+	}
+	deviceConfig["username"] = "default"
+	deviceConfig["password"] = "default"
+	username := strings.TrimSpace(data.Username.ValueString())
+	password := strings.TrimSpace(data.Password.ValueString())
+	if username != "" {
+		deviceConfig["username"] = username
+	}
+	if password != "" {
+		deviceConfig["password"] = password
+	}
+	params.DeviceConfig = deviceConfig
+	params.NameLabel = data.NameLabel.ValueString()
+	params.NameDescription = data.NameDescription.ValueString()
+	params.TypeKey = "smb"
+	params.Shared = true
+	params.SmConfig = make(map[string]string)
+
+	return params, nil
+}
+
+func updateSMBResourceModel(srRecord xenapi.SRRecord, pbdRecord xenapi.PBDRecord, data *smbResourceModel) error {
+	data.NameLabel = types.StringValue(srRecord.NameLabel)
+	server, ok := pbdRecord.DeviceConfig["server"]
+	if !ok {
+		return errors.New(`unable to find "server" in PBD device config`)
+	}
+	data.StorageLocation = types.StringValue(server)
+	serverPath, ok := pbdRecord.DeviceConfig["serverpath"]
+	if ok && serverPath != "" {
+		data.StorageLocation = types.StringValue(server + ":" + serverPath)
+	}
+	err := updateSMBResourceModelComputed(srRecord, data)
+
+	return err
+}
+
+func updateSMBResourceModelComputed(srRecord xenapi.SRRecord, data *smbResourceModel) error {
+	data.UUID = types.StringValue(srRecord.UUID)
+	data.ID = types.StringValue(srRecord.UUID)
+	data.NameDescription = types.StringValue(srRecord.NameDescription)
+
+	return nil
+}
+
+func smbResourceModelUpdateCheck(data smbResourceModel, dataState smbResourceModel) error {
+	if data.StorageLocation != dataState.StorageLocation {
+		return errors.New(`"storage_location" doesn't expected to be updated`)
+	}
+	return nil
+}
+
+func smbResourceModelUpdate(session *xenapi.Session, ref xenapi.SRRef, data smbResourceModel) error {
 	err := xenapi.SR.SetNameLabel(session, ref, data.NameLabel.ValueString())
 	if err != nil {
 		return errors.New(err.Error())

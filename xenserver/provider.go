@@ -192,6 +192,7 @@ func (p *xsProvider) Resources(_ context.Context) []func() resource.Resource {
 		NewVMResource,
 		NewSRResource,
 		NewNFSResource,
+		NewSMBResource,
 		NewVDIResource,
 		NewVlanResource,
 		NewSnapshotResource,

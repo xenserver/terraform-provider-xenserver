@@ -124,7 +124,7 @@ func (r *nfsResource) Create(ctx context.Context, req resource.CreateRequest, re
 		)
 		return
 	}
-	srRef, err := xenapi.SR.Create(r.session, params.Host, params.DeviceConfig, params.PhysicalSize, params.NameLabel, params.NameDescription, params.TypeKey, params.ContentType, params.Shared, params.SmConfig)
+	srRef, err := createSRResource(r.session, params)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to create SR",
