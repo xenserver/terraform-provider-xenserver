@@ -56,6 +56,13 @@ resource "xenserver_sr_smb" "smb_test" {
   storage_location = local.env_vars["SMB_SERVER_PATH"]
 }
 
+resource "xenserver_sr_smb" "smb_iso_test" {
+  name_label       = "SMB ISO library"
+  name_description = "A test SMB ISO library"
+  type             = "iso"
+  storage_location = local.env_vars["SMB_SERVER_PATH"]
+}
+
 resource "xenserver_sr" "nfs" {
   name_label = "Test NFS SR"
   type       = "nfs"
@@ -68,6 +75,14 @@ resource "xenserver_sr" "nfs" {
 
 output "sr_nfs_out" {
   value = xenserver_sr.nfs
+}
+
+resource "xenserver_sr_nfs" "nfs_iso_test" {
+  name_label       = "NFS ISO library"
+  name_description = "A test NFS ISO library description"
+  type             = "iso"
+  version          = "4"
+  storage_location = format("%s:%s", local.env_vars["NFS_SERVER"], local.env_vars["NFS_SERVER_PATH"])
 }
 
 resource "xenserver_sr_nfs" "nfs_test" {

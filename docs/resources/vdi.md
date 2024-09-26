@@ -18,7 +18,7 @@ resource "xenserver_sr_nfs" "nfs" {
   name_label       = "Test NFS SR"
   name_description = "A test NFS storage repository"
   version          = "3"
-  storage_location = "1.1.1.1:/server/path"
+  storage_location = "10.1.1.1:/server/path"
 }
 
 resource "xenserver_vdi" "vdi" {

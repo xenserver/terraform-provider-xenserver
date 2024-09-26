@@ -17,7 +17,15 @@ resource "xenserver_sr_nfs" "nfs_test" {
   name_label       = "NFS virtual disk storage"
   name_description = "A test NFS storage repository"
   version          = "3"
-  storage_location = "1.1.1.1:/server/path"
+  storage_location = "server:/path"
+}
+
+resource "xenserver_sr_nfs" "nfs_iso_test" {
+  name_label       = "NFS ISO library"
+  name_description = "A test NFS ISO library"
+  type             = "iso"
+  version          = "4"
+  storage_location = "server:/path"
 }
 ```
 
@@ -27,7 +35,7 @@ resource "xenserver_sr_nfs" "nfs_test" {
 ### Required
 
 - `name_label` (String) The name of the NFS storage repository.
-- `storage_location` (String) The server and server path of the NFS storage repository.<br />Follow the format `"1.1.1.1:/server/path"`.
+- `storage_location` (String) The server and server path of the NFS storage repository.<br />Follow the format `"server:/path"`.
 
 -> **Note:** `storage_location` is not allowed to be updated.
 - `version` (String) The version of NFS storage repository.<br />Can be set as `"3"` or `"4"`.
@@ -40,6 +48,9 @@ resource "xenserver_sr_nfs" "nfs_test" {
 
 -> **Note:** `advanced_options` is not allowed to be updated.
 - `name_description` (String) The description of the NFS storage repository, default to be `""`.
+- `type` (String) The type of the NFS storage repository, default to be `"nfs"`.<br />Can be set as `"nfs"` or `"iso"`.
+
+-> **Note:** `type` is not allowed to be updated.
 
 ### Read-Only
 

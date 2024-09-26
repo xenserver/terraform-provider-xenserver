@@ -51,9 +51,20 @@ func (r *nfsResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 				Computed:            true,
 				Default:             stringdefault.StaticString(""),
 			},
+			"type": schema.StringAttribute{
+				MarkdownDescription: "The type of the NFS storage repository, default to be `\"nfs\"`." + "<br />" +
+					"Can be set as `\"nfs\"` or `\"iso\"`." +
+					"\n\n-> **Note:** `type` is not allowed to be updated.",
+				Optional: true,
+				Computed: true,
+				Default:  stringdefault.StaticString("nfs"),
+				Validators: []validator.String{
+					stringvalidator.OneOf("nfs", "iso"),
+				},
+			},
 			"storage_location": schema.StringAttribute{
 				MarkdownDescription: "The server and server path of the NFS storage repository." + "<br />" +
-					"Follow the format `\"1.1.1.1:/server/path\"`." +
+					"Follow the format `\"server:/path\"`." +
 					"\n\n-> **Note:** `storage_location` is not allowed to be updated.",
 				Required: true,
 			},
