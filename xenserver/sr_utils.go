@@ -120,11 +120,12 @@ type srResourceModel struct {
 }
 
 func getPoolCoordinateRef(session *xenapi.Session) (xenapi.HostRef, error) {
+	var coordinateRef xenapi.HostRef
 	poolRefs, err := xenapi.Pool.GetAll(session)
 	if err != nil {
-		return xenapi.HostRef(""), errors.New(err.Error())
+		return coordinateRef, errors.New(err.Error())
 	}
-	coordinateRef, err := xenapi.Pool.GetMaster(session, poolRefs[0])
+	coordinateRef, err = xenapi.Pool.GetMaster(session, poolRefs[0])
 	if err != nil {
 		return coordinateRef, errors.New(err.Error())
 	}
@@ -255,24 +256,56 @@ func srResourceModelUpdate(ctx context.Context, session *xenapi.Session, ref xen
 	return nil
 }
 
-func cleanupSRResource(session *xenapi.Session, ref xenapi.SRRef) error {
-	pbdRefs, err := xenapi.SR.GetPBDs(session, ref)
-	if err != nil {
-		return errors.New(err.Error())
+func unplugPBDs(session *xenapi.Session, pbdRefs []xenapi.PBDRef) error {
+	if len(pbdRefs) == 0 {
+		return nil
 	}
+
+	var allPBDRefsToNonCoordinator []xenapi.PBDRef
+	var allPBDRefsToCoordinator []xenapi.PBDRef
+
+	coordinateRef, err := getPoolCoordinateRef(session)
+	if err != nil {
+		return err
+	}
+	// Need to run Unplug for the coordinator last
 	for _, pbdRef := range pbdRefs {
 		pbdRecord, err := xenapi.PBD.GetRecord(session, pbdRef)
 		if err != nil {
 			return errors.New(err.Error())
 		}
 		if pbdRecord.CurrentlyAttached {
-			err = xenapi.PBD.Unplug(session, pbdRef)
-			if err != nil {
-				return errors.New(err.Error())
+			if string(pbdRecord.Host) != "OpaqueRef:NULL" && pbdRecord.Host == coordinateRef {
+				allPBDRefsToCoordinator = append(allPBDRefsToCoordinator, pbdRef)
+			} else {
+				allPBDRefsToNonCoordinator = append(allPBDRefsToNonCoordinator, pbdRef)
 			}
 		}
 	}
-	err = xenapi.SR.Destroy(session, ref)
+
+	var allPBDRefs []xenapi.PBDRef
+	allPBDRefs = append(allPBDRefs, allPBDRefsToNonCoordinator...)
+	allPBDRefs = append(allPBDRefs, allPBDRefsToCoordinator...)
+	for _, pbdRef := range allPBDRefs {
+		err = xenapi.PBD.Unplug(session, pbdRef)
+		if err != nil {
+			return errors.New(err.Error())
+		}
+	}
+
+	return nil
+}
+
+func cleanupSRResource(session *xenapi.Session, ref xenapi.SRRef) error {
+	pbdRefs, err := xenapi.SR.GetPBDs(session, ref)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	err = unplugPBDs(session, pbdRefs)
+	if err != nil {
+		return err
+	}
+	err = xenapi.SR.Forget(session, ref)
 	if err != nil {
 		return errors.New(err.Error())
 	}
