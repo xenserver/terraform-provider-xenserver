@@ -120,11 +120,12 @@ type srResourceModel struct {
 }
 
 func getPoolCoordinateRef(session *xenapi.Session) (xenapi.HostRef, error) {
+	var coordinateRef xenapi.HostRef
 	poolRefs, err := xenapi.Pool.GetAll(session)
 	if err != nil {
-		return xenapi.HostRef(""), errors.New(err.Error())
+		return coordinateRef, errors.New(err.Error())
 	}
-	coordinateRef, err := xenapi.Pool.GetMaster(session, poolRefs[0])
+	coordinateRef, err = xenapi.Pool.GetMaster(session, poolRefs[0])
 	if err != nil {
 		return coordinateRef, errors.New(err.Error())
 	}
@@ -255,24 +256,56 @@ func srResourceModelUpdate(ctx context.Context, session *xenapi.Session, ref xen
 	return nil
 }
 
-func cleanupSRResource(session *xenapi.Session, ref xenapi.SRRef) error {
-	pbdRefs, err := xenapi.SR.GetPBDs(session, ref)
-	if err != nil {
-		return errors.New(err.Error())
+func unplugPBDs(session *xenapi.Session, pbdRefs []xenapi.PBDRef) error {
+	if len(pbdRefs) == 0 {
+		return nil
 	}
+
+	var allPBDRefsToNonCoordinator []xenapi.PBDRef
+	var allPBDRefsToCoordinator []xenapi.PBDRef
+
+	coordinateRef, err := getPoolCoordinateRef(session)
+	if err != nil {
+		return err
+	}
+	// Need to run Unplug for the coordinator last
 	for _, pbdRef := range pbdRefs {
 		pbdRecord, err := xenapi.PBD.GetRecord(session, pbdRef)
 		if err != nil {
 			return errors.New(err.Error())
 		}
 		if pbdRecord.CurrentlyAttached {
-			err = xenapi.PBD.Unplug(session, pbdRef)
-			if err != nil {
-				return errors.New(err.Error())
+			if string(pbdRecord.Host) != "OpaqueRef:NULL" && pbdRecord.Host == coordinateRef {
+				allPBDRefsToCoordinator = append(allPBDRefsToCoordinator, pbdRef)
+			} else {
+				allPBDRefsToNonCoordinator = append(allPBDRefsToNonCoordinator, pbdRef)
 			}
 		}
 	}
-	err = xenapi.SR.Destroy(session, ref)
+
+	var allPBDRefs []xenapi.PBDRef
+	allPBDRefs = append(allPBDRefs, allPBDRefsToNonCoordinator...)
+	allPBDRefs = append(allPBDRefs, allPBDRefsToCoordinator...)
+	for _, pbdRef := range allPBDRefs {
+		err = xenapi.PBD.Unplug(session, pbdRef)
+		if err != nil {
+			return errors.New(err.Error())
+		}
+	}
+
+	return nil
+}
+
+func cleanupSRResource(session *xenapi.Session, ref xenapi.SRRef) error {
+	pbdRefs, err := xenapi.SR.GetPBDs(session, ref)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	err = unplugPBDs(session, pbdRefs)
+	if err != nil {
+		return err
+	}
+	err = xenapi.SR.Forget(session, ref)
 	if err != nil {
 		return errors.New(err.Error())
 	}
@@ -347,6 +380,7 @@ func createSRResource(session *xenapi.Session, params srCreateParams) (xenapi.SR
 type nfsResourceModel struct {
 	NameLabel       types.String `tfsdk:"name_label"`
 	NameDescription types.String `tfsdk:"name_description"`
+	Type            types.String `tfsdk:"type"`
 	StorageLocation types.String `tfsdk:"storage_location"`
 	Version         types.String `tfsdk:"version"`
 	AdvancedOptions types.String `tfsdk:"advanced_options"`
@@ -361,16 +395,22 @@ func getNFSCreateParams(session *xenapi.Session, data nfsResourceModel) (srCreat
 		return params, err
 	}
 	params.Host = coordinateRef
+	params.TypeKey = data.Type.ValueString()
 	deviceConfig := make(map[string]string)
 	storageLocation := strings.Split(data.StorageLocation.ValueString(), ":")
-	deviceConfig["server"] = strings.TrimSpace(storageLocation[0])
-	deviceConfig["serverpath"] = strings.TrimSpace(strings.Join(storageLocation[1:], ":"))
-	deviceConfig["nfsversion"] = data.Version.ValueString()
+	if params.TypeKey == "iso" {
+		params.ContentType = "iso"
+		deviceConfig["location"] = strings.TrimSpace(data.StorageLocation.ValueString())
+		deviceConfig["type"] = "nfs_iso"
+	} else {
+		deviceConfig["server"] = strings.TrimSpace(storageLocation[0])
+		deviceConfig["serverpath"] = strings.TrimSpace(strings.Join(storageLocation[1:], ":"))
+	}
 	deviceConfig["options"] = data.AdvancedOptions.ValueString()
+	deviceConfig["nfsversion"] = data.Version.ValueString()
 	params.DeviceConfig = deviceConfig
 	params.NameLabel = data.NameLabel.ValueString()
 	params.NameDescription = data.NameDescription.ValueString()
-	params.TypeKey = "nfs"
 	params.Shared = true
 	params.SmConfig = make(map[string]string)
 
@@ -379,15 +419,23 @@ func getNFSCreateParams(session *xenapi.Session, data nfsResourceModel) (srCreat
 
 func updateNFSResourceModel(srRecord xenapi.SRRecord, pbdRecord xenapi.PBDRecord, data *nfsResourceModel) error {
 	data.NameLabel = types.StringValue(srRecord.NameLabel)
-	server, ok := pbdRecord.DeviceConfig["server"]
-	if !ok {
-		return errors.New(`unable to find "server" in PBD device config`)
+	if srRecord.Type == "iso" {
+		location, ok := pbdRecord.DeviceConfig["location"]
+		if !ok {
+			return errors.New(`unable to find "location" in PBD device config`)
+		}
+		data.StorageLocation = types.StringValue(location)
+	} else {
+		server, ok := pbdRecord.DeviceConfig["server"]
+		if !ok {
+			return errors.New(`unable to find "server" in PBD device config`)
+		}
+		serverPath, ok := pbdRecord.DeviceConfig["serverpath"]
+		if !ok {
+			return errors.New(`unable to find "serverpath" in PBD device config`)
+		}
+		data.StorageLocation = types.StringValue(server + ":" + serverPath)
 	}
-	serverPath, ok := pbdRecord.DeviceConfig["serverpath"]
-	if !ok {
-		return errors.New(`unable to find "serverpath" in PBD device config`)
-	}
-	data.StorageLocation = types.StringValue(server + ":" + serverPath)
 	nfsVersion, ok := pbdRecord.DeviceConfig["nfsversion"]
 	if !ok {
 		return errors.New(`unable to find "nfsversion" in PBD device config`)
@@ -402,6 +450,7 @@ func updateNFSResourceModelComputed(srRecord xenapi.SRRecord, pbdRecord xenapi.P
 	data.UUID = types.StringValue(srRecord.UUID)
 	data.ID = types.StringValue(srRecord.UUID)
 	data.NameDescription = types.StringValue(srRecord.NameDescription)
+	data.Type = types.StringValue(srRecord.Type)
 	advancedOptions, ok := pbdRecord.DeviceConfig["options"]
 	if !ok {
 		data.AdvancedOptions = types.StringValue("")
@@ -412,7 +461,10 @@ func updateNFSResourceModelComputed(srRecord xenapi.SRRecord, pbdRecord xenapi.P
 }
 
 func nfsResourceModelUpdateCheck(data nfsResourceModel, dataState nfsResourceModel) error {
-	if data.StorageLocation != dataState.StorageLocation {
+	if data.Type != dataState.Type {
+		return errors.New(`"type" doesn't expected to be updated`)
+	}
+	if strings.TrimSpace(data.StorageLocation.ValueString()) != strings.TrimSpace(dataState.StorageLocation.ValueString()) {
 		return errors.New(`"storage_location" doesn't expected to be updated`)
 	}
 	if data.Version != dataState.Version {
@@ -440,6 +492,7 @@ func nfsResourceModelUpdate(session *xenapi.Session, ref xenapi.SRRef, data nfsR
 type smbResourceModel struct {
 	NameLabel       types.String `tfsdk:"name_label"`
 	NameDescription types.String `tfsdk:"name_description"`
+	Type            types.String `tfsdk:"type"`
 	StorageLocation types.String `tfsdk:"storage_location"`
 	Username        types.String `tfsdk:"username"`
 	Password        types.String `tfsdk:"password"`
@@ -455,25 +508,40 @@ func getSMBCreateParams(session *xenapi.Session, data smbResourceModel) (srCreat
 	}
 	params.Host = coordinateRef
 	deviceConfig := make(map[string]string)
-	storageLocation := strings.Split(strings.TrimSpace(data.StorageLocation.ValueString()), ":")
-	deviceConfig["server"] = storageLocation[0]
-	if len(storageLocation) > 1 {
-		deviceConfig["serverpath"] = storageLocation[1]
-	}
-	deviceConfig["username"] = "default"
-	deviceConfig["password"] = "default"
 	username := strings.TrimSpace(data.Username.ValueString())
 	password := strings.TrimSpace(data.Password.ValueString())
-	if username != "" {
-		deviceConfig["username"] = username
-	}
-	if password != "" {
-		deviceConfig["password"] = password
+	storageLocation := strings.Split(strings.TrimSpace(data.StorageLocation.ValueString()), ":")
+	params.TypeKey = data.Type.ValueString()
+	if params.TypeKey == "iso" {
+		params.ContentType = "iso"
+		deviceConfig["location"] = strings.ReplaceAll(storageLocation[0], "\\", "/")
+		bits := strings.Split(deviceConfig["location"], "/")
+		if len(bits) > 4 {
+			deviceConfig["location"] = "//" + bits[2] + "/" + bits[3]
+			deviceConfig["iso_path"] = "/" + strings.Join(bits[4:], "/")
+		}
+		deviceConfig["type"] = "cifs"
+		if username != "" {
+			deviceConfig["username"] = username
+		}
+		if password != "" {
+			deviceConfig["cifspassword"] = password
+		}
+	} else {
+		deviceConfig["server"] = storageLocation[0]
+		if len(storageLocation) > 1 {
+			deviceConfig["serverpath"] = storageLocation[1]
+		}
+		if username != "" {
+			deviceConfig["username"] = username
+		}
+		if password != "" {
+			deviceConfig["password"] = password
+		}
 	}
 	params.DeviceConfig = deviceConfig
 	params.NameLabel = data.NameLabel.ValueString()
 	params.NameDescription = data.NameDescription.ValueString()
-	params.TypeKey = "smb"
 	params.Shared = true
 	params.SmConfig = make(map[string]string)
 
@@ -482,14 +550,27 @@ func getSMBCreateParams(session *xenapi.Session, data smbResourceModel) (srCreat
 
 func updateSMBResourceModel(srRecord xenapi.SRRecord, pbdRecord xenapi.PBDRecord, data *smbResourceModel) error {
 	data.NameLabel = types.StringValue(srRecord.NameLabel)
-	server, ok := pbdRecord.DeviceConfig["server"]
-	if !ok {
-		return errors.New(`unable to find "server" in PBD device config`)
-	}
-	data.StorageLocation = types.StringValue(server)
-	serverPath, ok := pbdRecord.DeviceConfig["serverpath"]
-	if ok && serverPath != "" {
-		data.StorageLocation = types.StringValue(server + ":" + serverPath)
+	if srRecord.Type == "iso" {
+		location, ok := pbdRecord.DeviceConfig["location"]
+		if !ok {
+			return errors.New(`unable to find "location" in PBD device config`)
+		}
+		isoPath, ok := pbdRecord.DeviceConfig["iso_path"]
+		if ok && isoPath != "" {
+			location += isoPath
+		}
+		location = strings.ReplaceAll(location, "/", "\\")
+		data.StorageLocation = types.StringValue(location)
+	} else {
+		server, ok := pbdRecord.DeviceConfig["server"]
+		if !ok {
+			return errors.New(`unable to find "server" in PBD device config`)
+		}
+		data.StorageLocation = types.StringValue(server)
+		serverPath, ok := pbdRecord.DeviceConfig["serverpath"]
+		if ok && serverPath != "" {
+			data.StorageLocation = types.StringValue(server + ":" + serverPath)
+		}
 	}
 	err := updateSMBResourceModelComputed(srRecord, data)
 
@@ -500,12 +581,16 @@ func updateSMBResourceModelComputed(srRecord xenapi.SRRecord, data *smbResourceM
 	data.UUID = types.StringValue(srRecord.UUID)
 	data.ID = types.StringValue(srRecord.UUID)
 	data.NameDescription = types.StringValue(srRecord.NameDescription)
+	data.Type = types.StringValue(srRecord.Type)
 
 	return nil
 }
 
 func smbResourceModelUpdateCheck(data smbResourceModel, dataState smbResourceModel) error {
-	if data.StorageLocation != dataState.StorageLocation {
+	if data.Type != dataState.Type {
+		return errors.New(`"type" doesn't expected to be updated`)
+	}
+	if strings.TrimSpace(data.StorageLocation.ValueString()) != strings.TrimSpace(dataState.StorageLocation.ValueString()) {
 		return errors.New(`"storage_location" doesn't expected to be updated`)
 	}
 	return nil

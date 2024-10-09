@@ -29,8 +29,8 @@ resource "xenserver_sr" "nfs" {
   content_type = ""
   shared       = true
   device_config = {
-    server     = "1.1.1.1"
-    serverpath = "/server/path"
+    server     = "10.1.1.1"
+    serverpath = "/path"
     nfsversion = "3"
   }
   sm_config = {

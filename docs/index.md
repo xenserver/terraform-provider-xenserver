@@ -13,7 +13,7 @@ The XenServer provider can be used to manage and deploy XenServer resources. Bef
 
 ```terraform
 provider "xenserver" {
-  host     = "https://1.1.1.1"
+  host     = "https://10.1.1.1"
   username = "root"
   password = "test123"
 }

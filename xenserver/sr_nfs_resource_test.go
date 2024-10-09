@@ -36,6 +36,7 @@ func TestAccNFSResource(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("xenserver_sr_nfs.test_nfs", "name_label", "Test NFS storage repository"),
 					resource.TestCheckResourceAttr("xenserver_sr_nfs.test_nfs", "name_description", ""),
+					resource.TestCheckResourceAttr("xenserver_sr_nfs.test_nfs", "type", "nfs"),
 					resource.TestCheckResourceAttr("xenserver_sr_nfs.test_nfs", "storage_location", storage_location),
 					resource.TestCheckResourceAttr("xenserver_sr_nfs.test_nfs", "version", "3"),
 					resource.TestCheckResourceAttr("xenserver_sr_nfs.test_nfs", "advanced_options", ""),
@@ -69,6 +70,61 @@ func TestAccNFSResource(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("xenserver_sr_nfs.test_nfs", "name_label", "Test NFS storage repository 2"),
 					resource.TestCheckResourceAttr("xenserver_sr_nfs.test_nfs", "name_description", "Test NFS Description"),
+					resource.TestCheckResourceAttr("xenserver_sr_nfs.test_nfs", "type", "nfs"),
+					resource.TestCheckResourceAttr("xenserver_sr_nfs.test_nfs", "storage_location", os.Getenv("NFS_SERVER")+":"+os.Getenv("NFS_SERVER_PATH")),
+					resource.TestCheckResourceAttr("xenserver_sr_nfs.test_nfs", "version", "3"),
+					resource.TestCheckResourceAttr("xenserver_sr_nfs.test_nfs", "advanced_options", ""),
+					// Verify dynamic values have any value set in the state.
+					resource.TestCheckResourceAttrSet("xenserver_sr_nfs.test_nfs", "uuid"),
+				),
+			},
+			// Delete testing automatically occurs in TestCase
+		},
+	})
+}
+
+func TestAccNFSISOResource(t *testing.T) {
+	storage_location := os.Getenv("NFS_SERVER") + ":" + os.Getenv("NFS_SERVER_PATH")
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			// Create and Read testing
+			{
+				Config:      providerConfig + testAccNFSResourceConfig("Test NFS ISO library", "", "3", storage_location, "type = \"other-type\""),
+				ExpectError: regexp.MustCompile(`Invalid Attribute Value Match`),
+			},
+			{
+				Config: providerConfig + testAccNFSResourceConfig("Test NFS ISO library", "", "3", storage_location, "type = \"iso\""),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("xenserver_sr_nfs.test_nfs", "name_label", "Test NFS ISO library"),
+					resource.TestCheckResourceAttr("xenserver_sr_nfs.test_nfs", "name_description", ""),
+					resource.TestCheckResourceAttr("xenserver_sr_nfs.test_nfs", "type", "iso"),
+					resource.TestCheckResourceAttr("xenserver_sr_nfs.test_nfs", "storage_location", storage_location),
+					resource.TestCheckResourceAttr("xenserver_sr_nfs.test_nfs", "version", "3"),
+					resource.TestCheckResourceAttr("xenserver_sr_nfs.test_nfs", "advanced_options", ""),
+					// Verify dynamic values have any value set in the state.
+
+					resource.TestCheckResourceAttrSet("xenserver_sr_nfs.test_nfs", "uuid"),
+				),
+			},
+			// ImportState testing
+			{
+				ResourceName:            "xenserver_sr_nfs.test_nfs",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{},
+			},
+			{
+				Config:      providerConfig + testAccNFSResourceConfig("Test NFS ISO library", "", "3", storage_location, "type = \"nfs\""),
+				ExpectError: regexp.MustCompile(`"type" doesn't expected to be updated`),
+			},
+			// Update and Read testing
+			{
+				Config: providerConfig + testAccNFSResourceConfig("Test NFS ISO library 2", "Test NFS ISO library Description", "3", storage_location, "type = \"iso\""),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("xenserver_sr_nfs.test_nfs", "name_label", "Test NFS ISO library 2"),
+					resource.TestCheckResourceAttr("xenserver_sr_nfs.test_nfs", "name_description", "Test NFS ISO library Description"),
+					resource.TestCheckResourceAttr("xenserver_sr_nfs.test_nfs", "type", "iso"),
 					resource.TestCheckResourceAttr("xenserver_sr_nfs.test_nfs", "storage_location", os.Getenv("NFS_SERVER")+":"+os.Getenv("NFS_SERVER_PATH")),
 					resource.TestCheckResourceAttr("xenserver_sr_nfs.test_nfs", "version", "3"),
 					resource.TestCheckResourceAttr("xenserver_sr_nfs.test_nfs", "advanced_options", ""),
