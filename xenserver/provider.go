@@ -55,17 +55,17 @@ func (p *xsProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *p
 			"host": schema.StringAttribute{
 				MarkdownDescription: "The base URL of target XenServer host." + "<br />" +
 					"Can be set by using the environment variable **XENSERVER_HOST**.",
-				Required: true,
+				Optional: true,
 			},
 			"username": schema.StringAttribute{
 				MarkdownDescription: "The user name of target XenServer host." + "<br />" +
 					"Can be set by using the environment variable **XENSERVER_USERNAME**.",
-				Required: true,
+				Optional: true,
 			},
 			"password": schema.StringAttribute{
 				MarkdownDescription: "The password of target XenServer host." + "<br />" +
 					"Can be set by using the environment variable **XENSERVER_PASSWORD**.",
-				Required:  true,
+				Optional:  true,
 				Sensitive: true,
 			},
 		},
@@ -77,37 +77,6 @@ func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureReques
 	var data providerModel
 
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	// If practitioner provided a configuration value for any of the
-	// attributes, it must be a known value.
-
-	if data.Host.IsUnknown() {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("host"),
-			"Unknown XenServer API Host",
-			"The provider cannot create the XenServer API client as there is an unknown configuration value for the XenServer API host. "+
-				"Either target apply the source of the value first, set the value statically in the configuration, or use the XENSERVER_HOST environment variable.",
-		)
-	}
-	if data.Username.IsUnknown() {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("username"),
-			"Unknown XenServer API Username",
-			"The provider cannot create the XenServer API client as there is an unknown configuration value for the XenServer API username. "+
-				"Either target apply the source of the value first, set the value statically in the configuration, or use the XENSERVER_USERNAME environment variable.",
-		)
-	}
-	if data.Password.IsUnknown() {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("password"),
-			"Unknown XenServer API Password",
-			"The provider cannot create the XenServer API client as there is an unknown configuration value for the XenServer API password. "+
-				"Either target apply the source of the value first, set the value statically in the configuration, or use the XENSERVER_PASSWORD environment variable.",
-		)
-	}
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -132,8 +101,8 @@ func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureReques
 	if host == "" {
 		resp.Diagnostics.AddAttributeError(
 			path.Root("host"),
-			"Missing XenServer API Host",
-			"The provider cannot create the XenServer API client as there is a missing or empty value for the XenServer API host. "+
+			"Missing Host Configuration",
+			"The provider cannot create the XenServer API client as there is a missing or empty value for the host. "+
 				"Set the host value in the configuration or use the XENSERVER_HOST environment variable. "+
 				"If either is already set, ensure the value is not empty.",
 		)
@@ -141,8 +110,8 @@ func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureReques
 	if username == "" {
 		resp.Diagnostics.AddAttributeError(
 			path.Root("username"),
-			"Missing XenServer API Username",
-			"The provider cannot create the XenServer API client as there is a missing or empty value for the XenServer API username. "+
+			"Missing Username Configuration",
+			"The provider cannot create the XenServer API client as there is a missing or empty value for the username. "+
 				"Set the username value in the configuration or use the XENSERVER_USERNAME environment variable. "+
 				"If either is already set, ensure the value is not empty.",
 		)
@@ -150,8 +119,8 @@ func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureReques
 	if password == "" {
 		resp.Diagnostics.AddAttributeError(
 			path.Root("password"),
-			"Missing XenServer API Password",
-			"The provider cannot create the XenServer API client as there is a missing or empty value for the XenServer API password. "+
+			"Missing Password Configuration",
+			"The provider cannot create the XenServer API client as there is a missing or empty value for the password. "+
 				"Set the password value in the configuration or use the XENSERVER_PASSWORD environment variable. "+
 				"If either is already set, ensure the value is not empty.",
 		)
@@ -175,10 +144,10 @@ func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureReques
 	_, err := session.LoginWithPassword(username, password, "1.0", "terraform provider")
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to create XENSERVER API client",
-			"An unexpected error occurred when creating the XENSERVER API client. "+
+			"Unable to create XenServer API client",
+			"An unexpected error occurred when creating the XenServer API client. "+
 				"If the error is not clear, please contact the provider developers.\n\n"+
-				"XENSERVER client Error: "+err.Error(),
+				"XenServer client Error: "+err.Error(),
 		)
 		return
 	}
