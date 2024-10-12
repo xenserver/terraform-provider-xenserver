@@ -35,11 +35,11 @@ data "xenserver_network" "network" {}
 
 resource "xenserver_vm" "vm" {
   name_label       = "Windows VM"
-  template_name    = "Windows 11"
+  template_name    = "Windows 10 (64-bit)"
   static_mem_max   = 4 * 1024 * 1024 * 1024
   vcpus            = 4
   cores_per_socket = 2
-  cdrom            = "win11-x64_uefi.iso"
+  cdrom            = "win10-x64_uefi.iso"
   boot_mode        = "uefi_security"
   boot_order       = "cdn"
 

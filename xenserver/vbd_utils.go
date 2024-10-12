@@ -122,12 +122,15 @@ func createVBD(session *xenapi.Session, vmRef xenapi.VMRef, vbd vbdResourceModel
 }
 
 func createVBDs(ctx context.Context, session *xenapi.Session, vmRef xenapi.VMRef, data vmResourceModel, vbdType xenapi.VbdType) error {
+	if data.HardDrive.IsUnknown() || len(data.HardDrive.Elements()) == 0 {
+		tflog.Debug(ctx, "---> Skip create VBDs")
+		return nil
+	}
+
 	elements := make([]vbdResourceModel, 0, len(data.HardDrive.Elements()))
-	if !data.HardDrive.IsUnknown() {
-		diags := data.HardDrive.ElementsAs(ctx, &elements, false)
-		if diags.HasError() {
-			return errors.New("unable to get HardDrive elements")
-		}
+	diags := data.HardDrive.ElementsAs(ctx, &elements, false)
+	if diags.HasError() {
+		return errors.New("unable to get HardDrive elements")
 	}
 
 	// Sort based on the `Bootable` field, with `true` values coming first.
@@ -143,7 +146,7 @@ func createVBDs(ctx context.Context, session *xenapi.Session, vmRef xenapi.VMRef
 		}
 	}
 
-	return checkHardDriveExist(session, vmRef)
+	return nil
 }
 
 func updateVBDs(ctx context.Context, plan vmResourceModel, state vmResourceModel, vmRef xenapi.VMRef, session *xenapi.Session) error {
@@ -236,7 +239,7 @@ func updateVBDs(ctx context.Context, plan vmResourceModel, state vmResourceModel
 		}
 	}
 
-	return checkHardDriveExist(session, vmRef)
+	return nil
 }
 
 func getAllDiskTypeVBDs(session *xenapi.Session, vmRef xenapi.VMRef) ([]string, error) {
@@ -255,17 +258,6 @@ func getAllDiskTypeVBDs(session *xenapi.Session, vmRef xenapi.VMRef) ([]string, 
 		}
 	}
 	return diskRefs, nil
-}
-
-func checkHardDriveExist(session *xenapi.Session, vmRef xenapi.VMRef) error {
-	hardDrives, err := getAllDiskTypeVBDs(session, vmRef)
-	if err != nil {
-		return err
-	}
-	if len(hardDrives) < 1 {
-		return errors.New("no hard drive found on VM, please set at least one to VM")
-	}
-	return nil
 }
 
 func getTemplateVBDRefListFromVMRecord(vmRecord xenapi.VMRecord) []xenapi.VBDRef {
