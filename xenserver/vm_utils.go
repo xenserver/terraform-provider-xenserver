@@ -222,16 +222,12 @@ func VMSchema() map[string]schema.Attribute {
 			Computed:            true,
 		},
 		"hard_drive": schema.SetNestedAttribute{
-			MarkdownDescription: "A set of hard drive attributes to attach to the virtual machine, default inherited from the template." + "<br />" +
-				"Set at least one item in this attribute when use it.",
+			MarkdownDescription: "A set of hard drive attributes to attach to the virtual machine, default inherited from the template.",
 			NestedObject: schema.NestedAttributeObject{
 				Attributes: VBDSchema(),
 			},
 			Optional: true,
 			Computed: true,
-			Validators: []validator.Set{
-				setvalidator.SizeAtLeast(1),
-			},
 		},
 		"network_interface": schema.SetNestedAttribute{
 			MarkdownDescription: "A set of network interface attributes to attach to the virtual machine." + "<br />" +
@@ -653,7 +649,7 @@ func updateVMResourceModel(ctx context.Context, session *xenapi.Session, vmRecor
 }
 
 func getVBDsFromVMRecord(ctx context.Context, session *xenapi.Session, vmRecord xenapi.VMRecord, vbdType xenapi.VbdType) (basetypes.SetValue, []vbdResourceModel, error) {
-	var vbdSet []vbdResourceModel
+	vbdSet := []vbdResourceModel{}
 	var setValue basetypes.SetValue
 
 	for _, vbdRef := range vmRecord.VBDs {
@@ -710,7 +706,7 @@ func getOtherConfigFromVMRecord(ctx context.Context, vmRecord xenapi.VMRecord) (
 }
 
 func getVIFsFromVMRecord(ctx context.Context, session *xenapi.Session, vmRecord xenapi.VMRecord) (basetypes.SetValue, error) {
-	var vifSet []vifResourceModel
+	vifSet := []vifResourceModel{}
 	var setValue basetypes.SetValue
 	var diags diag.Diagnostics
 	for _, vifRef := range vmRecord.VIFs {

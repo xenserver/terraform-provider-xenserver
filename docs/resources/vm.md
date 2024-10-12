@@ -197,7 +197,7 @@ output "vm_out" {
 - `cores_per_socket` (Number) The number of core pre socket for the virtual machine, default inherited from the template.
 - `dynamic_mem_max` (Number) Dynamic maximum memory (bytes), default same with `static_mem_max`.
 - `dynamic_mem_min` (Number) Dynamic minimum memory (bytes), default same with `static_mem_max`.
-- `hard_drive` (Attributes Set) A set of hard drive attributes to attach to the virtual machine, default inherited from the template.<br />Set at least one item in this attribute when use it. (see [below for nested schema](#nestedatt--hard_drive))
+- `hard_drive` (Attributes Set) A set of hard drive attributes to attach to the virtual machine, default inherited from the template. (see [below for nested schema](#nestedatt--hard_drive))
 - `name_description` (String) The description of the virtual machine, default to be `""`.
 - `other_config` (Map of String) The additional configuration of the virtual machine, default to be `{}`.
 - `static_mem_min` (Number) Statically-set (absolute) minimum memory (bytes), default same with `static_mem_max`. The least amount of memory this VM can boot with without crashing.
