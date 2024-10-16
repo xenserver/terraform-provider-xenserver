@@ -152,7 +152,7 @@ type vmResourceModel struct {
 	CheckIPTimeout   types.Int64  `tfsdk:"check_ip_timeout"`
 }
 
-func VMSchema() map[string]schema.Attribute {
+func vmSchema() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"name_label": schema.StringAttribute{
 			MarkdownDescription: "The name of the virtual machine.",
@@ -224,7 +224,7 @@ func VMSchema() map[string]schema.Attribute {
 		"hard_drive": schema.SetNestedAttribute{
 			MarkdownDescription: "A set of hard drive attributes to attach to the virtual machine, default inherited from the template.",
 			NestedObject: schema.NestedAttributeObject{
-				Attributes: VBDSchema(),
+				Attributes: vbdSchema(),
 			},
 			Optional: true,
 			Computed: true,
@@ -233,7 +233,7 @@ func VMSchema() map[string]schema.Attribute {
 			MarkdownDescription: "A set of network interface attributes to attach to the virtual machine." + "<br />" +
 				"Set at least one item in this attribute when use it.",
 			NestedObject: schema.NestedAttributeObject{
-				Attributes: VIFSchema(),
+				Attributes: vifSchema(),
 			},
 			Required: true,
 			Validators: []validator.Set{
@@ -664,7 +664,7 @@ func getVBDsFromVMRecord(ctx context.Context, session *xenapi.Session, vmRecord 
 
 		// for CD type VBD, VDI can be NULL
 		vdiUUID := ""
-		if vbdRecord.VDI != "OpaqueRef:NULL" {
+		if string(vbdRecord.VDI) != "OpaqueRef:NULL" {
 			vdiRecord, err := xenapi.VDI.GetRecord(session, vbdRecord.VDI)
 			if err != nil {
 				return setValue, vbdSet, errors.New("unable to get VDI record")
