@@ -50,3 +50,10 @@ resource "xenserver_snapshot" "snapshot" {
   name_label = "A test snapshot 2"
   vm_uuid    = xenserver_vm.vm.uuid
 }
+
+# revert snapshot to VM, the VM resource 'hard_drive' will updated after revert, follow the document to update the terraform state before continue.
+resource "xenserver_snapshot" "snapshot" {
+  name_label = "A test snapshot 2"
+  vm_uuid    = xenserver_vm.vm.uuid
+  revert     = true
+}

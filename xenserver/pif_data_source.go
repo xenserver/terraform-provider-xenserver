@@ -35,7 +35,7 @@ func (d *pifDataSource) Metadata(_ context.Context, req datasource.MetadataReque
 	resp.TypeName = req.ProviderTypeName + "_pif"
 }
 
-func pifSchema() map[string]schema.Attribute {
+func pifDataSchema() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"uuid": schema.StringAttribute{
 			MarkdownDescription: "The UUID of the storage repository.",
@@ -206,7 +206,7 @@ func (d *pifDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, re
 				MarkdownDescription: "The return items of physical network interfaces.",
 				Computed:            true,
 				NestedObject: schema.NestedAttributeObject{
-					Attributes: pifSchema(),
+					Attributes: pifDataSchema(),
 				},
 			},
 		},

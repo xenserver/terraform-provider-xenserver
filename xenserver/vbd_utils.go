@@ -29,7 +29,7 @@ var vbdResourceModelAttrTypes = map[string]attr.Type{
 	"bootable": types.BoolType,
 }
 
-func VBDSchema() map[string]schema.Attribute {
+func vbdSchema() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"vdi_uuid": schema.StringAttribute{
 			MarkdownDescription: "VDI UUID to attach to VBD." + "<br />" +

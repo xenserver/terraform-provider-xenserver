@@ -35,7 +35,7 @@ func (d *vmDataSource) Metadata(_ context.Context, req datasource.MetadataReques
 	resp.TypeName = req.ProviderTypeName + "_vm"
 }
 
-func vmSchema() map[string]schema.Attribute {
+func vmDataSchema() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"uuid": schema.StringAttribute{
 			MarkdownDescription: "The UUID of the virtual machine.",
@@ -443,7 +443,7 @@ func (d *vmDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, res
 				MarkdownDescription: "The return items of virtual machines.",
 				Computed:            true,
 				NestedObject: schema.NestedAttributeObject{
-					Attributes: vmSchema(),
+					Attributes: vmDataSchema(),
 				},
 			},
 		},
@@ -494,7 +494,7 @@ func (d *vmDataSource) Read(ctx context.Context, req datasource.ReadRequest, res
 			continue
 		}
 
-		if vmRecord.IsATemplate || vmRecord.IsDefaultTemplate || vmRecord.SnapshotOf != "OpaqueRef:NULL" || vmRecord.Domid == 0 {
+		if vmRecord.IsATemplate || vmRecord.IsDefaultTemplate || string(vmRecord.SnapshotOf) != "OpaqueRef:NULL" || vmRecord.Domid == 0 {
 			continue
 		}
 
