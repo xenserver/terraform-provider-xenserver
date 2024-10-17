@@ -2,7 +2,9 @@ package xenserver
 
 import (
 	"context"
+	"errors"
 	"os"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/function"
@@ -26,6 +28,7 @@ type xsProvider struct {
 	// provider is built and ran locally, and "test" when running acceptance
 	// testing.
 	version string
+	config  *providerModel
 }
 
 func New(version string) func() provider.Provider {
@@ -53,7 +56,7 @@ func (p *xsProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *p
 		MarkdownDescription: "The XenServer provider can be used to manage and deploy XenServer resources. Before using it, you must configure the provider with the appropriate credentials. Documentation regarding the data sources and resources supported by the XenServer provider can be found in the navigation on the left.",
 		Attributes: map[string]schema.Attribute{
 			"host": schema.StringAttribute{
-				MarkdownDescription: "The base URL of target XenServer host." + "<br />" +
+				MarkdownDescription: "The address of target XenServer host." + "<br />" +
 					"Can be set by using the environment variable **XENSERVER_HOST**.",
 				Optional: true,
 			},
@@ -80,6 +83,7 @@ func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureReques
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	p.config = &data
 
 	host := os.Getenv("XENSERVER_HOST")
 	username := os.Getenv("XENSERVER_USERNAME")
@@ -125,23 +129,16 @@ func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureReques
 				"If either is already set, ensure the value is not empty.",
 		)
 	}
+
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	ctx = tflog.SetField(ctx, "host", host)
 	ctx = tflog.SetField(ctx, "username", username)
-	ctx = tflog.SetField(ctx, "password", password)
-	ctx = tflog.MaskFieldValuesWithFieldKeys(ctx, "password")
 	tflog.Debug(ctx, "Creating XenServer API session")
 
-	session := xenapi.NewSession(&xenapi.ClientOpts{
-		URL: host,
-		Headers: map[string]string{
-			"User-Agent": "XS SDK for Go v1.0",
-		},
-	})
-	_, err := session.LoginWithPassword(username, password, "1.0", "terraform provider")
+	session, err := loginServer(host, username, password)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to create XenServer API client",
@@ -156,9 +153,35 @@ func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureReques
 	resp.ResourceData = session
 }
 
+func loginServer(host string, username string, password string) (*xenapi.Session, error) {
+	// check if host, username, password are non-empty
+	if host == "" || username == "" || password == "" {
+		return nil, errors.New("host, username, password cannot be empty")
+	}
+
+	if !strings.HasPrefix(host, "http") {
+		host = "https://" + host
+	}
+
+	session := xenapi.NewSession(&xenapi.ClientOpts{
+		URL: host,
+		Headers: map[string]string{
+			"User-Agent": "XS SDK for Go v1.0",
+		},
+	})
+
+	_, err := session.LoginWithPassword(username, password, "1.0", "terraform provider")
+	if err != nil {
+		return nil, errors.New(err.Error())
+	}
+
+	return session, nil
+}
+
 func (p *xsProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewVMResource,
+		NewPoolResource,
 		NewSRResource,
 		NewNFSResource,
 		NewSMBResource,
@@ -180,7 +203,4 @@ func (p *xsProvider) DataSources(_ context.Context) []func() datasource.DataSour
 
 func (p *xsProvider) Functions(_ context.Context) []func() function.Function {
 	return nil
-	// return []func() function.Function{
-	// 	NewExampleFunction,
-	// }
 }
