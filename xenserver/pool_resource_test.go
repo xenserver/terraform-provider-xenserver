@@ -3,6 +3,7 @@ package xenserver
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
@@ -71,4 +72,6 @@ func TestAccPoolResource(t *testing.T) {
 			// Delete testing automatically occurs in TestCase
 		},
 	})
+	// sleep 10s to wait for supports back to enable
+	time.Sleep(10 * time.Second)
 }

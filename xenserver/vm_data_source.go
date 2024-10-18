@@ -1,5 +1,3 @@
-// Example of data source
-
 package xenserver
 
 import (

@@ -20,6 +20,8 @@ data "xenserver_sr" "sr" {
   name_label = "Local storage"
 }
 
+data "xenserver_host" "host" {}
+
 // xe pif-reconfigure-ip uuid=<uuid of eth1> mode=dhcp gateway= DNS=
 data "xenserver_pif" "pif" {
   device = "eth0"
