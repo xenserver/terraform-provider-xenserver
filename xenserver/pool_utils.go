@@ -2,6 +2,7 @@ package xenserver
 
 import (
 	"errors"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -196,6 +197,8 @@ func poolResourceModelUpdate(session *xenapi.Session, poolRef xenapi.PoolRef, pl
 		if err != nil {
 			return errors.New(err.Error())
 		}
+		// wait for toolstack restart
+		time.Sleep(60 * time.Second)
 	}
 
 	return nil
@@ -240,6 +243,8 @@ func setPool(session *xenapi.Session, poolRef xenapi.PoolRef, poolParams poolPar
 		if err != nil {
 			return errors.New(err.Error() + ", uuid: " + poolParams.ManagementNetworkUUID)
 		}
+		// wait for toolstack restart
+		time.Sleep(60 * time.Second)
 	}
 
 	return nil

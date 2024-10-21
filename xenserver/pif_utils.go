@@ -3,10 +3,15 @@ package xenserver
 import (
 	"context"
 	"errors"
-	"xenapi"
+	"net"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
+
+	"xenapi"
 )
 
 // pifDataSourceModel describes the data source data model.
@@ -178,4 +183,96 @@ func updatePIFRecordData(ctx context.Context, session *xenapi.Session, record xe
 	}
 	data.PCI = types.StringValue(pciUUID)
 	return nil
+}
+
+type pifConfigureResourceModel struct {
+	DisallowUnplug types.Bool   `tfsdk:"disallow_unplug"`
+	Interface      types.Object `tfsdk:"interface"`
+	UUID           types.String `tfsdk:"uuid"`
+	ID             types.String `tfsdk:"id"`
+}
+
+type InterfaceObject struct {
+	Mode    types.String `tfsdk:"mode"`
+	IP      types.String `tfsdk:"ip"`
+	Gateway types.String `tfsdk:"gateway"`
+	Netmask types.String `tfsdk:"netmask"`
+	DNS     types.String `tfsdk:"dns"`
+}
+
+func getIPConfigurationMode(mode string) xenapi.IPConfigurationMode {
+	var value xenapi.IPConfigurationMode
+	switch mode {
+	case "None":
+		value = xenapi.IPConfigurationModeNone
+	case "DHCP":
+		value = xenapi.IPConfigurationModeDHCP
+	case "Static":
+		value = xenapi.IPConfigurationModeStatic
+	default:
+		value = xenapi.IPConfigurationModeUnrecognized
+	}
+	return value
+}
+
+func pifConfigureResourceModelUpdate(ctx context.Context, session *xenapi.Session, data pifConfigureResourceModel) error {
+	pifRef, err := xenapi.PIF.GetByUUID(session, data.UUID.ValueString())
+	if err != nil {
+		return errors.New(err.Error() + ", uuid: " + data.UUID.ValueString())
+	}
+
+	if !data.DisallowUnplug.IsNull() {
+		err := xenapi.PIF.SetDisallowUnplug(session, pifRef, data.DisallowUnplug.ValueBool())
+		if err != nil {
+			tflog.Error(ctx, "unable to update the PIF 'disallow_unplug'")
+			return errors.New(err.Error())
+		}
+	}
+	if !data.Interface.IsNull() {
+		var interfaceObject InterfaceObject
+		diags := data.Interface.As(ctx, &interfaceObject, basetypes.ObjectAsOptions{})
+		if diags.HasError() {
+			return errors.New("unable to read PIF interface config")
+		}
+		mode := getIPConfigurationMode(interfaceObject.Mode.ValueString())
+		ip := interfaceObject.IP.ValueString()
+		netmask := interfaceObject.Netmask.ValueString()
+		gateway := interfaceObject.Gateway.ValueString()
+		dns := interfaceObject.DNS.ValueString()
+		err := xenapi.PIF.ReconfigureIP(session, pifRef, mode, ip, netmask, gateway, dns)
+		if err != nil {
+			tflog.Error(ctx, "unable to update the PIF 'interface'")
+			return errors.New(err.Error())
+		}
+		if mode == "DHCP" {
+			err := checkPIFHasIP(ctx, session, pifRef)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func checkPIFHasIP(ctx context.Context, session *xenapi.Session, ref xenapi.PIFRef) error {
+	// set timeout channel to check if IP address is available
+	timeoutChan := time.After(time.Duration(60) * time.Second)
+	for {
+		select {
+		case <-timeoutChan:
+			return errors.New("get PIF IP timeout in 60 seconds")
+		default:
+			ip, err := xenapi.PIF.GetIP(session, ref)
+			if err != nil {
+				tflog.Error(ctx, "unable to get the PIF IP")
+				return errors.New(err.Error())
+			}
+			if isValidIpAddress(net.ParseIP(ip)) {
+				return nil
+			}
+			tflog.Debug(ctx, "-----> Retry get PIF IP")
+			time.Sleep(5 * time.Second)
+		}
+	}
 }
