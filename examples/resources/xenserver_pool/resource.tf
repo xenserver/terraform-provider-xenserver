@@ -1,21 +1,3 @@
-locals {
-  env_vars = { for tuple in regexall("export\\s*(\\S*)\\s*=\\s*(\\S*)\\s*", file("../../.env")) : tuple[0] => tuple[1] }
-}
-
-terraform {
-  required_providers {
-    xenserver = {
-      source = "xenserver/xenserver"
-    }
-  }
-}
-
-provider "xenserver" {
-  host     = local.env_vars["XENSERVER_HOST"]
-  username = local.env_vars["XENSERVER_USERNAME"]
-  password = local.env_vars["XENSERVER_PASSWORD"]
-}
-
 resource "xenserver_sr_nfs" "nfs" {
   name_label       = "NFS shared storage"
   name_description = "A test NFS storage repository"
@@ -43,10 +25,16 @@ resource "xenserver_pif_configure" "pif_update" {
   }
 }
 
+# Configure default SR and Management Network of the pool
 resource "xenserver_pool" "pool" {
   name_label   = "pool"
-  # default_sr = xenserver_sr_nfs.nfs.uuid
-  # management_network = data.xenserver_pif.pif.data_items[0].network
+  default_sr = xenserver_sr_nfs.nfs.uuid
+  management_network = data.xenserver_pif.pif.data_items[0].network
+}
+
+# Join supporter into the pool
+resource "xenserver_pool" "pool" {
+  name_label   = "pool"
   join_supporters = [
     {
       host = local.env_vars["SUPPORTER_HOST"]
@@ -56,12 +44,12 @@ resource "xenserver_pool" "pool" {
   ]
 }
 
-# comment out the following block for the second run
-# data "xenserver_host" "supporter" {
-#   is_coordinator = false
-# }
+# Eject supporter from the pool
+data "xenserver_host" "supporter" {
+  is_coordinator = false
+}
 
-# resource "xenserver_pool" "pool" {
-#   name_label   = "pool"
-#   eject_supporters = [ data.xenserver_host.supporter.data_items[1].uuid ]
-# }
+resource "xenserver_pool" "pool" {
+  name_label   = "pool"
+  eject_supporters = [ data.xenserver_host.supporter.data_items[1].uuid ]
+}

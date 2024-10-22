@@ -5,6 +5,7 @@ go 1.22.2
 replace xenapi => ./goSDK
 
 require (
+	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/hashicorp/terraform-plugin-docs v0.19.4
 	github.com/hashicorp/terraform-plugin-framework v1.12.0
 	github.com/hashicorp/terraform-plugin-framework-validators v0.14.0

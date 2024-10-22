@@ -48,6 +48,10 @@ func (d *hostDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, r
 				MarkdownDescription: "The address by which this host can be contacted from any other host in the pool.",
 				Optional:            true,
 			},
+			"is_coordinator": schema.BoolAttribute{
+				MarkdownDescription: "If true, show only coordinator of the pool, if false, show only supporter of the pool, if not set, show all hosts.",
+				Optional:            true,
+			},
 			"data_items": schema.ListNestedAttribute{
 				MarkdownDescription: "The return items of host.",
 				Computed:            true,
@@ -63,15 +67,15 @@ func (d *hostDataSource) Configure(_ context.Context, req datasource.ConfigureRe
 	if req.ProviderData == nil {
 		return
 	}
-	session, ok := req.ProviderData.(*xenapi.Session)
+	providerData, ok := req.ProviderData.(*xsProvider)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *xenapi.Session, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *xenserver.xsProvider, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
-	d.session = session
+	d.session = providerData.session
 }
 
 // Read refreshes the Terraform state with the latest data.
@@ -103,6 +107,27 @@ func (d *hostDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 		}
 		if !data.Address.IsNull() && hostRecord.Address != data.Address.ValueString() {
 			continue
+		}
+		if !data.IsCoordinator.IsNull() {
+			_, coordinatorUUID, err := getCoordinatorRef(d.session)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Unable to get coordinator ref",
+					err.Error(),
+				)
+				return
+			}
+
+			isCoordinator := hostRecord.UUID == coordinatorUUID
+			if data.IsCoordinator.ValueBool() {
+				if !isCoordinator {
+					continue
+				}
+			} else {
+				if isCoordinator {
+					continue
+				}
+			}
 		}
 
 		var hostData hostRecordData

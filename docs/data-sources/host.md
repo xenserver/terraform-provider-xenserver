@@ -28,6 +28,7 @@ output "host_output" {
 ### Optional
 
 - `address` (String) The address by which this host can be contacted from any other host in the pool.
+- `is_coordinator` (Boolean) If true, show only coordinator of the pool, if false, show only supporter of the pool, if not set, show all hosts.
 - `name_label` (String) The name of the host.
 - `uuid` (String) The UUID of the host.
 

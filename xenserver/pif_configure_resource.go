@@ -38,7 +38,7 @@ func (r *pifConfigureResource) Metadata(_ context.Context, req resource.Metadata
 
 func (r *pifConfigureResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Provides an PIF configure resource to update the exist PIF parameters.",
+		MarkdownDescription: "PIF configuration resource which is used to update the existing PIF parameters. \n\n Noted that no new PIF will be deployed when `terraform apply` is executed. Additionally, when it comes to `terraform destroy`, it actually has no effect on this resource.",
 		Attributes: map[string]schema.Attribute{
 			"uuid": schema.StringAttribute{
 				MarkdownDescription: "The UUID of the PIF.",
@@ -52,6 +52,10 @@ func (r *pifConfigureResource) Schema(_ context.Context, _ resource.SchemaReques
 				MarkdownDescription: "The IP interface of the PIF. Currently only support IPv4.",
 				Optional:            true,
 				Attributes: map[string]schema.Attribute{
+					"name_label": schema.StringAttribute{
+						MarkdownDescription: "The name of the interface in IP Address Configuration.",
+						Optional:            true,
+					},
 					"mode": schema.StringAttribute{
 						MarkdownDescription: "The protocol define the primary address of this PIF, for example, `\"None\"`, `\"DHCP\"`, `\"Static\"`.",
 						Required:            true,
@@ -94,15 +98,15 @@ func (r *pifConfigureResource) Configure(_ context.Context, req resource.Configu
 	if req.ProviderData == nil {
 		return
 	}
-	session, ok := req.ProviderData.(*xenapi.Session)
+	providerData, ok := req.ProviderData.(*xsProvider)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *xenapi.Session, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *xenserver.xsProvider, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
-	r.session = session
+	r.session = providerData.session
 }
 
 func (r *pifConfigureResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {

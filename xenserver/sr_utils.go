@@ -119,19 +119,6 @@ type srResourceModel struct {
 	ID              types.String `tfsdk:"id"`
 }
 
-func getPoolCoordinatorRef(session *xenapi.Session) (xenapi.HostRef, error) {
-	var coordinatorRef xenapi.HostRef
-	poolRefs, err := xenapi.Pool.GetAll(session)
-	if err != nil {
-		return coordinatorRef, errors.New(err.Error())
-	}
-	coordinatorRef, err = xenapi.Pool.GetMaster(session, poolRefs[0])
-	if err != nil {
-		return coordinatorRef, errors.New(err.Error())
-	}
-	return coordinatorRef, nil
-}
-
 func getSRCreateParams(ctx context.Context, session *xenapi.Session, data srResourceModel) (srCreateParams, error) {
 	var params srCreateParams
 	params.NameLabel = data.NameLabel.ValueString()
@@ -147,7 +134,7 @@ func getSRCreateParams(ctx context.Context, session *xenapi.Session, data srReso
 	if diags.HasError() {
 		return params, errors.New("unable to access SR SM config data")
 	}
-	coordinatorRef, err := getPoolCoordinatorRef(session)
+	coordinatorRef, _, err := getCoordinatorRef(session)
 	if err != nil {
 		return params, err
 	}
@@ -196,7 +183,7 @@ func updateSRResourceModelComputed(ctx context.Context, session *xenapi.Session,
 	if diags.HasError() {
 		return errors.New("unable to access SR SM config")
 	}
-	hostRef, err := getPoolCoordinatorRef(session)
+	hostRef, _, err := getCoordinatorRef(session)
 	if err != nil {
 		return err
 	}
@@ -264,7 +251,7 @@ func unplugPBDs(session *xenapi.Session, pbdRefs []xenapi.PBDRef) error {
 	var allPBDRefsToNonCoordinator []xenapi.PBDRef
 	var allPBDRefsToCoordinator []xenapi.PBDRef
 
-	coordinatorRef, err := getPoolCoordinatorRef(session)
+	coordinatorRef, _, err := getCoordinatorRef(session)
 	if err != nil {
 		return err
 	}
@@ -390,7 +377,7 @@ type nfsResourceModel struct {
 
 func getNFSCreateParams(session *xenapi.Session, data nfsResourceModel) (srCreateParams, error) {
 	var params srCreateParams
-	coordinatorRef, err := getPoolCoordinatorRef(session)
+	coordinatorRef, _, err := getCoordinatorRef(session)
 	if err != nil {
 		return params, err
 	}
@@ -502,7 +489,7 @@ type smbResourceModel struct {
 
 func getSMBCreateParams(session *xenapi.Session, data smbResourceModel) (srCreateParams, error) {
 	var params srCreateParams
-	coordinatorRef, err := getPoolCoordinatorRef(session)
+	coordinatorRef, _, err := getCoordinatorRef(session)
 	if err != nil {
 		return params, err
 	}

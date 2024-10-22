@@ -193,11 +193,12 @@ type pifConfigureResourceModel struct {
 }
 
 type InterfaceObject struct {
-	Mode    types.String `tfsdk:"mode"`
-	IP      types.String `tfsdk:"ip"`
-	Gateway types.String `tfsdk:"gateway"`
-	Netmask types.String `tfsdk:"netmask"`
-	DNS     types.String `tfsdk:"dns"`
+	NameLabel types.String `tfsdk:"name_label"`
+	Mode      types.String `tfsdk:"mode"`
+	IP        types.String `tfsdk:"ip"`
+	Gateway   types.String `tfsdk:"gateway"`
+	Netmask   types.String `tfsdk:"netmask"`
+	DNS       types.String `tfsdk:"dns"`
 }
 
 func getIPConfigurationMode(mode string) xenapi.IPConfigurationMode {
@@ -228,23 +229,55 @@ func pifConfigureResourceModelUpdate(ctx context.Context, session *xenapi.Sessio
 			return errors.New(err.Error())
 		}
 	}
+
 	if !data.Interface.IsNull() {
+		pifMetricsRef, err := xenapi.PIF.GetMetrics(session, pifRef)
+		if err != nil {
+			return errors.New(err.Error())
+		}
+
+		isPIFConnected, err := xenapi.PIFMetrics.GetCarrier(session, pifMetricsRef)
+		if err != nil {
+			return errors.New(err.Error())
+		}
+
+		if !isPIFConnected {
+			return errors.New("the PIF with uuid " + data.UUID.ValueString() + " is not connected")
+		}
+
 		var interfaceObject InterfaceObject
 		diags := data.Interface.As(ctx, &interfaceObject, basetypes.ObjectAsOptions{})
 		if diags.HasError() {
 			return errors.New("unable to read PIF interface config")
 		}
+
+		if !interfaceObject.NameLabel.IsNull() {
+			oc, err := xenapi.PIF.GetOtherConfig(session, pifRef)
+			if err != nil {
+				return errors.New(err.Error())
+			}
+
+			oc["management_purpose"] = interfaceObject.NameLabel.ValueString()
+
+			err = xenapi.PIF.SetOtherConfig(session, pifRef, oc)
+			if err != nil {
+				return errors.New(err.Error())
+			}
+		}
+
 		mode := getIPConfigurationMode(interfaceObject.Mode.ValueString())
 		ip := interfaceObject.IP.ValueString()
 		netmask := interfaceObject.Netmask.ValueString()
 		gateway := interfaceObject.Gateway.ValueString()
 		dns := interfaceObject.DNS.ValueString()
-		err := xenapi.PIF.ReconfigureIP(session, pifRef, mode, ip, netmask, gateway, dns)
+
+		tflog.Debug(ctx, "Reconfigure PIF IP with mode: "+string(mode)+", ip: "+ip+", netmask: "+netmask+", gateway: "+gateway+", dns: "+dns)
+		err = xenapi.PIF.ReconfigureIP(session, pifRef, mode, ip, netmask, gateway, dns)
 		if err != nil {
 			tflog.Error(ctx, "unable to update the PIF 'interface'")
 			return errors.New(err.Error())
 		}
-		if mode == "DHCP" {
+		if string(mode) == "DHCP" {
 			err := checkPIFHasIP(ctx, session, pifRef)
 			if err != nil {
 				return err
@@ -261,7 +294,7 @@ func checkPIFHasIP(ctx context.Context, session *xenapi.Session, ref xenapi.PIFR
 	for {
 		select {
 		case <-timeoutChan:
-			return errors.New("get PIF IP timeout in 60 seconds")
+			return errors.New("get PIF IP timeout in 60 seconds, please check if the interface is connected")
 		default:
 			ip, err := xenapi.PIF.GetIP(session, ref)
 			if err != nil {
@@ -269,8 +302,10 @@ func checkPIFHasIP(ctx context.Context, session *xenapi.Session, ref xenapi.PIFR
 				return errors.New(err.Error())
 			}
 			if isValidIpAddress(net.ParseIP(ip)) {
+				tflog.Debug(ctx, "PIF IP is available: "+ip)
 				return nil
 			}
+
 			tflog.Debug(ctx, "-----> Retry get PIF IP")
 			time.Sleep(5 * time.Second)
 		}

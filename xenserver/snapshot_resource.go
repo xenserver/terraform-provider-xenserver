@@ -49,8 +49,10 @@ func (r *snapshotResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				Required: true,
 			},
 			"with_memory": schema.BoolAttribute{
-				MarkdownDescription: "True if snapshot with the VM's memory (VM must in running state), default to be `false`." +
-					"\n\n-> **Note:** `with_memory` is not allowed to be updated.",
+				MarkdownDescription: "True if snapshot with the VM's memory, default to be `false`." +
+					"\n\n-> **Note:** " +
+					"1. `with_memory` field is not allowed to be updated. " +
+					"2. the VM must be in a running state and have the [XenServer VM Tool](https://www.xenserver.com/downloads) installed.",
 				Optional: true,
 				Computed: true,
 				Default:  booldefault.StaticBool(false),
@@ -97,15 +99,16 @@ func (r *snapshotResource) Configure(_ context.Context, req resource.ConfigureRe
 	if req.ProviderData == nil {
 		return
 	}
-	session, ok := req.ProviderData.(*xenapi.Session)
+
+	providerData, ok := req.ProviderData.(*xsProvider)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *xenapi.Session, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *xenserver.xsProvider, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
-	r.session = session
+	r.session = providerData.session
 }
 
 func (r *snapshotResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
