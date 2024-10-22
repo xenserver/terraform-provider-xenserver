@@ -2,67 +2,129 @@ package xenserver
 
 import (
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-func updatePIFConfigure(eth_index string, mode string) string {
+func pifResource(eth_index string) string {
 	return fmt.Sprintf(`
 // configure eth1 PIF IP
 data "xenserver_pif" "pif_data" {
   device = "eth%s"
 }
 
-// For a pool with 2 hosts
-resource "xenserver_pif_configure" "pif_update" {
+resource "xenserver_pif_configure" "pif1" {
   uuid = data.xenserver_pif.pif_data.data_items[0].uuid
   interface = {
-    mode = "%s"
+    mode = "DHCP"
   }
 }
 
-resource "xenserver_pif_configure" "pif_update1" {
+resource "xenserver_pif_configure" "pif2" {
   uuid = data.xenserver_pif.pif_data.data_items[1].uuid
   interface = {
-    mode = "%s"
+    mode = "DHCP"
   }
 }
-`, eth_index, mode, mode)
-}
 
-func testAccPoolResourceConfig(name_label string, name_description string, sr_index string, eth_index string) string {
-	return fmt.Sprintf(`
-data "xenserver_sr" "sr" {
-    name_label = "Local storage"
+resource "xenserver_pif_configure" "pif3" {
+  uuid = data.xenserver_pif.pif_data.data_items[2].uuid
+  interface = {
+    mode = "DHCP"
+  }
 }
 
 data "xenserver_pif" "pif" {
     device = "eth%s"
 }
+`, eth_index, eth_index)
+}
+
+func managementNetwork(index string) string {
+	return fmt.Sprintf(`
+	management_network = data.xenserver_pif.pif.data_items[%s].network
+	`, index)
+}
+
+func testPoolResource(name_label string,
+	name_description string,
+	storage_location string,
+	management_network string,
+	supporter_params string,
+	eject_supporter string) string {
+	return fmt.Sprintf(`
+resource "xenserver_sr_nfs" "nfs" {
+	name_label       = "NFS"
+	version          = "3"
+	storage_location = "%s"
+}
+
+data "xenserver_host" "supporter" {
+  is_coordinator = false
+}
 
 resource "xenserver_pool" "pool" {
     name_label   = "%s"
 	name_description = "%s"
-    default_sr = data.xenserver_sr.sr.data_items[%s].uuid
-    management_network = data.xenserver_pif.pif.data_items[0].network
+    default_sr = xenserver_sr_nfs.nfs.uuid
+	%s
+	%s
+	%s
 }
-`, eth_index, name_label, name_description, sr_index)
+`, storage_location,
+		name_label,
+		name_description,
+		management_network,
+		supporter_params,
+		eject_supporter)
+}
+
+func testJoinSupporterParams(supporterHost string, supporterUsername string, supporterPassowd string) string {
+	return fmt.Sprintf(`
+	join_supporters = [
+		{
+		    host = "%s"
+			username = "%s"
+			password = "%s"
+		}
+    ]
+`, supporterHost, supporterUsername, supporterPassowd)
+}
+
+func ejectSupporterParams(index string) string {
+	return fmt.Sprintf(`
+	eject_supporters = [
+		data.xenserver_host.supporter.data_items[%s].uuid
+	]
+`, index)
 }
 
 func TestAccPoolResource(t *testing.T) {
+	// skip test if TEST_POOL is not set
+	if os.Getenv("TEST_POOL") == "" {
+		t.Skip("Skipping TestAccPoolResource test due to TEST_POOL not set")
+	}
+
+	storageLocation := os.Getenv("NFS_SERVER") + ":" + os.Getenv("NFS_SERVER_PATH")
+	joinSupporterParams := testJoinSupporterParams(os.Getenv("SUPPORTER_HOST"), os.Getenv("SUPPORTER_USERNAME"), os.Getenv("SUPPORTER_PASSWORD"))
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
-			// Create and Read testing
+			// Create and Read testing for Default SR and Pool Join
 			{
-				Config: providerConfig + updatePIFConfigure("1", "DHCP") + testAccPoolResourceConfig("Test Pool A", "Test Pool A Description", "0", "0"),
+				Config: providerConfig + testPoolResource("Test Pool A",
+					"Test Pool Join",
+					storageLocation,
+					"",
+					joinSupporterParams,
+					""),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("xenserver_pool.pool", "name_label", "Test Pool A"),
-					resource.TestCheckResourceAttr("xenserver_pool.pool", "name_description", "Test Pool A Description"),
+					resource.TestCheckResourceAttr("xenserver_pool.pool", "name_description", "Test Pool Join"),
 					resource.TestCheckResourceAttrSet("xenserver_pool.pool", "default_sr"),
-					resource.TestCheckResourceAttrSet("xenserver_pool.pool", "management_network"),
 				),
 			},
 			// ImportState testing
@@ -70,25 +132,32 @@ func TestAccPoolResource(t *testing.T) {
 				ResourceName:            "xenserver_pool.pool",
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{},
+				ImportStateVerifyIgnore: []string{"join_supporters"},
 			},
-			// Update and Read testing
+			// Update and Read testing For Pool eject supporter
 			{
-				Config: providerConfig + testAccPoolResourceConfig("Test Pool B", "Test Pool B Description", "1", "1"),
+				Config: providerConfig + testPoolResource("Test Pool B",
+					"Test Pool Eject",
+					storageLocation,
+					"",
+					"",
+					ejectSupporterParams("1")),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("xenserver_pool.pool", "name_label", "Test Pool B"),
-					resource.TestCheckResourceAttr("xenserver_pool.pool", "name_description", "Test Pool B Description"),
-					resource.TestCheckResourceAttrSet("xenserver_pool.pool", "default_sr"),
-					resource.TestCheckResourceAttrSet("xenserver_pool.pool", "management_network"),
+					resource.TestCheckResourceAttr("xenserver_pool.pool", "name_description", "Test Pool Eject"),
 				),
 			},
-			// Revert changes
+			// Update and Read testing For Pool Management Network
 			{
-				Config: providerConfig + testAccPoolResourceConfig("Test Pool A", "Test Pool A Description", "0", "0"),
+				Config: providerConfig + pifResource("3") + testPoolResource("Test Pool C",
+					"Test Pool Management Network",
+					storageLocation,
+					managementNetwork("2"),
+					"",
+					""),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("xenserver_pool.pool", "name_label", "Test Pool A"),
-					resource.TestCheckResourceAttr("xenserver_pool.pool", "name_description", "Test Pool A Description"),
-					resource.TestCheckResourceAttrSet("xenserver_pool.pool", "default_sr"),
+					resource.TestCheckResourceAttr("xenserver_pool.pool", "name_label", "Test Pool C"),
+					resource.TestCheckResourceAttr("xenserver_pool.pool", "name_description", "Test Pool Management Network"),
 					resource.TestCheckResourceAttrSet("xenserver_pool.pool", "management_network"),
 				),
 			},
@@ -96,6 +165,6 @@ func TestAccPoolResource(t *testing.T) {
 		},
 	})
 
-	// sleep 10s to wait for supporters back to enable
-	time.Sleep(10 * time.Second)
+	// sleep 30s to wait for supporters and management network back to enable
+	time.Sleep(30 * time.Second)
 }

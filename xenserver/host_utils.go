@@ -7,16 +7,18 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"xenapi"
 )
 
 // pifDataSourceModel describes the data source data model.
 type hostDataSourceModel struct {
-	NameLabel types.String     `tfsdk:"name_label"`
-	UUID      types.String     `tfsdk:"uuid"`
-	Address   types.String     `tfsdk:"address"`
-	DataItems []hostRecordData `tfsdk:"data_items"`
+	NameLabel     types.String     `tfsdk:"name_label"`
+	UUID          types.String     `tfsdk:"uuid"`
+	Address       types.String     `tfsdk:"address"`
+	IsCoordinator types.Bool       `tfsdk:"is_coordinator"`
+	DataItems     []hostRecordData `tfsdk:"data_items"`
 }
 
 type hostRecordData struct {
@@ -59,6 +61,7 @@ func hostDataSchema() map[string]schema.Attribute {
 }
 
 func updateHostRecordData(ctx context.Context, session *xenapi.Session, record xenapi.HostRecord, data *hostRecordData) error {
+	tflog.Debug(ctx, "Found host data: "+record.NameLabel)
 	data.UUID = types.StringValue(record.UUID)
 	data.NameLabel = types.StringValue(record.NameLabel)
 	data.NameDescription = types.StringValue(record.NameDescription)

@@ -6,7 +6,13 @@ default: testacc
 # Run acceptance tests
 .PHONY: testacc
 testacc: provider ## make testacc
-	source .env && TF_ACC=1 go test ./xenserver/ -v  $(TESTARGS) -timeout 120m
+	source .env \
+    && TF_ACC=1 go test -v $(TESTARGS) -timeout 60m ./xenserver/ \
+    && TF_ACC=1 TEST_POOL=1 go test -v -run TestAccPoolResource -timeout 60m ./xenserver/
+
+testpool: provider
+	source .env \
+    && TF_ACC=1 TEST_POOL=1 go test -v -run TestAccPoolResource -timeout 60m ./xenserver/
 
 doc:  ## make doc for terraform provider documentation
 	go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate --provider-name xenserver
@@ -16,7 +22,7 @@ provider: go.mod  ## make provider
 	rm -f $(GOBIN)/terraform-provider-xenserver
 	go mod tidy
 	go install .
-	ls -l $(GOBIN)/terraform-provider-xenserver
+	md5sum $(GOBIN)/terraform-provider-xenserver
 
 apply: .env provider  ## make apply
 	cd $(WORKDIR) && \

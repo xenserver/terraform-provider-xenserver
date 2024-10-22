@@ -3,12 +3,15 @@
 page_title: "xenserver_pif_configure Resource - xenserver"
 subcategory: ""
 description: |-
-  Provides an PIF configure resource to update the exist PIF parameters.
+  PIF configuration resource which is used to update the existing PIF parameters.
+  Noted that no new PIF will be deployed when terraform apply is executed. Additionally, when it comes to terraform destroy, it actually has no effect on this resource.
 ---
 
 # xenserver_pif_configure (Resource)
 
-Provides an PIF configure resource to update the exist PIF parameters.
+PIF configuration resource which is used to update the existing PIF parameters. 
+
+ Noted that no new PIF will be deployed when `terraform apply` is executed. Additionally, when it comes to `terraform destroy`, it actually has no effect on this resource.
 
 ## Example Usage
 
@@ -70,6 +73,7 @@ Optional:
 - `dns` (String) Comma separated list of the IP addresses of the DNS servers to use.
 - `gateway` (String) The IP gateway.
 - `ip` (String) The IP address.
+- `name_label` (String) The name of the interface in IP Address Configuration.
 - `netmask` (String) The IP netmask.
 
 ## Import

@@ -27,8 +27,15 @@ type xsProvider struct {
 	// version is set to the provider version on release, "dev" when the
 	// provider is built and ran locally, and "test" when running acceptance
 	// testing.
-	version string
-	config  *providerModel
+	version         string
+	session         *xenapi.Session
+	coordinatorConf coordinatorConf
+}
+
+type coordinatorConf struct {
+	Host     string
+	Username string
+	Password string
 }
 
 func New(version string) func() provider.Provider {
@@ -83,7 +90,6 @@ func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureReques
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	p.config = &data
 
 	host := os.Getenv("XENSERVER_HOST")
 	username := os.Getenv("XENSERVER_USERNAME")
@@ -149,8 +155,14 @@ func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureReques
 		return
 	}
 
-	resp.DataSourceData = session
-	resp.ResourceData = session
+	p.coordinatorConf.Host = host
+	p.coordinatorConf.Username = username
+	p.coordinatorConf.Password = password
+	p.session = session
+
+	// the xsProvider type itself is made available for resources and data sources
+	resp.DataSourceData = p
+	resp.ResourceData = p
 }
 
 func loginServer(host string, username string, password string) (*xenapi.Session, error) {

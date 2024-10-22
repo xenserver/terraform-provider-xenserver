@@ -25,8 +25,8 @@ func NewPoolResource() resource.Resource {
 
 // poolResource defines the resource implementation.
 type poolResource struct {
-	session        *xenapi.Session
-	providerConfig *providerModel
+	session         *xenapi.Session
+	coordinatorConf *coordinatorConf
 }
 
 func (r *poolResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -35,7 +35,7 @@ func (r *poolResource) Metadata(_ context.Context, req resource.MetadataRequest,
 
 func (r *poolResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Provides a pool resource.",
+		MarkdownDescription: "This provides a pool resource. During the execution of `terraform destroy` for this particular resource, all of the hosts that are part of the pool will be separated and converted into standalone hosts.",
 		Attributes:          PoolSchema(),
 	}
 }
@@ -46,15 +46,18 @@ func (r *poolResource) Configure(_ context.Context, req resource.ConfigureReques
 	if req.ProviderData == nil {
 		return
 	}
-	session, ok := req.ProviderData.(*xenapi.Session)
+
+	providerData, ok := req.ProviderData.(*xsProvider)
 	if !ok {
 		resp.Diagnostics.AddError(
-			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *xenapi.Session, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			"Failed to get Provider Data in PoolResource",
+			fmt.Sprintf("Expected *xenserver.xsProvider, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
-	r.session = session
+
+	r.session = providerData.session
+	r.coordinatorConf = &providerData.coordinatorConf
 }
 
 func (r *poolResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -65,14 +68,7 @@ func (r *poolResource) Create(ctx context.Context, req resource.CreateRequest, r
 	}
 
 	tflog.Debug(ctx, "Creating pool...")
-	poolParams, err := getPoolParams(plan)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Unable to get pool create params",
-			err.Error(),
-		)
-		return
-	}
+	poolParams := getPoolParams(plan)
 
 	poolRef, err := getPoolRef(r.session)
 	if err != nil {
@@ -83,30 +79,31 @@ func (r *poolResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
-	err = setPool(r.session, poolRef, poolParams)
+	err = poolJoin(ctx, r.session, r.coordinatorConf, plan)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to set pool",
+			"Unable to join pool in Create stage",
 			err.Error(),
 		)
-
-		err = cleanupPoolResource(r.session, poolRef)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Unable to cleanup pool resource",
-				err.Error(),
-			)
-		}
-
 		return
 	}
 
-	err = poolJoin(r.providerConfig, poolParams)
+	err = poolEject(ctx, r.session, plan)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to join pool",
+			"Unable to eject pool in Create stage",
 			err.Error(),
 		)
+		return
+	}
+
+	err = setPool(r.session, poolRef, poolParams)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to set pool in Create stage",
+			err.Error(),
+		)
+
 		return
 	}
 
@@ -122,7 +119,7 @@ func (r *poolResource) Create(ctx context.Context, req resource.CreateRequest, r
 	err = updatePoolResourceModelComputed(r.session, poolRecord, &plan)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to update the computed fields of PoolResourceModel",
+			"Unable to update the computed fields of PoolResourceModel in Create stage",
 			err.Error(),
 		)
 		return
@@ -159,7 +156,7 @@ func (r *poolResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	err = updatePoolResourceModel(r.session, poolRecord, &state)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to update the computed fields of PoolResourceModel",
+			"Unable to update the computed fields of PoolResourceModel in Read stage",
 			err.Error(),
 		)
 		return
@@ -179,7 +176,9 @@ func (r *poolResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
-	poolRef, err := xenapi.Pool.GetByUUID(r.session, state.UUID.ValueString())
+	poolParams := getPoolParams(plan)
+
+	poolRef, err := getPoolRef(r.session)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to get pool ref",
@@ -188,12 +187,31 @@ func (r *poolResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
-	err = poolResourceModelUpdate(r.session, poolRef, plan)
+	err = poolJoin(ctx, r.session, r.coordinatorConf, plan)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to update pool resource model",
+			"Unable to join pool in Update stage",
 			err.Error(),
 		)
+		return
+	}
+
+	err = poolEject(ctx, r.session, plan)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to eject pool in Update stage",
+			err.Error(),
+		)
+		return
+	}
+
+	err = setPool(r.session, poolRef, poolParams)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to set pool in Update stage",
+			err.Error(),
+		)
+
 		return
 	}
 
@@ -209,7 +227,7 @@ func (r *poolResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	err = updatePoolResourceModelComputed(r.session, poolRecord, &plan)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to update the computed fields of PoolResourceModel",
+			"Unable to update the computed fields of PoolResourceModel in Update stage",
 			err.Error(),
 		)
 		return
@@ -225,22 +243,16 @@ func (r *poolResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 		return
 	}
 
+	tflog.Debug(ctx, "Deleting pool...")
 	poolRef, err := xenapi.Pool.GetByUUID(r.session, state.UUID.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddError(
-			"Unable to get pool ref",
-			err.Error(),
-		)
+		resp.Diagnostics.AddError("Unable to get pool ref", err.Error())
 		return
 	}
 
-	tflog.Debug(ctx, "Deleting pool...")
 	err = cleanupPoolResource(r.session, poolRef)
 	if err != nil {
-		resp.Diagnostics.AddError(
-			"Unable to cleanup pool resource",
-			err.Error(),
-		)
+		resp.Diagnostics.AddError("Unable to cleanup pool resource", err.Error())
 		return
 	}
 
