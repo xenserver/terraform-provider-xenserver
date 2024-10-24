@@ -22,13 +22,24 @@ data "xenserver_sr" "sr" {
 
 data "xenserver_host" "host" {}
 
-// xe pif-reconfigure-ip uuid=<uuid of eth1> mode=dhcp gateway= DNS=
 data "xenserver_pif" "pif" {
   device = "eth0"
 }
 
-output "pif_output" {
-  value = data.xenserver_pif.pif.data_items
+data "xenserver_pif" "pif1" {
+  device = "eth3"
+}
+
+locals {
+  pif1_data = tomap({for element in data.xenserver_pif.pif1.data_items: element.uuid => element})
+}
+
+resource "xenserver_pif_configure" "pif_update" {
+  for_each = local.pif1_data
+  uuid     = each.key
+  interface = {
+    mode = "DHCP"
+  }
 }
 
 resource "xenserver_pool" "pool" {
