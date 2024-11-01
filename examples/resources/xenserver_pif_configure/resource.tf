@@ -8,8 +8,8 @@ resource "xenserver_pif_configure" "pif_update" {
   disallow_unplug = true
   interface = {
     mode = "Static"
-    ip = "10.62.49.185"
-    netmask = "255.255.240.0"
+    ip = "192.0.2.1"
+    netmask = "255.255.255.0"
   }
 }
 
