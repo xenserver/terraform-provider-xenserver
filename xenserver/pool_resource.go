@@ -35,7 +35,7 @@ func (r *poolResource) Metadata(_ context.Context, req resource.MetadataRequest,
 
 func (r *poolResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "This provides a pool resource. During the execution of `terraform destroy` for this particular resource, all of the hosts that are part of the pool will be separated and converted into standalone hosts.",
+		MarkdownDescription: "This provides a pool resource." + "\n\n-> **Note:** During the execution of `terraform destroy` for this particular resource, all of the hosts that are part of the pool will be separated and converted into standalone hosts.",
 		Attributes:          PoolSchema(),
 	}
 }

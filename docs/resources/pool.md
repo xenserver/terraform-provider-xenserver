@@ -3,12 +3,15 @@
 page_title: "xenserver_pool Resource - xenserver"
 subcategory: ""
 description: |-
-  This provides a pool resource. During the execution of terraform destroy for this particular resource, all of the hosts that are part of the pool will be separated and converted into standalone hosts.
+  This provides a pool resource.
+  -> Note: During the execution of terraform destroy for this particular resource, all of the hosts that are part of the pool will be separated and converted into standalone hosts.
 ---
 
 # xenserver_pool (Resource)
 
-This provides a pool resource. During the execution of `terraform destroy` for this particular resource, all of the hosts that are part of the pool will be separated and converted into standalone hosts.
+This provides a pool resource.
+
+-> **Note:** During the execution of `terraform destroy` for this particular resource, all of the hosts that are part of the pool will be separated and converted into standalone hosts.
 
 ## Example Usage
 
@@ -83,15 +86,10 @@ resource "xenserver_pool" "pool" {
 - `eject_supporters` (Set of String) The set of pool supporters which will be ejected from the pool.
 - `join_supporters` (Attributes Set) The set of pool supporters which will join the pool.
 
--> **Note:** 
-1. It would raise error if a supporter is in both join_supporters and eject_supporters.
-2. The join operation would be performed only when the host, username, and password are provided. (see [below for nested schema](#nestedatt--join_supporters))
+-> **Note:** 1. It would raise error if a supporter is in both join_supporters and eject_supporters.<br>2. The join operation would be performed only when the host, username, and password are provided.<br> (see [below for nested schema](#nestedatt--join_supporters))
 - `management_network` (String) The management network UUID of the pool.
 
--> **Note:** 
-1. The management network would be reconfigured only when the management network UUID is provided. 
-2. All of the hosts in the pool should have the same management network with network configuration, you can set network configuration by `resource pif_configure`. 
-3.
+-> **Note:** 1. The management network would be reconfigured only when the management network UUID is provided.<br>2. All of the hosts in the pool should have the same management network with network configuration, and you can set network configuration by resource `pif_configure`.<br>3. It is not recommended to set the `management_network` with the `join_supporters` and `eject_supporters` attributes together.<br>
 - `name_description` (String) The description of the pool, default to be `""`.
 
 ### Read-Only

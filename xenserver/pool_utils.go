@@ -62,16 +62,17 @@ func PoolSchema() map[string]schema.Attribute {
 		},
 		"management_network": schema.StringAttribute{
 			MarkdownDescription: "The management network UUID of the pool." +
-				"\n\n-> **Note:** \n1. The management network would be reconfigured only when the management network UUID is provided. " +
-				"\n2. All of the hosts in the pool should have the same management network with network configuration, you can set network configuration by `resource pif_configure`. " +
-				"\n3. ",
+				"\n\n-> **Note:** " +
+				"1. The management network would be reconfigured only when the management network UUID is provided.<br>" +
+				"2. All of the hosts in the pool should have the same management network with network configuration, and you can set network configuration by resource `pif_configure`.<br>" +
+				"3. It is not recommended to set the `management_network` with the `join_supporters` and `eject_supporters` attributes together.<br>",
 			Optional: true,
 			Computed: true,
 		},
 		"join_supporters": schema.SetNestedAttribute{
 			MarkdownDescription: "The set of pool supporters which will join the pool." +
-				"\n\n-> **Note:** \n1. It would raise error if a supporter is in both join_supporters and eject_supporters." +
-				"\n2. The join operation would be performed only when the host, username, and password are provided.",
+				"\n\n-> **Note:** 1. It would raise error if a supporter is in both join_supporters and eject_supporters.<br>" +
+				"2. The join operation would be performed only when the host, username, and password are provided.<br>",
 			NestedObject: schema.NestedAttributeObject{
 				Attributes: map[string]schema.Attribute{
 					"host": schema.StringAttribute{
@@ -327,12 +328,12 @@ func cleanupPoolResource(session *xenapi.Session, poolRef xenapi.PoolRef) error 
 func setPool(session *xenapi.Session, poolRef xenapi.PoolRef, poolParams poolParams) error {
 	err := xenapi.Pool.SetNameLabel(session, poolRef, poolParams.NameLabel)
 	if err != nil {
-		return errors.New("unable to SetNameLabel!\n" + err.Error())
+		return errors.New("unable to Set NameLabel!\n" + err.Error())
 	}
 
 	err = xenapi.Pool.SetNameDescription(session, poolRef, poolParams.NameDescription)
 	if err != nil {
-		return errors.New("unable to SetNameDescription!\n" + err.Error())
+		return errors.New("unable to Set NameDescription!\n" + err.Error())
 	}
 
 	if poolParams.DefaultSRUUID != "" {
@@ -353,7 +354,7 @@ func setPool(session *xenapi.Session, poolRef xenapi.PoolRef, poolParams poolPar
 
 		err = xenapi.Pool.SetDefaultSR(session, poolRef, srRef)
 		if err != nil {
-			return errors.New("unable to SetDefaultSR!\n" + err.Error())
+			return errors.New("unable to Set DefaultSR on the Pool!\n" + err.Error())
 		}
 	}
 
@@ -365,7 +366,7 @@ func setPool(session *xenapi.Session, poolRef xenapi.PoolRef, poolParams poolPar
 
 		err = xenapi.Pool.ManagementReconfigure(session, networkRef)
 		if err != nil {
-			return errors.New("unable to ManagementReconfigure!\n" + err.Error() + ", uuid: " + poolParams.ManagementNetworkUUID)
+			return errors.New("unable to Reconfigure Management Network on the Pool!\n" + err.Error() + ", uuid: " + poolParams.ManagementNetworkUUID)
 		}
 
 		// wait for toolstack restart

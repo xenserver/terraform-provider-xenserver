@@ -2,20 +2,20 @@
 page_title: "XenServer Provider"
 subcategory: ""
 description: |-
-  The XenServer provider can be used to manage and deploy XenServer resources. Before using it, you must configure the provider with the appropriate credentials. Documentation regarding the data sources and resources supported by the XenServer provider can be found in the navigation on the left.
+  The XenServer provider facilitates the management and deployment of XenServer resources. Prior to utilisation, it is necessary to configure the provider with the required credentials. For security purposes, please ensure you have reviewed the document to protect sensitive input variables https://developer.hashicorp.com/terraform/tutorials/configuration-language/sensitive-variables. Comprehensive information regarding resource and data source usage is available within the left-hand navigation panel.
 ---
 
 # XenServer Provider
 
-The XenServer provider can be used to manage and deploy XenServer resources. Before using it, you must configure the provider with the appropriate credentials. Documentation regarding the data sources and resources supported by the XenServer provider can be found in the navigation on the left.
+The XenServer provider facilitates the management and deployment of XenServer resources. Prior to utilisation, it is necessary to configure the provider with the required credentials. For security purposes, please ensure you have reviewed the document to [protect sensitive input variables](https://developer.hashicorp.com/terraform/tutorials/configuration-language/sensitive-variables). Comprehensive information regarding resource and data source usage is available within the left-hand navigation panel.
 
 ## Example Usage
 
 ```terraform
 provider "xenserver" {
-  host     = "https://10.1.1.1"
+  host     = "https://192.0.2.1"
   username = "root"
-  password = "test123"
+  password = var.password
 }
 ```
 

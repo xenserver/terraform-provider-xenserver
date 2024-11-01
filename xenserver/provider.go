@@ -60,7 +60,7 @@ func (p *xsProvider) Metadata(_ context.Context, _ provider.MetadataRequest, res
 
 func (p *xsProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "The XenServer provider can be used to manage and deploy XenServer resources. Before using it, you must configure the provider with the appropriate credentials. Documentation regarding the data sources and resources supported by the XenServer provider can be found in the navigation on the left.",
+		MarkdownDescription: "The XenServer provider facilitates the management and deployment of XenServer resources. Prior to utilisation, it is necessary to configure the provider with the required credentials. For security purposes, please ensure you have reviewed the document to [protect sensitive input variables](https://developer.hashicorp.com/terraform/tutorials/configuration-language/sensitive-variables). Comprehensive information regarding resource and data source usage is available within the left-hand navigation panel.",
 		Attributes: map[string]schema.Attribute{
 			"host": schema.StringAttribute{
 				MarkdownDescription: "The address of target XenServer host." + "<br />" +
