@@ -243,17 +243,13 @@ func poolEject(ctx context.Context, session *xenapi.Session, plan poolResourceMo
 	for _, hostUUID := range ejectSupporters {
 		tflog.Debug(ctx, "Ejecting pool with host: "+hostUUID)
 
-		operation := func() error {
-			hostRef, err := xenapi.Host.GetByUUID(session, hostUUID)
-			if err != nil {
-				return errors.New(err.Error())
-			}
-			return xenapi.Pool.Eject(session, hostRef)
-		}
-
-		err := backoff.Retry(operation, backoff.NewExponentialBackOff())
+		hostRef, err := xenapi.Host.GetByUUID(session, hostUUID)
 		if err != nil {
-			return errors.New(err.Error())
+			return errors.New("unable to Get Host by UUID " + hostUUID + "!\n" + err.Error())
+		}
+		err = xenapi.Pool.Eject(session, hostRef)
+		if err != nil {
+			return errors.New("unable to Eject Pool with host UUID " + hostUUID + "!\n" + err.Error())
 		}
 	}
 
