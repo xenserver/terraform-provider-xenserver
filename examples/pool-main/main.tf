@@ -16,6 +16,25 @@ provider "xenserver" {
   password = local.env_vars["XENSERVER_PASSWORD"]
 }
 
+# get the existing supporter hosts
+data "xenserver_host" "supporter" {
+  is_coordinator = false
+}
+
+# join a new supporter to the pool
+resource "xenserver_pool" "pool" {
+  name_label   = "pool"
+  join_supporters = [
+    {
+      host = local.env_vars["SUPPORTER_HOST"]
+      username = local.env_vars["SUPPORTER_USERNAME"]
+      password = local.env_vars["SUPPORTER_PASSWORD"]
+    }
+  ]
+  eject_supporters = [ data.xenserver_host.supporter.data_items[0].uuid ]
+}
+
+
 # resource "xenserver_sr_nfs" "nfs" {
 #   name_label       = "NFS shared storage"
 #   name_description = "A test NFS storage repository"
@@ -43,25 +62,8 @@ provider "xenserver" {
 #   }
 # }
 
-# resource "xenserver_pool" "pool" {
+# resource "xenserver_pool" "pool_management" {
 #   name_label   = "pool"
-#   # default_sr = xenserver_sr_nfs.nfs.uuid
-#   # management_network = data.xenserver_pif.pif.data_items[0].network
-#   join_supporters = [
-#     {
-#       host = local.env_vars["SUPPORTER_HOST"]
-#       username = local.env_vars["SUPPORTER_USERNAME"]
-#       password = local.env_vars["SUPPORTER_PASSWORD"]
-#     }
-#   ]
+#   default_sr = data.xenserver_sr_nfs.nfs.data_items[0].uuid
+#   management_network = data.xenserver_pif.pif.data_items[0].uuid
 # }
-
-# comment out the following block for the second run
-data "xenserver_host" "supporter" {
-  is_coordinator = false
-}
-
-resource "xenserver_pool" "pool" {
-  name_label   = "pool"
-  eject_supporters = [ data.xenserver_host.supporter.data_items[0].uuid ]
-}

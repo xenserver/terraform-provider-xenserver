@@ -7,32 +7,33 @@ This repository is the [Terraform Provider of XenServer](https://registry.terraf
 - `xenserver/` The provider, resources, data sources and tests.
 - Miscellaneous meta files.
 
-## Requirements
+## Developing the Provider
+### Requirements
 
 - [Terraform](https://developer.hashicorp.com/terraform/downloads) >= 1.8
 - [Go](https://golang.org/doc/install) >= 1.22.2
 
-## Developing the Provider
 
-### Prepare
+### Prepare Development Environment
 
-If you wish to work on the provider, you'll first need [Go](http://www.golang.org) installed on your machine (see [Requirements](#requirements) above).
+The following instructions are based on Linux system.
 
-To build the provider, you'll need to prepare the local XenServer module for Go. 
-- [Download](https://www.xenserver.com/downloads) the XenServer SDK zip package and unzip
-- Create `goSDK/` directory under `terraform-provider-xenserver/`
-- Copy all source files under `XenServer-SDK/XenServerGo/src/` to `terraform-provider-xenserver/goSDK/` folder
+- Prepare the local XenServer SDK module
+    - [Download](https://www.xenserver.com/downloads) the XenServer SDK zip package and unzip
+    - Create `goSDK/` directory under `terraform-provider-xenserver/`
+    - Copy all source files under `XenServer-SDK/XenServerGo/src/` to `terraform-provider-xenserver/goSDK/` folder
 
 ### Build
 
 Run the commands as follows:
-
 ```shell
 go get -u all
 go mod tidy
 ```
 
 To compile the provider, run `"go install"`. This will build the provider and put the provider binary in the `$GOPATH/bin` directory.
+
+In short, you can just run `make provider` instead.
 
 ### Document
 
@@ -44,10 +45,12 @@ Set up log with `github.com/hashicorp/terraform-plugin-log/tflog`. To enable log
 
 ```shell
 export TF_LOG_PROVIDER="DEBUG"
+export TF_LOG_PATH=/tmp/terraform.log
 ```
-See https://developer.hashicorp.com/terraform/plugin/log/managing.
 
-### Test
+Find more details in [Managing Log Output](https://developer.hashicorp.com/terraform/plugin/log/managing).
+
+### Acceptance Test
 In order to run the full suite of acceptance tests, prepare a local `.env` file like:
 
 ```shell
@@ -61,7 +64,7 @@ export SMB_SERVER_USERNAME=<smb-server-username>
 export SMB_SERVER_PASSWORD=<smb-server-password>
 ```
 
-Run `"make testacc"`. *Note:* Acceptance tests create real resources, and often cost money to run.
+Run `"make testacc"`. *Note:* Acceptance tests generate actual resources and frequently incur costs when run.
 
 ```shell
 make testacc
@@ -74,7 +77,7 @@ Terraform allows to use local provider builds by setting a `dev_overrides` block
 1. Set `GOBIN` to the path where Go installs binaries or use the default path:
 
 ```shell
-export GOBIN=/Users/<Username>/go/bin
+export GOBIN=$HOME/go/bin
 go env GOBIN
 ```
 
@@ -120,6 +123,9 @@ gofmt -w -l xenserver/*.go
 sudo docker run -it -v $(pwd):/app -w /app golangci/golangci-lint bash
 golangci-lint run --config=/app/.golangci.yml
 ```
+
+## Known Issue
+1. If you are using Terraform provider v0.1.1, you might encounter compatibility issues after applying the XenServer 8 updates released to Early Access on 25 September 2024 and Normal on 2 October 2024. Terraform v0.1.2 resolves these compatibility issues.
 
 ## Contributing
 
