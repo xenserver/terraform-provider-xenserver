@@ -88,7 +88,7 @@ resource "xenserver_snapshot" "snapshot" {
 
 - `revert` (Boolean) Set to `true` if you want to revert this snapshot to VM, default to be `false`.
 
--> **Note:** When `revert` is true, the snapshot resource will be updated with new configuration first and then revert to VM.
+-> **Note:** `revert` only works after the snapshot resource created. When `revert` is true, the snapshot resource attributes will be updated first, for example `name_label`. And then revert to VM.
 
 ~> **Warning:** After revert, the VM `hard_drive` will be updated. If snapshot revert to the VM resource defined in 'main.tf', it'll cause issue when continue execute terraform commands. There's a suggest solution to resolve this issue, follow the steps: <br>1. run `terraform state show xenserver_snapshot.<snapshot_resource_name>`, get the revert VM's UUID 'vm_uuid' and revert VDIs' UUID 'vdi_uuid'.<br>2. run `terraform state rm xenserver_vm.<vm_resource_name>` to remove the VM resource state.<br>3. run `terraform import xenserver_vm.<vm_resource_name> <vm_uuid>` to import the VM resource new state.<br>4. run `terraform state rm xenserver_vdi.<vdi_resource_name>` to remove the VDI resource state. Be careful, you only need to remove the VDI resource used in above VM resource. If there're multiple VDI resources, remove them all.<br>5. run `terraform import xenserver_vdi.<vdi_resource_name> <vdi_uuid>` to import the VDI resource new state. If there're multiple VDI resources, import them all.<br>
 - `with_memory` (Boolean) True if snapshot with the VM's memory, default to be `false`.

@@ -59,7 +59,7 @@ func (r *snapshotResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 			},
 			"revert": schema.BoolAttribute{
 				MarkdownDescription: "Set to `true` if you want to revert this snapshot to VM, default to be `false`." +
-					"\n\n-> **Note:** When `revert` is true, the snapshot resource will be updated with new configuration first and then revert to VM." +
+					"\n\n-> **Note:** `revert` only works after the snapshot resource created. When `revert` is true, the snapshot resource attributes will be updated first, for example `name_label`. And then revert to VM." +
 					"\n\n~> **Warning:** After revert, the VM `hard_drive` will be updated. If snapshot revert to the VM resource defined in 'main.tf', it'll cause issue when continue execute terraform commands. There's a suggest solution to resolve this issue, follow the steps: <br>" +
 					"1. run `terraform state show xenserver_snapshot.<snapshot_resource_name>`, get the revert VM's UUID 'vm_uuid' and revert VDIs' UUID 'vdi_uuid'.<br>" +
 					"2. run `terraform state rm xenserver_vm.<vm_resource_name>` to remove the VM resource state.<br>" +
