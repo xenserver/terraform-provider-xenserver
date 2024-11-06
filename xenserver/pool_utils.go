@@ -308,11 +308,7 @@ func cleanupPoolResource(session *xenapi.Session, poolRef xenapi.PoolRef) error 
 			continue
 		}
 
-		operation := func() error {
-			return xenapi.Pool.Eject(session, hostRef)
-		}
-
-		err = backoff.Retry(operation, backoff.NewExponentialBackOff())
+		err = xenapi.Pool.Eject(session, hostRef)
 		if err != nil {
 			return errors.New(err.Error())
 		}

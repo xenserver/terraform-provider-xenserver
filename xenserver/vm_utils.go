@@ -624,17 +624,19 @@ func updateVMResourceModelComputed(ctx context.Context, session *xenapi.Session,
 		return err
 	}
 
-	checkIPDuration, err := strconv.Atoi(vmRecord.OtherConfig["tf_check_ip_timeout"])
-	if err != nil {
-		return errors.New("unable to convert check_ip_timeout to an int value")
-	}
-	data.CheckIPTimeout = types.Int64Value(int64(checkIPDuration))
+	if _, ok := vmRecord.OtherConfig["tf_check_ip_timeout"]; ok {
+		checkIPDuration, err := strconv.Atoi(vmRecord.OtherConfig["tf_check_ip_timeout"])
+		if err != nil {
+			return errors.New("unable to convert check_ip_timeout to an int value")
+		}
+		data.CheckIPTimeout = types.Int64Value(int64(checkIPDuration))
 
-	ip, err := checkIP(ctx, session, vmRecord)
-	if err != nil {
-		return err
+		ip, err := checkIP(ctx, session, vmRecord)
+		if err != nil {
+			return err
+		}
+		data.DefaultIP = types.StringValue(ip)
 	}
-	data.DefaultIP = types.StringValue(ip)
 
 	return nil
 }
