@@ -59,6 +59,23 @@ resource "xenserver_vm" "windows_vm" {
   }
 }
 
+# Create a Windows 11 VM that is copy from the custom template
+resource "xenserver_vm" "windows_vm_copy" {
+  name_label       = "Windows VM Copy From Custom Template"
+  template_name    = "Custom Windows 11 Template"
+  static_mem_max   = 4 * 1024 * 1024 * 1024
+  vcpus            = 4
+  cores_per_socket = 2
+  sr_for_full_disk_copy = data.xenserver_sr.sr.data_items[0].uuid
+
+  network_interface = [
+    {
+      device       = "0"
+      network_uuid = data.xenserver_network.network.data_items[0].uuid,
+    },
+  ]
+}
+
 # Create a Linux VM that is cloned from the custom template
 resource "xenserver_vm" "linux_vm" {
   name_label       = "Linux VM"

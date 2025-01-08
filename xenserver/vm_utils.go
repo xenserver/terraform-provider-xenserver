@@ -131,25 +131,26 @@ type vmRecordData struct {
 
 // vmResourceModel describes the resource data model.
 type vmResourceModel struct {
-	NameLabel        types.String `tfsdk:"name_label"`
-	NameDescription  types.String `tfsdk:"name_description"`
-	TemplateName     types.String `tfsdk:"template_name"`
-	StaticMemMin     types.Int64  `tfsdk:"static_mem_min"`
-	StaticMemMax     types.Int64  `tfsdk:"static_mem_max"`
-	DynamicMemMin    types.Int64  `tfsdk:"dynamic_mem_min"`
-	DynamicMemMax    types.Int64  `tfsdk:"dynamic_mem_max"`
-	VCPUs            types.Int32  `tfsdk:"vcpus"`
-	BootMode         types.String `tfsdk:"boot_mode"`
-	BootOrder        types.String `tfsdk:"boot_order"`
-	CorePerSocket    types.Int32  `tfsdk:"cores_per_socket"`
-	OtherConfig      types.Map    `tfsdk:"other_config"`
-	HardDrive        types.Set    `tfsdk:"hard_drive"`
-	NetworkInterface types.Set    `tfsdk:"network_interface"`
-	CDROM            types.String `tfsdk:"cdrom"`
-	UUID             types.String `tfsdk:"uuid"`
-	ID               types.String `tfsdk:"id"`
-	DefaultIP        types.String `tfsdk:"default_ip"`
-	CheckIPTimeout   types.Int64  `tfsdk:"check_ip_timeout"`
+	NameLabel         types.String `tfsdk:"name_label"`
+	NameDescription   types.String `tfsdk:"name_description"`
+	TemplateName      types.String `tfsdk:"template_name"`
+	StaticMemMin      types.Int64  `tfsdk:"static_mem_min"`
+	StaticMemMax      types.Int64  `tfsdk:"static_mem_max"`
+	DynamicMemMin     types.Int64  `tfsdk:"dynamic_mem_min"`
+	DynamicMemMax     types.Int64  `tfsdk:"dynamic_mem_max"`
+	VCPUs             types.Int32  `tfsdk:"vcpus"`
+	BootMode          types.String `tfsdk:"boot_mode"`
+	BootOrder         types.String `tfsdk:"boot_order"`
+	CorePerSocket     types.Int32  `tfsdk:"cores_per_socket"`
+	OtherConfig       types.Map    `tfsdk:"other_config"`
+	HardDrive         types.Set    `tfsdk:"hard_drive"`
+	SRForFullDiskCopy types.String `tfsdk:"sr_for_full_disk_copy"`
+	NetworkInterface  types.Set    `tfsdk:"network_interface"`
+	CDROM             types.String `tfsdk:"cdrom"`
+	UUID              types.String `tfsdk:"uuid"`
+	ID                types.String `tfsdk:"id"`
+	DefaultIP         types.String `tfsdk:"default_ip"`
+	CheckIPTimeout    types.Int64  `tfsdk:"check_ip_timeout"`
 }
 
 func vmSchema() map[string]schema.Attribute {
@@ -228,6 +229,13 @@ func vmSchema() map[string]schema.Attribute {
 			},
 			Optional: true,
 			Computed: true,
+		},
+		"sr_for_full_disk_copy": schema.StringAttribute{
+			MarkdownDescription: "Use storage-level full disk copy. Give a SR uuid or set as `\"origin\"` to keep use the origin SR of template disks. Only support custom template." +
+				"\n\n-> **Note:** `sr_for_full_disk_copy` is not allowed to be updated.",
+			Optional: true,
+			Computed: true,
+			Default:  stringdefault.StaticString(""),
 		},
 		"network_interface": schema.SetNestedAttribute{
 			MarkdownDescription: "A set of network interface attributes to attach to the virtual machine." + "<br />" +
@@ -473,6 +481,45 @@ func getFirstTemplate(session *xenapi.Session, templateName string) (xenapi.VMRe
 	return vmRef, errors.New("unable to find the VM template with the name: " + templateName)
 }
 
+func checkIfSupportFullCopy(session *xenapi.Session, templateRef xenapi.VMRef, srUUID string) (xenapi.SRRef, error) {
+	var srRef xenapi.SRRef
+	// show error if choose the XS default template
+	isDefaultTemplate, err := xenapi.VM.GetIsDefaultTemplate(session, templateRef)
+	if err != nil {
+		return srRef, errors.New("can't get is_default_template. " + err.Error())
+	}
+	if isDefaultTemplate {
+		return srRef, errors.New("don't support default template")
+	}
+
+	// check if VM template disk allow copy
+	templateHardDrives, err := getAllDiskTypeVBDs(session, templateRef)
+	if err != nil {
+		return srRef, err
+	}
+	for _, vbdRefStr := range templateHardDrives {
+		vdiRef, err := xenapi.VBD.GetVDI(session, xenapi.VBDRef(vbdRefStr))
+		if err != nil {
+			return srRef, errors.New("can't get VDI ref. " + err.Error())
+		}
+		allowedOps, err := xenapi.VDI.GetAllowedOperations(session, vdiRef)
+		if err != nil {
+			return srRef, errors.New("can't get VDI allowed_operations. " + err.Error())
+		}
+		if !slices.Contains(allowedOps, xenapi.VdiOperationsCopy) {
+			return srRef, errors.New("template disk doesn't allow copy")
+		}
+	}
+
+	if srUUID != "origin" {
+		srRef, err = xenapi.SR.GetByUUID(session, srUUID)
+		if err != nil {
+			return srRef, errors.New("can't get SR ref. " + err.Error())
+		}
+	}
+	return srRef, nil
+}
+
 func setOtherConfigWhenCreate(session *xenapi.Session, vmRef xenapi.VMRef) error {
 	vmOtherConfig, err := xenapi.VM.GetOtherConfig(session, vmRef)
 	if err != nil {
@@ -535,6 +582,7 @@ func updateOtherConfigFromPlan(ctx context.Context, session *xenapi.Session, vmR
 	vmOtherConfig["tf_other_config_keys"] = strings.Join(tfOtherConfigKeys, ",")
 	vmOtherConfig["tf_check_ip_timeout"] = plan.CheckIPTimeout.String()
 	vmOtherConfig["tf_template_name"] = plan.TemplateName.ValueString()
+	vmOtherConfig["tf_sr_for_full_disk_copy"] = plan.SRForFullDiskCopy.ValueString()
 
 	err = xenapi.VM.SetOtherConfig(session, vmRef, vmOtherConfig)
 	if err != nil {
@@ -636,6 +684,10 @@ func updateVMResourceModelComputed(ctx context.Context, session *xenapi.Session,
 			return err
 		}
 		data.DefaultIP = types.StringValue(ip)
+	}
+
+	if _, ok := vmRecord.OtherConfig["tf_sr_for_full_disk_copy"]; ok {
+		data.SRForFullDiskCopy = types.StringValue(vmRecord.OtherConfig["tf_sr_for_full_disk_copy"])
 	}
 
 	return nil
@@ -1219,6 +1271,9 @@ func vmResourceModelUpdateCheck(plan vmResourceModel, state vmResourceModel) err
 	}
 	if !plan.BootMode.IsUnknown() && plan.BootMode != state.BootMode {
 		return errors.New(`"boot_mode" doesn't expected to be updated`)
+	}
+	if !plan.SRForFullDiskCopy.IsUnknown() && plan.SRForFullDiskCopy != state.SRForFullDiskCopy {
+		return errors.New(`"sr_for_full_disk_copy" doesn't expected to be updated`)
 	}
 	return nil
 }
