@@ -69,14 +69,36 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 		)
 		return
 	}
-	tflog.Debug(ctx, "Clone VM from a template")
-	vmRef, err := xenapi.VM.Clone(r.session, templateRef, plan.NameLabel.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Unable to clone VM from template",
-			err.Error(),
-		)
-		return
+
+	var vmRef xenapi.VMRef
+	if !plan.SRForFullDiskCopy.IsUnknown() && plan.SRForFullDiskCopy.ValueString() != "" {
+		srRef, err := checkIfSupportFullCopy(r.session, templateRef, plan.SRForFullDiskCopy.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Use storage-level full disk copy but get error",
+				err.Error(),
+			)
+			return
+		}
+		tflog.Debug(ctx, "----> Copy VM from a template")
+		vmRef, err = xenapi.VM.Copy(r.session, templateRef, plan.NameLabel.ValueString(), srRef)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Unable to copy VM from template",
+				err.Error(),
+			)
+			return
+		}
+	} else {
+		tflog.Debug(ctx, "----> Clone VM from a template")
+		vmRef, err = xenapi.VM.Clone(r.session, templateRef, plan.NameLabel.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Unable to clone VM from template",
+				err.Error(),
+			)
+			return
+		}
 	}
 
 	err = setVMResourceModel(ctx, r.session, vmRef, plan)
