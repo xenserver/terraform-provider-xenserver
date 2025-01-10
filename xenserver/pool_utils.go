@@ -133,60 +133,65 @@ func poolJoin(ctx context.Context, coordinatorSession *xenapi.Session, coordinat
 	if diags.HasError() {
 		return errors.New("unable to access join supporters in config data")
 	}
+	if len(joinSupporters) == 0 {
+		tflog.Debug(ctx, "No host to join.")
+		return nil
+	}
+	ejectSupporters := make([]string, 0, len(plan.EjectSupporters.Elements()))
+	diags = plan.EjectSupporters.ElementsAs(ctx, &ejectSupporters, false)
+	if diags.HasError() {
+		return errors.New("unable to access eject supporters in config data")
+	}
+	// if coordinator host has scheme, remove it
+	coordinatorIP := regexp.MustCompile(`^https?://`).ReplaceAllString(coordinatorConf.Host, "")
+	supportersHosts := []string{}
 	for _, supporter := range joinSupporters {
+		// check if the supporter is duplicated in 'join_supporters', skip if it is
+		if slices.Contains(supportersHosts, supporter.Host.ValueString()) {
+			tflog.Debug(ctx, "Skip duplicate supporter in 'join_supporters'")
+			continue
+		}
+		supportersHosts = append(supportersHosts, supporter.Host.ValueString())
+
 		supporterSession, err := loginServer(supporter.Host.ValueString(), supporter.Username.ValueString(), supporter.Password.ValueString())
 		if err != nil {
 			if strings.Contains(err.Error(), "HOST_IS_SLAVE") {
-				tflog.Debug(ctx, "Host is already in the pool, continue")
-				continue
+				// check if the supporter in current pool
+				re := regexp.MustCompile(`data \[([^']*)\]`)
+				matches := re.FindStringSubmatch(err.Error())
+				if len(matches) > 1 && matches[1] == coordinatorIP {
+					tflog.Debug(ctx, "Host "+supporter.Host.ValueString()+" is already in this pool, continue")
+					continue
+				} else {
+					return errors.New("unable to join supporter host " + supporter.Host.ValueString() + ", it's not a standalone host")
+				}
 			}
-			return errors.New("Login Supporter Host Failed!\n" + err.Error() + ", host: " + supporter.Host.ValueString())
+			return errors.New("login supporter host " + supporter.Host.ValueString() + "failed. " + err.Error())
 		}
 
 		hostRefs, err := xenapi.Host.GetAll(supporterSession)
 		if err != nil {
-			return errors.New(err.Error())
+			return errors.New("unable to get the supporter host refs. " + err.Error())
 		}
-
+		// check if the supporter is a pool with more than 1 host, return error if it is
 		if len(hostRefs) > 1 {
-			return errors.New("Supporter host " + supporter.Host.ValueString() + " is not a standalone host")
+			return errors.New("unable to join supporter host " + supporter.Host.ValueString() + ", it's not a standalone host")
 		}
-
 		supporterRef := hostRefs[0]
-
-		// Check if the host is already in the pool, continue if it is
-		beforeJoinHostRefs, err := xenapi.Host.GetAll(coordinatorSession)
-		if err != nil {
-			return errors.New(err.Error())
-		}
-
-		if slices.Contains(beforeJoinHostRefs, supporterRef) {
-			continue
-		}
-
 		supporterUUID, err := xenapi.Host.GetUUID(supporterSession, supporterRef)
 		if err != nil {
-			return errors.New(err.Error() + ". \n\nunable to Get Host UUID with host: " + supporter.Host.ValueString())
+			return errors.New(err.Error() + ". \n\nunable to get supporter host UUID with host: " + supporter.Host.ValueString())
 		}
 
-		ejectSupporters := make([]string, 0, len(plan.EjectSupporters.Elements()))
-		diags := plan.EjectSupporters.ElementsAs(ctx, &ejectSupporters, false)
-		if diags.HasError() {
-			return errors.New("unable to access eject supporters in config data")
-		}
-
-		// Check if the host is in eject_supporters, return error if it is
+		// check if the host is in eject_supporters, return error if it is
 		if slices.Contains(ejectSupporters, supporterUUID) {
 			return errors.New("host " + supporter.Host.ValueString() + " with uuid " + supporterUUID + " is in eject_supporters, can't join the pool")
 		}
 
-		// if coordinator host has scheme, remove it
-		coordinatorIP := regexp.MustCompile(`^https?://`).ReplaceAllString(coordinatorConf.Host, "")
 		err = xenapi.Pool.Join(supporterSession, coordinatorIP, coordinatorConf.Username, coordinatorConf.Password)
 		if err != nil {
 			return errors.New(err.Error() + ". \n\nPool join failed with host uuid: " + supporterUUID)
 		}
-
 		joinedSupporterUUIDs = append(joinedSupporterUUIDs, supporterUUID)
 	}
 
@@ -194,30 +199,23 @@ func poolJoin(ctx context.Context, coordinatorSession *xenapi.Session, coordinat
 }
 
 func waitAllSupportersLive(ctx context.Context, session *xenapi.Session, supporterUUIDs []string) error {
-	tflog.Debug(ctx, "Waiting for all supporters to join the pool...")
+	tflog.Debug(ctx, "---> Waiting for all supporters to join the pool...")
 	operation := func() error {
 		for _, supporterUUID := range supporterUUIDs {
 			hostRef, err := xenapi.Host.GetByUUID(session, supporterUUID)
 			if err != nil {
-				return errors.New("unable to Get Host by UUID " + supporterUUID + "!\n" + err.Error())
+				return errors.New("unable to get host ref by UUID " + supporterUUID + "!\n" + err.Error())
 			}
-
-			hostMetricsRef, err := xenapi.Host.GetMetrics(session, hostRef)
+			hostEnabled, err := xenapi.Host.GetEnabled(session, hostRef)
 			if err != nil {
-				return errors.New("unable to Get Host Metrics with UUID " + supporterUUID + "!\n" + err.Error())
+				return errors.New("unable to get host enabled status. " + err.Error())
 			}
-
-			hostIsLive, err := xenapi.HostMetrics.GetLive(session, hostMetricsRef)
-			if err != nil {
-				return errors.New("unable to Get Host Live Status with UUID " + supporterUUID + "!\n" + err.Error())
-			}
-
-			if hostIsLive {
-				tflog.Debug(ctx, "Host "+supporterUUID+" is live")
+			if hostEnabled {
+				tflog.Debug(ctx, "Host "+supporterUUID+" is enabled")
 				continue
 			} else {
-				tflog.Debug(ctx, "Host "+supporterUUID+" is not live, retrying...")
-				return errors.New("host " + supporterUUID + " is not live")
+				tflog.Debug(ctx, "Host "+supporterUUID+" is disabled, retrying...")
+				return errors.New("host " + supporterUUID + " is disabled")
 			}
 		}
 		return nil
@@ -230,6 +228,7 @@ func waitAllSupportersLive(ctx context.Context, session *xenapi.Session, support
 	if err != nil {
 		return errors.New(err.Error())
 	}
+	tflog.Debug(ctx, "---> All supporters success join the pool.")
 
 	return nil
 }
@@ -240,17 +239,35 @@ func poolEject(ctx context.Context, session *xenapi.Session, plan poolResourceMo
 	if diags.HasError() {
 		return errors.New("unable to access eject supporters in config data")
 	}
+	if len(ejectSupporters) == 0 {
+		tflog.Debug(ctx, "No host to eject.")
+		return nil
+	}
+	// get all the hosts current in pool
+	beforeEjectHostRefs, err := xenapi.Host.GetAll(session)
+	if err != nil {
+		return errors.New("unable to get the origin host refs in pool. " + err.Error())
+	}
+	beforeEjectHosts := make(map[string]xenapi.HostRef)
+	for _, ref := range beforeEjectHostRefs {
+		uuid, err := xenapi.Host.GetUUID(session, ref)
+		if err != nil {
+			return errors.New("unable to get the origin host uuid in pool. " + err.Error())
+		}
+		beforeEjectHosts[uuid] = ref
+	}
 
 	for _, hostUUID := range ejectSupporters {
 		tflog.Debug(ctx, "Ejecting pool with host: "+hostUUID)
-
-		hostRef, err := xenapi.Host.GetByUUID(session, hostUUID)
-		if err != nil {
-			return errors.New("unable to Get Host by UUID " + hostUUID + "!\n" + err.Error())
+		// check if the supporter is not in the pool, skip if it is
+		hostRef, ok := beforeEjectHosts[hostUUID]
+		if !ok {
+			tflog.Debug(ctx, "Skip eject as supporter is not in pool")
+			continue
 		}
-		err = xenapi.Pool.Eject(session, hostRef)
+		err := xenapi.Pool.Eject(session, hostRef)
 		if err != nil {
-			return errors.New("unable to Eject Pool with host UUID " + hostUUID + "!\n" + err.Error())
+			return errors.New("unable to eject pool with host UUID " + hostUUID + "!\n" + err.Error())
 		}
 	}
 
@@ -266,11 +283,11 @@ func getCoordinatorRef(session *xenapi.Session) (xenapi.HostRef, string, error) 
 	}
 	coordinatorRef, err = xenapi.Pool.GetMaster(session, poolRef)
 	if err != nil {
-		return coordinatorRef, coordinatorUUID, errors.New(err.Error())
+		return coordinatorRef, coordinatorUUID, errors.New("unable to get pool master. " + err.Error())
 	}
 	coordinatorUUID, err = xenapi.Host.GetUUID(session, coordinatorRef)
 	if err != nil {
-		return coordinatorRef, coordinatorUUID, errors.New(err.Error())
+		return coordinatorRef, coordinatorUUID, errors.New("unable to get host UUID. " + err.Error())
 	}
 	return coordinatorRef, coordinatorUUID, nil
 }
@@ -278,7 +295,7 @@ func getCoordinatorRef(session *xenapi.Session) (xenapi.HostRef, string, error) 
 func getPoolRef(session *xenapi.Session) (xenapi.PoolRef, error) {
 	poolRefs, err := xenapi.Pool.GetAll(session)
 	if err != nil {
-		return "", errors.New(err.Error())
+		return "", errors.New("unable to get pool refs. " + err.Error())
 	}
 
 	return poolRefs[0], nil
@@ -287,10 +304,9 @@ func getPoolRef(session *xenapi.Session) (xenapi.PoolRef, error) {
 func cleanupPoolResource(session *xenapi.Session, poolRef xenapi.PoolRef) error {
 	err := xenapi.Pool.SetNameLabel(session, poolRef, "")
 	if err != nil {
-		return errors.New(err.Error())
+		return errors.New("unable to set pool name_label. " + err.Error())
 	}
 
-	// eject supporters
 	coordinatorRef, _, err := getCoordinatorRef(session)
 	if err != nil {
 		return errors.New(err.Error())
@@ -299,7 +315,7 @@ func cleanupPoolResource(session *xenapi.Session, poolRef xenapi.PoolRef) error 
 	// eject supporters
 	hostRefs, err := xenapi.Host.GetAll(session)
 	if err != nil {
-		return errors.New(err.Error())
+		return errors.New("unable to get host all refs. " + err.Error())
 	}
 
 	for _, hostRef := range hostRefs {
@@ -310,7 +326,7 @@ func cleanupPoolResource(session *xenapi.Session, poolRef xenapi.PoolRef) error 
 
 		err = xenapi.Pool.Eject(session, hostRef)
 		if err != nil {
-			return errors.New(err.Error())
+			return errors.New("Pool eject failed when clean up. " + err.Error())
 		}
 	}
 
@@ -320,24 +336,24 @@ func cleanupPoolResource(session *xenapi.Session, poolRef xenapi.PoolRef) error 
 func setPool(session *xenapi.Session, poolRef xenapi.PoolRef, poolParams poolParams) error {
 	err := xenapi.Pool.SetNameLabel(session, poolRef, poolParams.NameLabel)
 	if err != nil {
-		return errors.New("unable to Set NameLabel!\n" + err.Error())
+		return errors.New("unable to set pool name_label. " + err.Error())
 	}
 
 	err = xenapi.Pool.SetNameDescription(session, poolRef, poolParams.NameDescription)
 	if err != nil {
-		return errors.New("unable to Set NameDescription!\n" + err.Error())
+		return errors.New("unable to set pool name_description. " + err.Error())
 	}
 
 	if poolParams.DefaultSRUUID != "" {
 		srRef, err := xenapi.SR.GetByUUID(session, poolParams.DefaultSRUUID)
 		if err != nil {
-			return errors.New("unable to Get SR by UUID!\n" + err.Error() + ", uuid: " + poolParams.DefaultSRUUID)
+			return errors.New("unable to get SR by UUID " + poolParams.DefaultSRUUID + "!\n" + err.Error())
 		}
 
 		// Check if the SR is non-shared, return error if it is
 		shared, err := xenapi.SR.GetShared(session, srRef)
 		if err != nil {
-			return errors.New("unable to Get SR shared status!\n" + err.Error())
+			return errors.New("unable to get SR shared status. " + err.Error())
 		}
 
 		if !shared {
@@ -346,19 +362,19 @@ func setPool(session *xenapi.Session, poolRef xenapi.PoolRef, poolParams poolPar
 
 		err = xenapi.Pool.SetDefaultSR(session, poolRef, srRef)
 		if err != nil {
-			return errors.New("unable to Set DefaultSR on the Pool!\n" + err.Error())
+			return errors.New("unable to set pool default_SR. " + err.Error())
 		}
 	}
 
 	if poolParams.ManagementNetworkUUID != "" {
 		networkRef, err := xenapi.Network.GetByUUID(session, poolParams.ManagementNetworkUUID)
 		if err != nil {
-			return errors.New("unable to Get Network by UUID!\n" + err.Error() + ", uuid: " + poolParams.ManagementNetworkUUID)
+			return errors.New("unable to get network by UUID " + poolParams.ManagementNetworkUUID + "!\n" + err.Error())
 		}
 
 		err = xenapi.Pool.ManagementReconfigure(session, networkRef)
 		if err != nil {
-			return errors.New("unable to Reconfigure Management Network on the Pool!\n" + err.Error() + ", uuid: " + poolParams.ManagementNetworkUUID)
+			return errors.New("unable to reconfigure pool management network " + poolParams.ManagementNetworkUUID + "!\n" + err.Error())
 		}
 
 		// wait for toolstack restart
@@ -371,24 +387,24 @@ func setPool(session *xenapi.Session, poolRef xenapi.PoolRef, poolParams poolPar
 func getManagementNetworkUUID(session *xenapi.Session, coordinatorRef xenapi.HostRef) (string, error) {
 	pifRefs, err := xenapi.Host.GetPIFs(session, coordinatorRef)
 	if err != nil {
-		return "", errors.New(err.Error())
+		return "", errors.New("unable to get host PIFs. " + err.Error())
 	}
 
 	for _, pifRef := range pifRefs {
 		isManagement, err := xenapi.PIF.GetManagement(session, pifRef)
 		if err != nil {
-			return "", errors.New(err.Error())
+			return "", errors.New("unable to get PIF management. " + err.Error())
 		}
 
 		if isManagement {
 			networkRef, err := xenapi.PIF.GetNetwork(session, pifRef)
 			if err != nil {
-				return "", errors.New(err.Error())
+				return "", errors.New("unable to get PIF network. " + err.Error())
 			}
 
 			networkRecord, err := xenapi.Network.GetRecord(session, networkRef)
 			if err != nil {
-				return "", errors.New(err.Error())
+				return "", errors.New("unable to get network record. " + err.Error())
 			}
 
 			return networkRecord.UUID, nil
