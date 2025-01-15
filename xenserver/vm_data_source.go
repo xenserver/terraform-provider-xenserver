@@ -66,7 +66,7 @@ func vmDataSchema() map[string]schema.Attribute {
 			Computed:            true,
 		},
 		"suspend_vdi": schema.StringAttribute{
-			MarkdownDescription: "The VDI that a suspend image is stored on. Only has meaning if VM is currently suspended.",
+			MarkdownDescription: "The VDI(UUID) that a suspend image is stored on. Only has meaning if VM is currently suspended.",
 			Computed:            true,
 		},
 		"memory_overhead": schema.Int64Attribute{
@@ -105,11 +105,11 @@ func vmDataSchema() map[string]schema.Attribute {
 			Computed:            true,
 		},
 		"resident_on": schema.StringAttribute{
-			MarkdownDescription: "The host the VM is currently resident on.",
+			MarkdownDescription: "The host(UUID) the VM is currently resident on.",
 			Computed:            true,
 		},
 		"scheduled_to_be_resident_on": schema.StringAttribute{
-			MarkdownDescription: "The host on which the VM is due to be started/resumed/migrated. This acts as a memory reservation indicator.",
+			MarkdownDescription: "The host(UUID) on which the VM is due to be started/resumed/migrated. This acts as a memory reservation indicator.",
 			Computed:            true,
 		},
 		"affinity": schema.StringAttribute{
@@ -161,32 +161,32 @@ func vmDataSchema() map[string]schema.Attribute {
 			Computed:            true,
 		},
 		"consoles": schema.ListAttribute{
-			MarkdownDescription: "Virtual console devices.",
+			MarkdownDescription: "The UUID list of virtual console devices.",
 			Computed:            true,
 			ElementType:         types.StringType,
 		},
 		"vifs": schema.ListAttribute{
-			MarkdownDescription: "Virtual network interfaces.",
+			MarkdownDescription: "The UUID list of virtual network interfaces.",
 			Computed:            true,
 			ElementType:         types.StringType,
 		},
 		"vbds": schema.ListAttribute{
-			MarkdownDescription: "Virtual block devices.",
+			MarkdownDescription: "The UUID list of virtual block devices.",
 			Computed:            true,
 			ElementType:         types.StringType,
 		},
 		"vusbs": schema.ListAttribute{
-			MarkdownDescription: "Virtual USB devices.",
+			MarkdownDescription: "The UUID list of virtual USB devices.",
 			Computed:            true,
 			ElementType:         types.StringType,
 		},
 		"crash_dumps": schema.ListAttribute{
-			MarkdownDescription: "Crash dumps associated with this VM.",
+			MarkdownDescription: "The UUID list of crash dumps associated with this VM.",
 			Computed:            true,
 			ElementType:         types.StringType,
 		},
 		"vtpms": schema.ListAttribute{
-			MarkdownDescription: "Virtual TPMs.",
+			MarkdownDescription: "The UUID list of virtual TPMs.",
 			Computed:            true,
 			ElementType:         types.StringType,
 		},
@@ -241,11 +241,11 @@ func vmDataSchema() map[string]schema.Attribute {
 			ElementType:         types.StringType,
 		},
 		"metrics": schema.StringAttribute{
-			MarkdownDescription: "Metrics associated with this VM.",
+			MarkdownDescription: "Metrics(UUID) associated with this VM.",
 			Computed:            true,
 		},
 		"guest_metrics": schema.StringAttribute{
-			MarkdownDescription: "Metrics associated with the running guest.",
+			MarkdownDescription: "Metrics(UUID) associated with the running guest.",
 			Computed:            true,
 		},
 		"last_booted_record": schema.StringAttribute{
@@ -274,11 +274,11 @@ func vmDataSchema() map[string]schema.Attribute {
 			Computed:            true,
 		},
 		"snapshot_of": schema.StringAttribute{
-			MarkdownDescription: "Ref pointing to the VM this snapshot is of.",
+			MarkdownDescription: "UUID pointing to the VM this snapshot is of.",
 			Computed:            true,
 		},
 		"snapshots": schema.ListAttribute{
-			MarkdownDescription: "List pointing to all the VM snapshots.",
+			MarkdownDescription: "UUID list pointing to all the VM snapshots.",
 			Computed:            true,
 			ElementType:         types.StringType,
 		},
@@ -291,7 +291,7 @@ func vmDataSchema() map[string]schema.Attribute {
 			Computed:            true,
 		},
 		"blobs": schema.MapAttribute{
-			MarkdownDescription: "Binary blobs associated with this VM.",
+			MarkdownDescription: "Binary blobs(UUID) associated with this VM.",
 			Computed:            true,
 			ElementType:         types.StringType,
 		},
@@ -315,11 +315,11 @@ func vmDataSchema() map[string]schema.Attribute {
 			Computed:            true,
 		},
 		"parent": schema.StringAttribute{
-			MarkdownDescription: "Ref pointing to the parent of this VM.",
+			MarkdownDescription: "UUID pointing to the parent of this VM.",
 			Computed:            true,
 		},
 		"children": schema.ListAttribute{
-			MarkdownDescription: "List pointing to all the children of this VM.",
+			MarkdownDescription: "UUID list pointing to all the children of this VM.",
 			Computed:            true,
 			ElementType:         types.StringType,
 		},
@@ -329,7 +329,7 @@ func vmDataSchema() map[string]schema.Attribute {
 			ElementType:         types.StringType,
 		},
 		"protection_policy": schema.StringAttribute{
-			MarkdownDescription: "Ref pointing to a protection policy for this VM.",
+			MarkdownDescription: "UUID pointing to a protection policy for this VM.",
 			Computed:            true,
 		},
 		"is_snapshot_from_vmpp": schema.BoolAttribute{
@@ -337,7 +337,7 @@ func vmDataSchema() map[string]schema.Attribute {
 			Computed:            true,
 		},
 		"snapshot_schedule": schema.StringAttribute{
-			MarkdownDescription: "Ref pointing to a snapshot schedule for this VM.",
+			MarkdownDescription: "UUID pointing to a snapshot schedule for this VM.",
 			Computed:            true,
 		},
 		"is_vmss_snapshot": schema.BoolAttribute{
@@ -345,7 +345,7 @@ func vmDataSchema() map[string]schema.Attribute {
 			Computed:            true,
 		},
 		"appliance": schema.StringAttribute{
-			MarkdownDescription: "The appliance to which this VM belongs.",
+			MarkdownDescription: "The appliance(UUID) to which this VM belongs.",
 			Computed:            true,
 		},
 		"start_delay": schema.Int64Attribute{
@@ -361,17 +361,17 @@ func vmDataSchema() map[string]schema.Attribute {
 			Computed:            true,
 		},
 		"vgpus": schema.ListAttribute{
-			MarkdownDescription: "Virtual GPUs.",
+			MarkdownDescription: "The UUID list of virtual GPUs.",
 			Computed:            true,
 			ElementType:         types.StringType,
 		},
 		"attached_pcis": schema.ListAttribute{
-			MarkdownDescription: "Currently passed-through PCI devices.",
+			MarkdownDescription: "The UUID list of currently passed-through PCI devices.",
 			Computed:            true,
 			ElementType:         types.StringType,
 		},
 		"suspend_sr": schema.StringAttribute{
-			MarkdownDescription: "The SR on which a suspend image is stored.",
+			MarkdownDescription: "The SR(UUID) on which a suspend image is stored.",
 			Computed:            true,
 		},
 		"version": schema.Int32Attribute{
@@ -419,6 +419,11 @@ func vmDataSchema() map[string]schema.Attribute {
 		},
 		"pending_guidances_full": schema.ListAttribute{
 			MarkdownDescription: "The set of pending full guidances after applying updates, which a user should follow to make some updates, for example, specific hardware drivers or CPU features, fully effective, but the 'average user' doesn't need to.",
+			Computed:            true,
+			ElementType:         types.StringType,
+		},
+		"groups": schema.ListAttribute{
+			MarkdownDescription: "The UUID list of VM groups associated with the VM.",
 			Computed:            true,
 			ElementType:         types.StringType,
 		},
@@ -497,7 +502,7 @@ func (d *vmDataSource) Read(ctx context.Context, req datasource.ReadRequest, res
 		}
 
 		var vmItem vmRecordData
-		err := updateVMRecordData(ctx, vmRecord, &vmItem)
+		err := updateVMRecordData(ctx, d.session, vmRecord, &vmItem)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Unable to update VM data",

@@ -67,15 +67,9 @@ func updateHostRecordData(ctx context.Context, session *xenapi.Session, record x
 	data.NameDescription = types.StringValue(record.NameDescription)
 	data.Hostname = types.StringValue(record.Hostname)
 	data.Address = types.StringValue(record.Address)
-	residentVMs := []string{}
-	for _, vmRef := range record.ResidentVMs {
-		if vmRef != record.ControlDomain {
-			vmUUID, err := xenapi.VM.GetUUID(session, vmRef)
-			if err != nil {
-				return errors.New(err.Error())
-			}
-			residentVMs = append(residentVMs, vmUUID)
-		}
+	residentVMs, err := getVMUUIDs(session, record.ResidentVMs, record.ControlDomain)
+	if err != nil {
+		return err
 	}
 	var diags diag.Diagnostics
 	data.ResidentVMs, diags = types.ListValueFrom(ctx, types.StringType, residentVMs)

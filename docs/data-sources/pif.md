@@ -41,8 +41,8 @@ output "pif_data_out" {
 
 Read-Only:
 
-- `bond_master_of` (List of String) Indicates this PIF represents the results of a bond.
-- `bond_slave_of` (String) Indicates which bond this interface is part of.
+- `bond_master_of` (List of String) Indicates this PIF represents the results of a bond(UUID).
+- `bond_slave_of` (String) Indicates which bond(UUID) this interface is part of.
 - `capabilities` (List of String) Additional capabilities on the interface.
 - `currently_attached` (Boolean) True if this interface is online.
 - `device` (String) The machine-readable name of the physical interface (PIF). (For example, `"eth0"`)
@@ -63,15 +63,15 @@ Read-Only:
 - `netmask` (String) IP netmask.
 - `network` (String) The UUID of the virtual network to which this PIF is connected.
 - `other_config` (Map of String) Additional configuration.
-- `pci` (String) Link to underlying PCI device.
+- `pci` (String) Link to underlying PCI(UUID) device.
 - `physical` (Boolean) True if this represents a physical network interface.
 - `primary_address_type` (String) Which protocol should define the primary address of this interface.
 - `properties` (Map of String) Additional configuration properties for the interface.
-- `sriov_logical_pif_of` (List of String) Indicates which network_sriov this interface is the logical PIF of.
-- `sriov_physical_pif_of` (List of String) Indicates which network_sriov this interface is the physical PIF of.
-- `tunnel_access_pif_of` (List of String) Indicates to which tunnel this PIF gives access.
-- `tunnel_transport_pif_of` (List of String) Indicates to which tunnel this PIF provides transport.
+- `sriov_logical_pif_of` (List of String) Indicates which network_sriov(UUID) this interface is the logical PIF of.
+- `sriov_physical_pif_of` (List of String) Indicates which network_sriov(UUID) this interface is the physical PIF of.
+- `tunnel_access_pif_of` (List of String) Indicates to which tunnel(UUID) this PIF gives access.
+- `tunnel_transport_pif_of` (List of String) Indicates to which tunnel(UUID) this PIF provides transport.
 - `uuid` (String) The UUID of the storage repository.
 - `vlan` (Number) VLAN tag for all traffic passing through this interface.
-- `vlan_master_of` (String) Indicates which VLAN this interface receives untagged traffic from.
-- `vlan_slave_of` (List of String) Indicates which VLANs this interface transmits tagged traffic to.
+- `vlan_master_of` (String) Indicates which VLAN(UUID) this interface receives untagged traffic from.
+- `vlan_slave_of` (List of String) Indicates which VLANs(UUID) this interface transmits tagged traffic to.
