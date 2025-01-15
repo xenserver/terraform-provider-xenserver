@@ -178,9 +178,9 @@ func poolJoin(ctx context.Context, coordinatorSession *xenapi.Session, coordinat
 			return errors.New("unable to join supporter host " + supporter.Host.ValueString() + ", it's not a standalone host")
 		}
 		supporterRef := hostRefs[0]
-		supporterUUID, err := xenapi.Host.GetUUID(supporterSession, supporterRef)
+		supporterUUID, err := getUUIDFromHostRef(supporterSession, supporterRef)
 		if err != nil {
-			return errors.New(err.Error() + ". \n\nunable to get supporter host UUID with host: " + supporter.Host.ValueString())
+			return errors.New(err.Error() + ". \n\nsupporter host is: " + supporter.Host.ValueString())
 		}
 
 		// check if the host is in eject_supporters, return error if it is
@@ -250,9 +250,9 @@ func poolEject(ctx context.Context, session *xenapi.Session, plan poolResourceMo
 	}
 	beforeEjectHosts := make(map[string]xenapi.HostRef)
 	for _, ref := range beforeEjectHostRefs {
-		uuid, err := xenapi.Host.GetUUID(session, ref)
+		uuid, err := getUUIDFromHostRef(session, ref)
 		if err != nil {
-			return errors.New("unable to get the origin host uuid in pool. " + err.Error())
+			return err
 		}
 		beforeEjectHosts[uuid] = ref
 	}
@@ -285,9 +285,9 @@ func getCoordinatorRef(session *xenapi.Session) (xenapi.HostRef, string, error) 
 	if err != nil {
 		return coordinatorRef, coordinatorUUID, errors.New("unable to get pool master. " + err.Error())
 	}
-	coordinatorUUID, err = xenapi.Host.GetUUID(session, coordinatorRef)
+	coordinatorUUID, err = getUUIDFromHostRef(session, coordinatorRef)
 	if err != nil {
-		return coordinatorRef, coordinatorUUID, errors.New("unable to get host UUID. " + err.Error())
+		return coordinatorRef, coordinatorUUID, err
 	}
 	return coordinatorRef, coordinatorUUID, nil
 }
@@ -425,7 +425,7 @@ func updatePoolResourceModelComputed(session *xenapi.Session, record xenapi.Pool
 
 	data.DefaultSRUUID = types.StringValue("")
 	if string(record.DefaultSR) != "OpaqueRef:NULL" {
-		srUUID, err := xenapi.SR.GetUUID(session, record.DefaultSR)
+		srUUID, err := getUUIDFromSRRef(session, record.DefaultSR)
 		if err == nil {
 			data.DefaultSRUUID = types.StringValue(srUUID)
 		}

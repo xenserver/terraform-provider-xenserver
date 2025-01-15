@@ -43,7 +43,7 @@ type srRecordData struct {
 	IsToolsSr           types.Bool   `tfsdk:"is_tools_sr"`
 }
 
-func updateSRRecordData(ctx context.Context, record xenapi.SRRecord, data *srRecordData) error {
+func updateSRRecordData(ctx context.Context, session *xenapi.Session, record xenapi.SRRecord, data *srRecordData) error {
 	data.UUID = types.StringValue(record.UUID)
 	data.NameLabel = types.StringValue(record.NameLabel)
 	data.NameDescription = types.StringValue(record.NameDescription)
@@ -56,11 +56,19 @@ func updateSRRecordData(ctx context.Context, record xenapi.SRRecord, data *srRec
 	if diags.HasError() {
 		return errors.New("unable to read SR current operation")
 	}
-	data.VDIs, diags = types.ListValueFrom(ctx, types.StringType, record.VDIs)
+	vdiUUIDs, err := getVDIUUIDs(session, record.VDIs)
+	if err != nil {
+		return err
+	}
+	data.VDIs, diags = types.ListValueFrom(ctx, types.StringType, vdiUUIDs)
 	if diags.HasError() {
 		return errors.New("unable to read SR VDIs")
 	}
-	data.PBDs, diags = types.ListValueFrom(ctx, types.StringType, record.PBDs)
+	pbdUUIDs, err := getPBDUUIDs(session, record.PBDs)
+	if err != nil {
+		return err
+	}
+	data.PBDs, diags = types.ListValueFrom(ctx, types.StringType, pbdUUIDs)
 	if diags.HasError() {
 		return errors.New("unable to read SR PBDs")
 	}
@@ -82,12 +90,20 @@ func updateSRRecordData(ctx context.Context, record xenapi.SRRecord, data *srRec
 	if diags.HasError() {
 		return errors.New("unable to read SR SM config")
 	}
-	data.Blobs, diags = types.MapValueFrom(ctx, types.StringType, record.Blobs)
+	blobs, err := getBlobUUIDsMap(session, record.Blobs)
+	if err != nil {
+		return err
+	}
+	data.Blobs, diags = types.MapValueFrom(ctx, types.StringType, blobs)
 	if diags.HasError() {
 		return errors.New("unable to read SR blobs")
 	}
 	data.LocalCacheEnabled = types.BoolValue(record.LocalCacheEnabled)
-	data.IntroducedBy = types.StringValue(string(record.IntroducedBy))
+	introducedBy, err := getUUIDFromDRTaskRef(session, record.IntroducedBy)
+	if err != nil {
+		return err
+	}
+	data.IntroducedBy = types.StringValue(introducedBy)
 	data.Clustered = types.BoolValue(record.Clustered)
 	data.IsToolsSr = types.BoolValue(record.IsToolsSr)
 	return nil
@@ -190,9 +206,9 @@ func updateSRResourceModelComputed(ctx context.Context, session *xenapi.Session,
 	if !srRecord.Shared {
 		hostRef = pbdRecord.Host
 	}
-	hostUUID, err := xenapi.Host.GetUUID(session, hostRef)
+	hostUUID, err := getUUIDFromHostRef(session, hostRef)
 	if err != nil {
-		return errors.New(err.Error())
+		return err
 	}
 	data.Host = types.StringValue(hostUUID)
 	data.DeviceConfig, diags = types.MapValueFrom(ctx, types.StringType, pbdRecord.DeviceConfig)

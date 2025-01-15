@@ -38,7 +38,7 @@ type networkRecordData struct {
 	Purpose            types.List   `tfsdk:"purpose"`
 }
 
-func updateNetworkRecordData(ctx context.Context, record xenapi.NetworkRecord, data *networkRecordData) error {
+func updateNetworkRecordData(ctx context.Context, session *xenapi.Session, record xenapi.NetworkRecord, data *networkRecordData) error {
 	data.UUID = types.StringValue(record.UUID)
 	data.NameLabel = types.StringValue(record.NameLabel)
 	data.NameDescription = types.StringValue(record.NameDescription)
@@ -51,11 +51,19 @@ func updateNetworkRecordData(ctx context.Context, record xenapi.NetworkRecord, d
 	if diags.HasError() {
 		return errors.New("unable to read network current operation")
 	}
-	data.VIFs, diags = types.ListValueFrom(ctx, types.StringType, record.VIFs)
+	vifUUIDs, err := getVIFUUIDs(session, record.VIFs)
+	if err != nil {
+		return err
+	}
+	data.VIFs, diags = types.ListValueFrom(ctx, types.StringType, vifUUIDs)
 	if diags.HasError() {
 		return errors.New("unable to read network VIFs")
 	}
-	data.PIFs, diags = types.ListValueFrom(ctx, types.StringType, record.PIFs)
+	pifUUIDs, err := getPIFUUIDs(session, record.PIFs)
+	if err != nil {
+		return err
+	}
+	data.PIFs, diags = types.ListValueFrom(ctx, types.StringType, pifUUIDs)
 	if diags.HasError() {
 		return errors.New("unable to read network PIFs")
 	}
@@ -66,7 +74,11 @@ func updateNetworkRecordData(ctx context.Context, record xenapi.NetworkRecord, d
 	}
 	data.Bridge = types.StringValue(record.Bridge)
 	data.Managed = types.BoolValue(record.Managed)
-	data.Blobs, diags = types.MapValueFrom(ctx, types.StringType, record.Blobs)
+	blobs, err := getBlobUUIDsMap(session, record.Blobs)
+	if err != nil {
+		return err
+	}
+	data.Blobs, diags = types.MapValueFrom(ctx, types.StringType, blobs)
 	if diags.HasError() {
 		return errors.New("unable to read network blobs")
 	}
@@ -75,7 +87,11 @@ func updateNetworkRecordData(ctx context.Context, record xenapi.NetworkRecord, d
 		return errors.New("unable to read network tags")
 	}
 	data.DefaultLockingMode = types.StringValue(string(record.DefaultLockingMode))
-	data.AssignedIps, diags = types.MapValueFrom(ctx, types.StringType, record.AssignedIps)
+	assignedIps, err := getVIFUUIDsMap(session, record.AssignedIps)
+	if err != nil {
+		return err
+	}
+	data.AssignedIps, diags = types.MapValueFrom(ctx, types.StringType, assignedIps)
 	if diags.HasError() {
 		return errors.New("unable to read network assigned_ips")
 	}

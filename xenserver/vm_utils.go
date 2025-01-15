@@ -127,6 +127,7 @@ type vmRecordData struct {
 	PendingGuidances            types.List    `tfsdk:"pending_guidances"`
 	PendingGuidancesRecommended types.List    `tfsdk:"pending_guidances_recommended"`
 	PendingGuidancesFull        types.List    `tfsdk:"pending_guidances_full"`
+	Groups                      types.List    `tfsdk:"groups"`
 }
 
 // vmResourceModel describes the resource data model.
@@ -288,7 +289,7 @@ func vmSchema() map[string]schema.Attribute {
 	}
 }
 
-func updateVMRecordData(ctx context.Context, record xenapi.VMRecord, data *vmRecordData) error {
+func updateVMRecordData(ctx context.Context, session *xenapi.Session, record xenapi.VMRecord, data *vmRecordData) error {
 	data.UUID = types.StringValue(record.UUID)
 	var diags diag.Diagnostics
 	data.AllowedOperations, diags = types.ListValueFrom(ctx, types.StringType, record.AllowedOperations)
@@ -305,10 +306,26 @@ func updateVMRecordData(ctx context.Context, record xenapi.VMRecord, data *vmRec
 	data.UserVersion = types.Int32Value(int32(record.UserVersion))
 	data.IsATemplate = types.BoolValue(record.IsATemplate)
 	data.IsDefaultTemplate = types.BoolValue(record.IsDefaultTemplate)
-	data.SuspendVDI = types.StringValue(string(record.SuspendVDI))
-	data.ResidentOn = types.StringValue(string(record.ResidentOn))
-	data.ScheduledToBeResidentOn = types.StringValue(string(record.ScheduledToBeResidentOn))
-	data.Affinity = types.StringValue(string(record.Affinity))
+	suspendVDI, err := getUUIDFromVDIRef(session, record.SuspendVDI)
+	if err != nil {
+		return err
+	}
+	data.SuspendVDI = types.StringValue(suspendVDI)
+	residentOn, err := getUUIDFromHostRef(session, record.ResidentOn)
+	if err != nil {
+		return err
+	}
+	data.ResidentOn = types.StringValue(residentOn)
+	scheduledToBeResidentOn, err := getUUIDFromHostRef(session, record.ScheduledToBeResidentOn)
+	if err != nil {
+		return err
+	}
+	data.ScheduledToBeResidentOn = types.StringValue(scheduledToBeResidentOn)
+	affinity, err := getUUIDFromHostRef(session, record.Affinity)
+	if err != nil {
+		return err
+	}
+	data.Affinity = types.StringValue(affinity)
 	data.MemoryOverhead = types.Int64Value(int64(record.MemoryOverhead))
 	data.MemoryTarget = types.Int64Value(int64(record.MemoryTarget))
 	data.MemoryStaticMax = types.Int64Value(int64(record.MemoryStaticMax))
@@ -325,27 +342,51 @@ func updateVMRecordData(ctx context.Context, record xenapi.VMRecord, data *vmRec
 	data.ActionsAfterShutdown = types.StringValue(string(record.ActionsAfterShutdown))
 	data.ActionsAfterReboot = types.StringValue(string(record.ActionsAfterReboot))
 	data.ActionsAfterCrash = types.StringValue(string(record.ActionsAfterCrash))
-	data.Consoles, diags = types.ListValueFrom(ctx, types.StringType, record.Consoles)
+	consoles, err := getConsoleUUIDs(session, record.Consoles)
+	if err != nil {
+		return err
+	}
+	data.Consoles, diags = types.ListValueFrom(ctx, types.StringType, consoles)
 	if diags.HasError() {
 		return errors.New("unable to read VM consoles")
 	}
-	data.VIFs, diags = types.ListValueFrom(ctx, types.StringType, record.VIFs)
+	vifUUIDs, err := getVIFUUIDs(session, record.VIFs)
+	if err != nil {
+		return err
+	}
+	data.VIFs, diags = types.ListValueFrom(ctx, types.StringType, vifUUIDs)
 	if diags.HasError() {
 		return errors.New("unable to read VM VIFs")
 	}
-	data.VBDs, diags = types.ListValueFrom(ctx, types.StringType, record.VBDs)
+	vbdUUIDs, err := getVBDUUIDs(session, record.VBDs)
+	if err != nil {
+		return err
+	}
+	data.VBDs, diags = types.ListValueFrom(ctx, types.StringType, vbdUUIDs)
 	if diags.HasError() {
 		return errors.New("unable to read VM VBDs")
 	}
-	data.VUSBs, diags = types.ListValueFrom(ctx, types.StringType, record.VUSBs)
+	vusbUUIDs, err := getVUSBUUIDs(session, record.VUSBs)
+	if err != nil {
+		return err
+	}
+	data.VUSBs, diags = types.ListValueFrom(ctx, types.StringType, vusbUUIDs)
 	if diags.HasError() {
 		return errors.New("unable to read VM VUSBs")
 	}
-	data.CrashDumps, diags = types.ListValueFrom(ctx, types.StringType, record.CrashDumps)
+	crashDumps, err := getCrashdumpUUIDs(session, record.CrashDumps)
+	if err != nil {
+		return err
+	}
+	data.CrashDumps, diags = types.ListValueFrom(ctx, types.StringType, crashDumps)
 	if diags.HasError() {
 		return errors.New("unable to read VM crash dumps")
 	}
-	data.VTPMs, diags = types.ListValueFrom(ctx, types.StringType, record.VTPMs)
+	vtpms, err := getVTPMUUIDs(session, record.VTPMs)
+	if err != nil {
+		return err
+	}
+	data.VTPMs, diags = types.ListValueFrom(ctx, types.StringType, vtpms)
 	if diags.HasError() {
 		return errors.New("unable to read VM VTPMs")
 	}
@@ -377,8 +418,16 @@ func updateVMRecordData(ctx context.Context, record xenapi.VMRecord, data *vmRec
 		return errors.New("unable to read VM last boot CPU flags")
 	}
 	data.IsControlDomain = types.BoolValue(record.IsControlDomain)
-	data.Metrics = types.StringValue(string(record.Metrics))
-	data.GuestMetrics = types.StringValue(string(record.GuestMetrics))
+	metrics, err := getUUIDFromVMMetricsRef(session, record.Metrics)
+	if err != nil {
+		return err
+	}
+	data.Metrics = types.StringValue(metrics)
+	guestMetrics, err := getUUIDFromVMGuestMetricsRef(session, record.GuestMetrics)
+	if err != nil {
+		return err
+	}
+	data.GuestMetrics = types.StringValue(guestMetrics)
 	data.LastBootedRecord = types.StringValue(record.LastBootedRecord)
 	data.Recommendations = types.StringValue(record.Recommendations)
 	data.XenstoreData, diags = types.MapValueFrom(ctx, types.StringType, record.XenstoreData)
@@ -388,15 +437,28 @@ func updateVMRecordData(ctx context.Context, record xenapi.VMRecord, data *vmRec
 	data.HaAlwaysRun = types.BoolValue(record.HaAlwaysRun)
 	data.HaRestartPriority = types.StringValue(record.HaRestartPriority)
 	data.IsASnapshot = types.BoolValue(record.IsASnapshot)
-	data.SnapshotOf = types.StringValue(string(record.SnapshotOf))
-	data.Snapshots, diags = types.ListValueFrom(ctx, types.StringType, record.Snapshots)
+	snapshotOf, err := getUUIDFromVMRef(session, record.SnapshotOf)
+	if err != nil {
+		return err
+	}
+	data.SnapshotOf = types.StringValue(snapshotOf)
+	var emptyRef xenapi.VMRef
+	snapshots, err := getVMUUIDs(session, record.Snapshots, emptyRef)
+	if err != nil {
+		return err
+	}
+	data.Snapshots, diags = types.ListValueFrom(ctx, types.StringType, snapshots)
 	if diags.HasError() {
 		return errors.New("unable to read VM snapshots")
 	}
 	// Transfer time.Time to string
 	data.SnapshotTime = types.StringValue(record.SnapshotTime.String())
 	data.TransportableSnapshotID = types.StringValue(record.TransportableSnapshotID)
-	data.Blobs, diags = types.MapValueFrom(ctx, types.StringType, record.Blobs)
+	blobs, err := getBlobUUIDsMap(session, record.Blobs)
+	if err != nil {
+		return err
+	}
+	data.Blobs, diags = types.MapValueFrom(ctx, types.StringType, blobs)
 	if diags.HasError() {
 		return errors.New("unable to read VM blobs")
 	}
@@ -413,8 +475,16 @@ func updateVMRecordData(ctx context.Context, record xenapi.VMRecord, data *vmRec
 		return errors.New("unable to read VM snapshot info")
 	}
 	data.SnapshotMetadata = types.StringValue(record.SnapshotMetadata)
-	data.Parent = types.StringValue(string(record.Parent))
-	data.Children, diags = types.ListValueFrom(ctx, types.StringType, record.Children)
+	parent, err := getUUIDFromVMRef(session, record.Parent)
+	if err != nil {
+		return err
+	}
+	data.Parent = types.StringValue(parent)
+	children, err := getVMUUIDs(session, record.Children, emptyRef)
+	if err != nil {
+		return err
+	}
+	data.Children, diags = types.ListValueFrom(ctx, types.StringType, children)
 	if diags.HasError() {
 		return errors.New("unable to read VM children")
 	}
@@ -422,23 +492,47 @@ func updateVMRecordData(ctx context.Context, record xenapi.VMRecord, data *vmRec
 	if diags.HasError() {
 		return errors.New("unable to read VM bios strings")
 	}
-	data.ProtectionPolicy = types.StringValue(string(record.ProtectionPolicy))
+	protectionPolicy, err := getUUIDFromVMPPRef(session, record.ProtectionPolicy)
+	if err != nil {
+		return err
+	}
+	data.ProtectionPolicy = types.StringValue(protectionPolicy)
 	data.IsSnapshotFromVmpp = types.BoolValue(record.IsSnapshotFromVmpp)
-	data.SnapshotSchedule = types.StringValue(string(record.SnapshotSchedule))
+	snapshotSchedule, err := getUUIDFromVMSSRef(session, record.SnapshotSchedule)
+	if err != nil {
+		return err
+	}
+	data.SnapshotSchedule = types.StringValue(snapshotSchedule)
 	data.IsVmssSnapshot = types.BoolValue(record.IsVmssSnapshot)
-	data.Appliance = types.StringValue(string(record.Appliance))
+	appliance, err := getUUIDFromVMApplianceRef(session, record.Appliance)
+	if err != nil {
+		return err
+	}
+	data.Appliance = types.StringValue(appliance)
 	data.StartDelay = types.Int64Value(int64(record.StartDelay))
 	data.ShutdownDelay = types.Int64Value(int64(record.ShutdownDelay))
 	data.Order = types.Int32Value(int32(record.Order))
-	data.VGPUs, diags = types.ListValueFrom(ctx, types.StringType, record.VGPUs)
+	vgpus, err := getVGPUUUIDs(session, record.VGPUs)
+	if err != nil {
+		return err
+	}
+	data.VGPUs, diags = types.ListValueFrom(ctx, types.StringType, vgpus)
 	if diags.HasError() {
 		return errors.New("unable to read VM VGPUs")
 	}
-	data.AttachedPCIs, diags = types.ListValueFrom(ctx, types.StringType, record.AttachedPCIs)
+	attachedPCIs, err := getPCIUUIDs(session, record.AttachedPCIs)
+	if err != nil {
+		return err
+	}
+	data.AttachedPCIs, diags = types.ListValueFrom(ctx, types.StringType, attachedPCIs)
 	if diags.HasError() {
 		return errors.New("unable to read VM attached PCIs")
 	}
-	data.SuspendSR = types.StringValue(string(record.SuspendSR))
+	suspendSR, err := getUUIDFromSRRef(session, record.SuspendSR)
+	if err != nil {
+		return err
+	}
+	data.SuspendSR = types.StringValue(suspendSR)
 	data.Version = types.Int32Value(int32(record.Version))
 	data.GenerationID = types.StringValue(record.GenerationID)
 	data.HardwarePlatformVersion = types.Int32Value(int32(record.HardwarePlatformVersion))
@@ -461,6 +555,14 @@ func updateVMRecordData(ctx context.Context, record xenapi.VMRecord, data *vmRec
 	data.PendingGuidancesFull, diags = types.ListValueFrom(ctx, types.StringType, record.PendingGuidancesFull)
 	if diags.HasError() {
 		return errors.New("unable to read VM pending guidances full")
+	}
+	groups, err := getVMGroupUUIDs(session, record.Groups)
+	if err != nil {
+		return err
+	}
+	data.Groups, diags = types.ListValueFrom(ctx, types.StringType, groups)
+	if diags.HasError() {
+		return errors.New("unable to read VM groups")
 	}
 	return nil
 }

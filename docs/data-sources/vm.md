@@ -43,20 +43,21 @@ Read-Only:
 - `actions_after_softreboot` (String) Action to take after soft reboot.
 - `affinity` (String) A host which the VM has some affinity for (or NULL). This is used as a hint to the start call when it decides where to run the VM. Resource constraints may cause the VM to be started elsewhere.
 - `allowed_operations` (List of String) The list of the operations allowed in this state.
-- `appliance` (String) The appliance to which this VM belongs.
-- `attached_pcis` (List of String) Currently passed-through PCI devices.
+- `appliance` (String) The appliance(UUID) to which this VM belongs.
+- `attached_pcis` (List of String) The UUID list of currently passed-through PCI devices.
 - `bios_strings` (Map of String) BIOS strings.
-- `blobs` (Map of String) Binary blobs associated with this VM.
+- `blobs` (Map of String) Binary blobs(UUID) associated with this VM.
 - `blocked_operations` (Map of String) List of operations which have been explicitly blocked and an error code.
-- `children` (List of String) List pointing to all the children of this VM.
-- `consoles` (List of String) Virtual console devices.
-- `crash_dumps` (List of String) Crash dumps associated with this VM.
+- `children` (List of String) UUID list pointing to all the children of this VM.
+- `consoles` (List of String) The UUID list of virtual console devices.
+- `crash_dumps` (List of String) The UUID list of crash dumps associated with this VM.
 - `current_operations` (Map of String) The links each of the running tasks using this object (by reference) to a current_operation enum which describes the nature of the task.
 - `domain_type` (String) The type of domain that will be created when the VM is started.
 - `domarch` (String) Domain architecture (if available, null string otherwise).
 - `domid` (Number) Domain ID (if available, -1 otherwise).
 - `generation_id` (String) Generation ID of the VM.
-- `guest_metrics` (String) Metrics associated with the running guest.
+- `groups` (List of String) The UUID list of VM groups associated with the VM.
+- `guest_metrics` (String) Metrics(UUID) associated with the running guest.
 - `ha_always_run` (Boolean) If true then the system will attempt to keep the VM running as much as possible.
 - `ha_restart_priority` (String) Has possible values: 'best-effort' meaning 'try to restart this VM if possible but don't consider the pool to be overcommitted if this is not possible'; 'restart' meaning 'this VM should be restarted'; '' meaning 'do not try to restart this VM'.
 - `hardware_platform_version` (Number) The host virtual hardware platform version the VM can run on.
@@ -78,20 +79,20 @@ Read-Only:
 - `memory_static_max` (Number) Statically-set (absolute) maximum (bytes). The value of this field at VM start time acts as a hard limit of the amount of memory a guest can use. New values only take effect on reboot.
 - `memory_static_min` (Number) Statically-set (absolute) mininum (bytes). The value of this field indicates the least amount of memory this VM can boot with without crashing.
 - `memory_target` (Number) Dynamically-set memory target (bytes). The value of this field indicates the current target for memory available to this VM.
-- `metrics` (String) Metrics associated with this VM.
+- `metrics` (String) Metrics(UUID) associated with this VM.
 - `name_description` (String) The description of the virtual machine.
 - `name_label` (String) The name of the virtual machine.
 - `nvram` (Map of String) Initial value for guest NVRAM (containing UEFI variables, and so on). Cannot be changed while the VM is running.
 - `order` (Number) The point in the startup or shutdown sequence at which this VM will be started.
 - `other_config` (Map of String) Additional configuration.
-- `parent` (String) Ref pointing to the parent of this VM.
+- `parent` (String) UUID pointing to the parent of this VM.
 - `pci_bus` (String) PCI bus path for pass-through devices.
 - `pending_guidances` (List of String) The set of pending mandatory guidances after applying updates, which must be applied, as otherwise there may be, for example, VM failures.
 - `pending_guidances_full` (List of String) The set of pending full guidances after applying updates, which a user should follow to make some updates, for example, specific hardware drivers or CPU features, fully effective, but the 'average user' doesn't need to.
 - `pending_guidances_recommended` (List of String) The set of pending recommended guidances after applying updates, which most users should follow to make the updates effective, but if not followed, will not cause a failure.
 - `platform` (Map of String) Platform-specific configuration.
 - `power_state` (String) The current power state of the virtual machine.
-- `protection_policy` (String) Ref pointing to a protection policy for this VM.
+- `protection_policy` (String) UUID pointing to a protection policy for this VM.
 - `pv_args` (String) Kernel command-line arguments
 - `pv_bootloader` (String) Name of or path to bootloader.
 - `pv_bootloader_args` (String) Miscellaneous arguments for the bootloader.
@@ -101,29 +102,29 @@ Read-Only:
 - `recommendations` (String) An XML specification of recommended values and ranges for properties of this VM.
 - `reference_label` (String) Textual reference to the template used to create a VM. This can be used by clients in need of an immutable reference to the template since the latter's uuid and name_label may change, for example, after a package installation or upgrade.
 - `requires_reboot` (Boolean) Indicates whether a VM requires a reboot in order to update its configuration, for example, its memory allocation.
-- `resident_on` (String) The host the VM is currently resident on.
-- `scheduled_to_be_resident_on` (String) The host on which the VM is due to be started/resumed/migrated. This acts as a memory reservation indicator.
+- `resident_on` (String) The host(UUID) the VM is currently resident on.
+- `scheduled_to_be_resident_on` (String) The host(UUID) on which the VM is due to be started/resumed/migrated. This acts as a memory reservation indicator.
 - `shutdown_delay` (Number) The delay to wait before proceeding to the next order in the shutdown sequence (seconds).
 - `snapshot_info` (Map of String) Human-readable information concerning this snapshot.
 - `snapshot_metadata` (String) Metadata concerning this snapshot.
-- `snapshot_of` (String) Ref pointing to the VM this snapshot is of.
-- `snapshot_schedule` (String) Ref pointing to a snapshot schedule for this VM.
+- `snapshot_of` (String) UUID pointing to the VM this snapshot is of.
+- `snapshot_schedule` (String) UUID pointing to a snapshot schedule for this VM.
 - `snapshot_time` (String) Date/time when this snapshot was created.
-- `snapshots` (List of String) List pointing to all the VM snapshots.
+- `snapshots` (List of String) UUID list pointing to all the VM snapshots.
 - `start_delay` (Number) The delay to wait before proceeding to the next order in the startup sequence (seconds).
-- `suspend_sr` (String) The SR on which a suspend image is stored.
-- `suspend_vdi` (String) The VDI that a suspend image is stored on. Only has meaning if VM is currently suspended.
+- `suspend_sr` (String) The SR(UUID) on which a suspend image is stored.
+- `suspend_vdi` (String) The VDI(UUID) that a suspend image is stored on. Only has meaning if VM is currently suspended.
 - `tags` (List of String) User-specified tags for categorization purposes.
 - `transportable_snapshot_id` (String) Transportable ID of the snapshot VM.
 - `user_version` (Number) Creators of VMs and templates may store version information here.
 - `uuid` (String) The UUID of the virtual machine.
-- `vbds` (List of String) Virtual block devices.
+- `vbds` (List of String) The UUID list of virtual block devices.
 - `vcpus_at_startup` (Number) Boot number of VCPUs.
 - `vcpus_max` (Number) Max number of VCPUs.
 - `vcpus_params` (Map of String) Configuration parameters for the selected VCPU policy.
 - `version` (Number) The number of times this VM has been recovered.
-- `vgpus` (List of String) Virtual GPUs.
-- `vifs` (List of String) Virtual network interfaces.
-- `vtpms` (List of String) Virtual TPMs.
-- `vusbs` (List of String) Virtual USB devices.
+- `vgpus` (List of String) The UUID list of virtual GPUs.
+- `vifs` (List of String) The UUID list of virtual network interfaces.
+- `vtpms` (List of String) The UUID list of virtual TPMs.
+- `vusbs` (List of String) The UUID list of virtual USB devices.
 - `xenstore_data` (Map of String) Data to be inserted into the xenstore tree (/local/domain/<domid>/vm-data) after the VM is created.

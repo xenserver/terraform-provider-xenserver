@@ -96,20 +96,20 @@ func pifDataSchema() map[string]schema.Attribute {
 			Computed:            true,
 		},
 		"bond_slave_of": schema.StringAttribute{
-			MarkdownDescription: "Indicates which bond this interface is part of.",
+			MarkdownDescription: "Indicates which bond(UUID) this interface is part of.",
 			Computed:            true,
 		},
 		"bond_master_of": schema.ListAttribute{
-			MarkdownDescription: "Indicates this PIF represents the results of a bond.",
+			MarkdownDescription: "Indicates this PIF represents the results of a bond(UUID).",
 			Computed:            true,
 			ElementType:         types.StringType,
 		},
 		"vlan_master_of": schema.StringAttribute{
-			MarkdownDescription: "Indicates which VLAN this interface receives untagged traffic from.",
+			MarkdownDescription: "Indicates which VLAN(UUID) this interface receives untagged traffic from.",
 			Computed:            true,
 		},
 		"vlan_slave_of": schema.ListAttribute{
-			MarkdownDescription: "Indicates which VLANs this interface transmits tagged traffic to.",
+			MarkdownDescription: "Indicates which VLANs(UUID) this interface transmits tagged traffic to.",
 			Computed:            true,
 			ElementType:         types.StringType,
 		},
@@ -123,12 +123,12 @@ func pifDataSchema() map[string]schema.Attribute {
 			Computed:            true,
 		},
 		"tunnel_access_pif_of": schema.ListAttribute{
-			MarkdownDescription: "Indicates to which tunnel this PIF gives access.",
+			MarkdownDescription: "Indicates to which tunnel(UUID) this PIF gives access.",
 			Computed:            true,
 			ElementType:         types.StringType,
 		},
 		"tunnel_transport_pif_of": schema.ListAttribute{
-			MarkdownDescription: "Indicates to which tunnel this PIF provides transport.",
+			MarkdownDescription: "Indicates to which tunnel(UUID) this PIF provides transport.",
 			Computed:            true,
 			ElementType:         types.StringType,
 		},
@@ -168,17 +168,17 @@ func pifDataSchema() map[string]schema.Attribute {
 			Computed:            true,
 		},
 		"sriov_physical_pif_of": schema.ListAttribute{
-			MarkdownDescription: "Indicates which network_sriov this interface is the physical PIF of.",
+			MarkdownDescription: "Indicates which network_sriov(UUID) this interface is the physical PIF of.",
 			Computed:            true,
 			ElementType:         types.StringType,
 		},
 		"sriov_logical_pif_of": schema.ListAttribute{
-			MarkdownDescription: "Indicates which network_sriov this interface is the logical PIF of.",
+			MarkdownDescription: "Indicates which network_sriov(UUID) this interface is the logical PIF of.",
 			Computed:            true,
 			ElementType:         types.StringType,
 		},
 		"pci": schema.StringAttribute{
-			MarkdownDescription: "Link to underlying PCI device.",
+			MarkdownDescription: "Link to underlying PCI(UUID) device.",
 			Computed:            true,
 		},
 	}

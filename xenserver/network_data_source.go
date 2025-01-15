@@ -75,12 +75,12 @@ func (d *networkDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 							ElementType:         types.StringType,
 						},
 						"vifs": schema.ListAttribute{
-							MarkdownDescription: "The list of connected VIFs.",
+							MarkdownDescription: "The list of connected VIFs(UUID).",
 							Computed:            true,
 							ElementType:         types.StringType,
 						},
 						"pifs": schema.ListAttribute{
-							MarkdownDescription: "The list of connected PIFs.",
+							MarkdownDescription: "The list of connected PIFs(UUID).",
 							Computed:            true,
 							ElementType:         types.StringType,
 						},
@@ -102,7 +102,7 @@ func (d *networkDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 							Computed:            true,
 						},
 						"blobs": schema.MapAttribute{
-							MarkdownDescription: "The binary blobs associated with this SR.",
+							MarkdownDescription: "The binary blobs(UUID) associated with this SR.",
 							Computed:            true,
 							ElementType:         types.StringType,
 						},
@@ -116,7 +116,7 @@ func (d *networkDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 							Computed:            true,
 						},
 						"assigned_ips": schema.MapAttribute{
-							MarkdownDescription: "The IP addresses assigned to VIFs on networks that have active [xapi-managed](https://github.com/xapi-project/xen-api) DHCP.",
+							MarkdownDescription: "The IP addresses assigned to VIFs(UUID) on networks that have active [xapi-managed](https://github.com/xapi-project/xen-api) DHCP.",
 							Computed:            true,
 							ElementType:         types.StringType,
 						},
@@ -177,7 +177,7 @@ func (d *networkDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		}
 
 		var networkData networkRecordData
-		err = updateNetworkRecordData(ctx, networkRecord, &networkData)
+		err = updateNetworkRecordData(ctx, d.session, networkRecord, &networkData)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Unable to update network record data",
