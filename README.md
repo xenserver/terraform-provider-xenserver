@@ -11,7 +11,7 @@ This repository is the [Terraform Provider of XenServer](https://registry.terraf
 ### Requirements
 
 - [Terraform](https://developer.hashicorp.com/terraform/downloads) >= 1.8
-- [Go](https://golang.org/doc/install) >= 1.22.2
+- [Go](https://golang.org/doc/install) (see the go version in go.mod)
 
 
 ### Prepare Development Environment
@@ -103,7 +103,7 @@ provider_installation {
 terraform plan
 terraform apply -auto-approve
 
-// show state 
+// show state
 terraform state show xenserver_vm.vm
 
 // remove state

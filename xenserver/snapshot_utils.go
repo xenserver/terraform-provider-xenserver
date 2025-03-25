@@ -180,7 +180,8 @@ func revertPowerState(session *xenapi.Session, record xenapi.VMRecord) error {
 	vmCanBootOnHost := vmCanBootOnHost(session, vmRef, vmRecord.ResidentOn)
 
 	if revertPowerState {
-		if vmRecord.PowerState == xenapi.VMPowerStateHalted {
+		switch vmRecord.PowerState {
+		case xenapi.VMPowerStateHalted:
 			if vmCanBootOnHost {
 				err := xenapi.VM.StartOn(session, vmRef, vmRecord.ResidentOn, false, false)
 				if err != nil {
@@ -192,7 +193,7 @@ func revertPowerState(session *xenapi.Session, record xenapi.VMRecord) error {
 					return errors.New(err.Error())
 				}
 			}
-		} else if vmRecord.PowerState == xenapi.VMPowerStateSuspended {
+		case xenapi.VMPowerStateSuspended:
 			if vmCanBootOnHost {
 				err := xenapi.VM.ResumeOn(session, vmRef, vmRecord.ResidentOn, false, false)
 				if err != nil {
@@ -204,6 +205,15 @@ func revertPowerState(session *xenapi.Session, record xenapi.VMRecord) error {
 					return errors.New(err.Error())
 				}
 			}
+		case xenapi.VMPowerStatePaused:
+			err := xenapi.VM.Unpause(session, vmRef)
+			if err != nil {
+				return errors.New(err.Error())
+			}
+		case xenapi.VMPowerStateRunning:
+			// No action needed
+		case xenapi.VMPowerStateUnrecognized:
+			return errors.New("unrecognized VM power state")
 		}
 	}
 	return nil

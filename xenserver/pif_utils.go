@@ -74,8 +74,16 @@ func updatePIFRecordData(ctx context.Context, session *xenapi.Session, record xe
 	}
 	data.Host = types.StringValue(hostUUID)
 	data.MAC = types.StringValue(record.MAC)
-	data.MTU = types.Int32Value(int32(record.MTU))
-	data.VLAN = types.Int32Value(int32(record.VLAN))
+	mtu, err := ToInt32(record.MTU)
+	if err != nil {
+		return err
+	}
+	data.MTU = types.Int32Value(mtu)
+	vlan, err := ToInt32(record.VLAN)
+	if err != nil {
+		return err
+	}
+	data.VLAN = types.Int32Value(vlan)
 	data.Physical = types.BoolValue(record.Physical)
 	data.CurrentlyAttached = types.BoolValue(record.CurrentlyAttached)
 	data.IPConfigurationMode = types.StringValue(string(record.IPConfigurationMode))
