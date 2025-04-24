@@ -3,6 +3,8 @@ package xenserver
 import (
 	"context"
 	"errors"
+	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -204,6 +206,43 @@ func cleanupVDIResource(session *xenapi.Session, ref xenapi.VDIRef) error {
 	err := xenapi.VDI.Destroy(session, ref)
 	if err != nil {
 		return errors.New(err.Error())
+	}
+	return nil
+}
+
+func createVDI(session *xenapi.Session, nameLabel string, fileSize int, srRef xenapi.SRRef) (xenapi.VDIRef, error) {
+	vdiRecord := xenapi.VDIRecord{
+		NameLabel:   nameLabel,
+		SR:          srRef,
+		VirtualSize: fileSize,
+		Type:        "user",
+		Sharable:    false,
+		ReadOnly:    false,
+		OtherConfig: map[string]string{},
+	}
+
+	vdiRef, err := xenapi.VDI.Create(session, vdiRecord)
+	if err != nil {
+		return "", errors.New(err.Error())
+	}
+
+	return vdiRef, nil
+}
+
+func removeVDI(session *xenapi.Session, vdiRef xenapi.VDIRef) error {
+	err := xenapi.VDI.Destroy(session, vdiRef)
+	if err != nil {
+		// if error message VDI_IN_USE, retry 10 times
+		if strings.Contains(err.Error(), "VDI_IN_USE") {
+			for range 10 {
+				time.Sleep(5 * time.Second)
+				err = xenapi.VDI.Destroy(session, vdiRef)
+				if err == nil {
+					return nil
+				}
+			}
+		}
+		return errors.New("failed to destroy VDI: " + err.Error())
 	}
 	return nil
 }
