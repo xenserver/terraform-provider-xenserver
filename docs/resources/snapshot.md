@@ -110,14 +110,16 @@ Required:
 - `sr_uuid` (String) The UUID of the storage repository used.
 
 -> **Note:** `sr_uuid` is not allowed to be updated.
-- `virtual_size` (Number) The size of virtual disk image (in bytes).
-
--> **Note:** `virtual_size` is not allowed to be updated.
 
 Optional:
 
 - `name_description` (String) The description of the virtual disk image, default to be `""`.
 - `other_config` (Map of String) The additional configuration of the virtual disk image, default to be `{}`.
+- `raw_vdi_path` (String) The file path to the raw disk image (VDI), compatible with "Raw", "Tar", "VHD" formats.
+
+-> **Note:**
+
+ 1. `raw_vdi_path` is required if `virtual_size` is not set. 2. `raw_vdi_path` is not allowed to be updated. 3. If `raw_vdi_path` is set, `virtual_size` will be ignored. 4. If `raw_vdi_path` is set, `type` will be `user`, `sharable` and `read_only` will be `false`.
 - `read_only` (Boolean) True if this SR is (capable of being) shared between multiple hosts, default to be `false`.
 
 -> **Note:** `read_only` is not allowed to be updated.
@@ -127,6 +129,11 @@ Optional:
 - `type` (String) The type of the virtual disk image, default to be `"user"`.
 
 -> **Note:** `type` is not allowed to be updated.
+- `virtual_size` (Number) The size of virtual disk image (in bytes).
+
+-> **Note:**
+
+ 1. `virtual_size` is required if `raw_vdi_path` is not set. 2. `virtual_size` is not allowed to be updated.
 
 Read-Only:
 

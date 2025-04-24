@@ -3,6 +3,7 @@ package xenserver
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -25,7 +26,9 @@ func NewVDIResource() resource.Resource {
 
 // vdiResource defines the resource implementation.
 type vdiResource struct {
-	session *xenapi.Session
+	coordinatorConf *coordinatorConf
+	session         *xenapi.Session
+	sessionRef      xenapi.SessionRef
 }
 
 func (r *vdiResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -54,6 +57,8 @@ func (r *vdiResource) Configure(_ context.Context, req resource.ConfigureRequest
 		return
 	}
 	r.session = providerData.session
+	r.coordinatorConf = &providerData.coordinatorConf
+	r.sessionRef = providerData.sessionRef
 }
 
 func (r *vdiResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -72,6 +77,59 @@ func (r *vdiResource) Create(ctx context.Context, req resource.CreateRequest, re
 		)
 		return
 	}
+
+	var fileInfo os.FileInfo
+	diskFormat := "raw"
+	if !data.RawVdiPath.IsNull() {
+		filePath := data.RawVdiPath.ValueString()
+		tflog.Debug(ctx, "Creating VDI with file path: "+filePath)
+		fileInfo, err = os.Stat(filePath)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Unable to get file",
+				fmt.Sprintf("Failed to get file: %s", err),
+			)
+			return
+		}
+
+		if fileInfo.IsDir() {
+			resp.Diagnostics.AddError(
+				"Invalid file path",
+				"The provided path is a directory, not a file: "+filePath,
+			)
+			return
+		}
+
+		if fileInfo.Size() == 0 {
+			resp.Diagnostics.AddError(
+				"Empty file",
+				"The provided file is empty: "+filePath,
+			)
+			return
+		}
+
+		virtualSize := int(fileInfo.Size())
+		// Check if file is a VHD and try to get its original size
+		isVHD, err := IsVHDFile(filePath)
+		if err != nil {
+			tflog.Debug(ctx, fmt.Sprintf("Error checking if file is VHD: %s", err))
+		} else if isVHD {
+			if vhdSize, vhdErr := GetVHDOriginalSize(filePath); vhdErr == nil {
+				tflog.Info(ctx, fmt.Sprintf("Detected VHD file with original size: %d bytes", vhdSize))
+				virtualSize = int(vhdSize)
+				diskFormat = "vhd"
+			} else {
+				resp.Diagnostics.AddError(
+					"Unable to get VHD original size",
+					fmt.Sprintf("Failed to get VHD original size: %s", vhdErr),
+				)
+				return
+			}
+		}
+
+		record.VirtualSize = virtualSize
+	}
+
 	vdiRef, err := xenapi.VDI.Create(r.session, record)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -80,13 +138,33 @@ func (r *vdiResource) Create(ctx context.Context, req resource.CreateRequest, re
 		)
 		return
 	}
+
+	if !data.RawVdiPath.IsNull() {
+		err = importRawVdiTask(ctx, r.session, r.coordinatorConf, r.sessionRef, vdiRef, data.RawVdiPath.ValueString(), fileInfo.Size(), diskFormat)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Unable to import VDI",
+				fmt.Sprintf("Error importing VDI: %s", err),
+			)
+
+			err = cleanupVDIResource(ctx, r.session, vdiRef)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Error cleaning up VDI resource",
+					err.Error(),
+				)
+			}
+			return
+		}
+	}
+
 	vdiRecord, err := xenapi.VDI.GetRecord(r.session, vdiRef)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to get VDI record",
 			err.Error(),
 		)
-		err = cleanupVDIResource(r.session, vdiRef)
+		err = cleanupVDIResource(ctx, r.session, vdiRef)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error cleaning up VDI resource",
@@ -95,13 +173,14 @@ func (r *vdiResource) Create(ctx context.Context, req resource.CreateRequest, re
 		}
 		return
 	}
+
 	err = updateVDIResourceModelComputed(ctx, vdiRecord, &data)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to update the computed fields of VDIResourceModel",
 			err.Error(),
 		)
-		err = cleanupVDIResource(r.session, vdiRef)
+		err = cleanupVDIResource(ctx, r.session, vdiRef)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error cleaning up VDI resource",
@@ -110,8 +189,8 @@ func (r *vdiResource) Create(ctx context.Context, req resource.CreateRequest, re
 		}
 		return
 	}
-	tflog.Debug(ctx, "VDI created")
 
+	tflog.Debug(ctx, "VDI created")
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
@@ -224,7 +303,7 @@ func (r *vdiResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 		)
 		return
 	}
-	err = cleanupVDIResource(r.session, vdiRef)
+	err = cleanupVDIResource(ctx, r.session, vdiRef)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to delete VDI resource",

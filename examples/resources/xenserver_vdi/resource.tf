@@ -30,3 +30,9 @@ resource "xenserver_vdi" "vdi" {
   read_only        = true
   type             = "system"
 }
+
+resource "xenserver_vdi" "import_vdi" {
+  name_label   = "Import VDI"
+  sr_uuid      = data.xenserver_sr.sr.data_items[0].uuid
+  raw_vdi_path = "/tmp/livecd.ubuntu-cpc.azure.vhd"
+}
