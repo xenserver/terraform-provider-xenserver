@@ -1,9 +1,16 @@
 package xenserver
 
 import (
+	"strings"
 	"context"
 	"errors"
-
+	"fmt"
+	"crypto/tls"
+	"net/http"
+	"io"
+	"os"
+	"time"
+	"xenapi"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -13,8 +20,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-
-	"xenapi"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 type vdiResourceModel struct {
@@ -22,6 +28,7 @@ type vdiResourceModel struct {
 	NameDescription types.String `tfsdk:"name_description"`
 	SR              types.String `tfsdk:"sr_uuid"`
 	VirtualSize     types.Int64  `tfsdk:"virtual_size"`
+	RawVdiPath      types.String `tfsdk:"raw_vdi_path"`
 	Type            types.String `tfsdk:"type"`
 	Sharable        types.Bool   `tfsdk:"sharable"`
 	ReadOnly        types.Bool   `tfsdk:"read_only"`
@@ -35,6 +42,7 @@ var vdiResourceModelAttrTypes = map[string]attr.Type{
 	"name_description": types.StringType,
 	"sr_uuid":          types.StringType,
 	"virtual_size":     types.Int64Type,
+	"raw_vdi_path":     types.StringType,
 	"type":             types.StringType,
 	"sharable":         types.BoolType,
 	"read_only":        types.BoolType,
@@ -57,13 +65,29 @@ func vdiSchema() map[string]schema.Attribute {
 		},
 		"sr_uuid": schema.StringAttribute{
 			MarkdownDescription: "The UUID of the storage repository used." +
-				"\n\n-> **Note:** `sr_uuid` is not allowed to be updated.",
-			Required: true,
+				"\n\n-> **Note:**:\n\n" +
+				" 1. `sr_uuid` is required when creating a new VDI." +
+				" 2. `sr_uuid` is not allowed to be updated." +
+				" 3. If `raw_vdi_path` is set, `sr_uuid` is not mandatory and the provider will employ default SR.",
+			Optional: true,
+			Computed: true,
 		},
 		"virtual_size": schema.Int64Attribute{
 			MarkdownDescription: "The size of virtual disk image (in bytes)." +
-				"\n\n-> **Note:** `virtual_size` is not allowed to be updated.",
-			Required: true,
+				"\n\n-> **Note:**\n\n"+
+				" 1. `virtual_size` is required if `raw_vdi_path` is not set." +
+				" 2. `virtual_size` is not allowed to be updated.",
+			Optional: true,
+			Computed: true,
+		},
+		"raw_vdi_path": schema.StringAttribute{
+			Description: "The path to the raw VDI file for which formats like Raw, Tar, and Vhd are supported." + 
+				"\n\n-> **Note:**\n\n" +
+				" 1. `raw_vdi_path` is required if `virtual_size` is not set." +
+				" 2. `raw_vdi_path` is not allowed to be updated." +
+				" 3. If `raw_vdi_path` is set, `virtual_size` will be ignored." +
+				" 4. If `raw_vdi_path` is set, `sr_uuid` is not mandatory and the provider will employ default SR.",
+			Optional: true,
 		},
 		"type": schema.StringAttribute{
 			MarkdownDescription: "The type of the virtual disk image, default to be `\"user\"`." +
@@ -112,17 +136,39 @@ func vdiSchema() map[string]schema.Attribute {
 
 func getVDICreateParams(ctx context.Context, session *xenapi.Session, data vdiResourceModel) (xenapi.VDIRecord, error) {
 	var record xenapi.VDIRecord
+	var srRef xenapi.SRRef
+	var err error
+
 	record.NameLabel = data.NameLabel.ValueString()
 	record.NameDescription = data.NameDescription.ValueString()
-	srRef, err := xenapi.SR.GetByUUID(session, data.SR.ValueString())
-	if err != nil {
-		return record, errors.New(err.Error())
+	if data.SR.IsUnknown() {
+		srRef, err = getDefaultSR(session)
+		if err != nil {
+			return record, errors.New("unable to get default SR: " + err.Error())
+		}
+		SRUUID, err := xenapi.SR.GetUUID(session, srRef)
+		if err != nil {
+			return record, errors.New("unable to get SR UUID: " + err.Error())
+		}
+		tflog.Debug(ctx, "Using default SR with UUID: "+SRUUID)
+	} else {
+		srRef, err = xenapi.SR.GetByUUID(session, data.SR.ValueString())
+		if err != nil {
+			return record, errors.New(err.Error())
+		}
 	}
 	record.SR = srRef
-	record.VirtualSize = int(data.VirtualSize.ValueInt64())
-	record.Type = xenapi.VdiType(data.Type.ValueString())
-	record.Sharable = data.Sharable.ValueBool()
-	record.ReadOnly = data.ReadOnly.ValueBool()
+
+	if data.RawVdiPath.IsNull() {
+		record.Type = xenapi.VdiType(data.Type.ValueString())
+		record.VirtualSize = int(data.VirtualSize.ValueInt64())
+		record.Sharable = data.Sharable.ValueBool()
+		record.ReadOnly = data.ReadOnly.ValueBool()
+	} else {
+		record.Type = xenapi.VdiType("user")
+		record.Sharable = false
+		record.ReadOnly = false
+	}
 
 	diags := data.OtherConfig.ElementsAs(ctx, &record.OtherConfig, false)
 	if diags.HasError() {
@@ -134,24 +180,28 @@ func getVDICreateParams(ctx context.Context, session *xenapi.Session, data vdiRe
 
 func updateVDIResourceModel(ctx context.Context, session *xenapi.Session, record xenapi.VDIRecord, data *vdiResourceModel) error {
 	data.NameLabel = types.StringValue(record.NameLabel)
-	srUUID, err := getUUIDFromSRRef(session, record.SR)
-	if err != nil {
-		return err
-	}
-	data.SR = types.StringValue(srUUID)
-	data.VirtualSize = types.Int64Value(int64(record.VirtualSize))
 
-	return updateVDIResourceModelComputed(ctx, record, data)
+	return updateVDIResourceModelComputed(ctx, session, record, data)
 }
 
-func updateVDIResourceModelComputed(ctx context.Context, record xenapi.VDIRecord, data *vdiResourceModel) error {
+func updateVDIResourceModelComputed(ctx context.Context, session *xenapi.Session, record xenapi.VDIRecord, data *vdiResourceModel) error {
 	data.UUID = types.StringValue(record.UUID)
 	data.ID = types.StringValue(record.UUID)
 	data.NameDescription = types.StringValue(record.NameDescription)
 	data.Type = types.StringValue(string(record.Type))
 	data.Sharable = types.BoolValue(record.Sharable)
 	data.ReadOnly = types.BoolValue(record.ReadOnly)
+	srUUID, err := getUUIDFromSRRef(session, record.SR)
+	if err != nil {
+		return err
+	}
+	data.SR = types.StringValue(srUUID)
+	data.VirtualSize = types.Int64Value(int64(record.VirtualSize))
 	var diags diag.Diagnostics
+	// Remove key content_id that is created when importing a VDI in record.OtherConfig
+	if _, exists := record.OtherConfig["content_id"]; exists {
+		delete(record.OtherConfig, "content_id")
+	}
 	data.OtherConfig, diags = types.MapValueFrom(ctx, types.StringType, record.OtherConfig)
 	if diags.HasError() {
 		return errors.New("unable to access VDI other config")
@@ -203,7 +253,172 @@ func vdiResourceModelUpdate(ctx context.Context, session *xenapi.Session, ref xe
 func cleanupVDIResource(session *xenapi.Session, ref xenapi.VDIRef) error {
 	err := xenapi.VDI.Destroy(session, ref)
 	if err != nil {
-		return errors.New(err.Error())
+		// if error message VDI_IN_USE, retry 10 times
+		if strings.Contains(err.Error(), "VDI_IN_USE") {
+			for range 10 {
+				time.Sleep(5 * time.Second)
+				err = xenapi.VDI.Destroy(session, ref)
+				if err == nil {
+					return nil
+				}
+			}
+		}
+		return errors.New("failed to destroy VDI: " + err.Error())
 	}
+	return nil
+}
+
+func createDefaultVDI(session *xenapi.Session, nameLabel string, fileSize int, srRef xenapi.SRRef) (xenapi.VDIRef, error) {
+	vdiRecord := xenapi.VDIRecord{
+		NameLabel:   nameLabel,
+		SR:          srRef,
+		VirtualSize: fileSize,
+		Type:        "user",
+		Sharable:    false,
+		ReadOnly:    false,
+		OtherConfig: map[string]string{},
+	}
+
+	vdiRef, err := xenapi.VDI.Create(session, vdiRecord)
+	if err != nil {
+		return "", errors.New(err.Error())
+	}
+
+	return vdiRef, nil
+}
+
+func removeVDI(session *xenapi.Session, vdiRef xenapi.VDIRef) error {
+	err := xenapi.VDI.Destroy(session, vdiRef)
+	if err != nil {
+		// if error message VDI_IN_USE, retry 10 times
+		if strings.Contains(err.Error(), "VDI_IN_USE") {
+			for range 10 {
+				time.Sleep(5 * time.Second)
+				err = xenapi.VDI.Destroy(session, vdiRef)
+				if err == nil {
+					return nil
+				}
+			}
+		}
+		return errors.New("failed to destroy VDI: " + err.Error())
+	}
+	return nil
+}
+
+func importRawVdiTask(ctx context.Context, session *xenapi.Session, coordinatorConf *coordinatorConf, sessionRef xenapi.SessionRef, vdiRef xenapi.VDIRef, filePath string, fileSize int64) error {
+	// Create the import task
+	vdiUUID, err := xenapi.VDI.GetUUID(session, vdiRef)
+	if err != nil {
+		return errors.New("failed to get VDI UUID: " + err.Error())
+	}
+	taskName := "import " + vdiUUID
+	importTask, err := xenapi.Task.Create(session, taskName, "")
+	if err != nil {
+		return errors.New("failed to create import task: " + err.Error())
+	}
+
+	// Open file for streaming
+	file, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	// Configure HTTP client with appropriate timeouts and TLS settings
+	// #nosec G402 - InsecureSkipVerify is required for self-signed certificates
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true, // Equivalent to curl's --insecure flag
+		},
+		// Set other transport options for performance
+		MaxIdleConns:          10,
+		MaxIdleConnsPerHost:   5,
+		IdleConnTimeout:       90 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   30 * time.Minute, // Long timeout for large files
+	}
+
+	// Create a new PUT request
+	fullURL := fmt.Sprintf("%s/import_raw_vdi?session_id=%s&vdi=%s&task_id=%s", coordinatorConf.Host, sessionRef, vdiRef, importTask)
+	tflog.Debug(ctx, "Creating HTTP request to upload VDI to: "+fullURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, fullURL, file)
+	if err != nil {
+		return fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+
+	req.ContentLength = fileSize // Important for large files
+	req.Header.Set("Content-Type", "application/octet-stream")
+	tflog.Debug(ctx, fmt.Sprintf("Uploading file %s (%d bytes) to %s", filePath, fileSize, fullURL))
+
+	// Send the request
+	startTime := time.Now()
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send HTTP request: %w", err)
+	}
+	defer resp.Body.Close() // Important to prevent memory leaks
+
+	// Log upload statistics
+	uploadDuration := time.Since(startTime)
+	uploadSpeed := float64(fileSize) / uploadDuration.Seconds() / 1024 / 1024 // MB/s
+	tflog.Debug(ctx, fmt.Sprintf("Upload completed in %v (%.2f MB/s)", uploadDuration, uploadSpeed))
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to upload file: %s, status code: %d, response: %s", filePath, resp.StatusCode, string(respBody))
+	}
+
+	// Continue with your existing code for monitoring the task...
+	// Monitor task status
+	importStatus, err := xenapi.Task.GetStatus(session, importTask)
+	if err != nil {
+		return errors.New("unable to get task status: " + err.Error())
+	}
+
+	// Wait for task completion - remove the unnecessary Sleep
+	timeout := 60 * 60
+	for importStatus == "pending" {
+		time.Sleep(5 * time.Second) // Check every second
+		importStatus, err = xenapi.Task.GetStatus(session, importTask)
+		if err != nil {
+			return errors.New("unable to get task status: " + err.Error())
+		}
+
+		progress, err := xenapi.Task.GetProgress(session, importTask)
+		if err != nil {
+			return errors.New("unable to get task progress: " + err.Error())
+		}
+		tflog.Debug(ctx, fmt.Sprintf("Task progress: %.2f", progress))
+
+		timeout--
+		if timeout <= 0 {
+			if err := xenapi.Task.Cancel(session, importTask); err != nil {
+				tflog.Warn(ctx, "Failed to cancel task: "+err.Error())
+			}
+			return errors.New("import task timed out: the server took too long to process the import")
+		}
+	}
+
+	// Check task success
+	if importStatus != "success" {
+		errorInfo, err := xenapi.Task.GetErrorInfo(session, importTask)
+		if err != nil {
+			return errors.New("task failed but couldn't get error info: " + err.Error())
+		}
+		return fmt.Errorf("import task failed: %s", errorInfo)
+	}
+
+	// Cleanup task
+	if err := xenapi.Task.Destroy(session, importTask); err != nil {
+		tflog.Warn(ctx, "Failed to destroy task: "+err.Error())
+	}
+
+	tflog.Debug(ctx, "VDI import completed successfully")
 	return nil
 }

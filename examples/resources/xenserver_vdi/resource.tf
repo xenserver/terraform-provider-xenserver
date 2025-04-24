@@ -30,3 +30,8 @@ resource "xenserver_vdi" "vdi" {
   read_only        = true
   type             = "system"
 }
+
+resource "xenserver_vdi" "import_vdi" {
+  name_label = "Import VDI"
+  raw_vdi_path = "/tmp/livecd.ubuntu-cpc.azure.vhd"
+}

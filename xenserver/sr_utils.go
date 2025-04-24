@@ -611,3 +611,15 @@ func smbResourceModelUpdate(session *xenapi.Session, ref xenapi.SRRef, data smbR
 
 	return nil
 }
+
+func getDefaultSR(session *xenapi.Session) (xenapi.SRRef, error) {
+	pool, err := xenapi.Pool.GetAll(session)
+	if err != nil {
+		return "", errors.New("Unable to get pool: " + err.Error())
+	}
+	defaultSr, err := xenapi.Pool.GetDefaultSR(session, pool[0])
+	if err != nil {
+		return "", errors.New("Unable to get default SR: " + err.Error())
+	}
+	return defaultSr, nil
+}

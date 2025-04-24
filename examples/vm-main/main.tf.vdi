@@ -1,0 +1,48 @@
+locals {
+  env_vars = { for tuple in regexall("export\\s*(\\S*)\\s*=\\s*(\\S*)\\s*", file("../../.env")) : tuple[0] => tuple[1] }
+}
+
+terraform {
+  required_providers {
+    xenserver = {
+      source = "xenserver/xenserver"
+    }
+  }
+}
+
+provider "xenserver" {
+  host     = local.env_vars["XENSERVER_HOST"]
+  username = local.env_vars["XENSERVER_USERNAME"]
+  password = local.env_vars["XENSERVER_PASSWORD"]
+}
+
+resource "xenserver_vdi" "vdi" {
+  name_label = "imported_vdi"
+  raw_vdi_path = "/tmp/livecd.ubuntu-cpc.azure.vhd"
+}
+
+data "xenserver_network" "network" {}
+
+resource "xenserver_vm" "vm" {
+  name_label       = "Ubuntu VM"
+  template_name    = "Ubuntu Jammy Jellyfish 22.04"
+  static_mem_max   = 4 * 1024 * 1024 * 1024
+  vcpus            = 4
+  cores_per_socket = 2
+  boot_order       = "cdn"
+
+  hard_drive = [
+    {
+      vdi_uuid = xenserver_vdi.vdi.uuid,
+      bootable = true,
+      mode     = "RW"
+    }
+  ]
+
+  network_interface = [
+    {
+      device       = "0"
+      network_uuid = data.xenserver_network.network.data_items[0].uuid,
+    }
+  ]
+}

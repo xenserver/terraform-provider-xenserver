@@ -3,6 +3,7 @@ package xenserver
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -25,7 +26,9 @@ func NewVDIResource() resource.Resource {
 
 // vdiResource defines the resource implementation.
 type vdiResource struct {
-	session *xenapi.Session
+	coordinatorConf *coordinatorConf
+	session         *xenapi.Session
+	sessionRef      xenapi.SessionRef
 }
 
 func (r *vdiResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -54,6 +57,8 @@ func (r *vdiResource) Configure(_ context.Context, req resource.ConfigureRequest
 		return
 	}
 	r.session = providerData.session
+	r.coordinatorConf = &providerData.coordinatorConf
+	r.sessionRef = providerData.sessionRef
 }
 
 func (r *vdiResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -72,6 +77,38 @@ func (r *vdiResource) Create(ctx context.Context, req resource.CreateRequest, re
 		)
 		return
 	}
+
+	var fileInfo os.FileInfo
+	if !data.RawVdiPath.IsNull() {
+		tflog.Debug(ctx, "Creating VDI with file path: "+data.RawVdiPath.ValueString())
+		fileInfo, err = os.Stat(data.RawVdiPath.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Unable to get file",
+				fmt.Sprintf("Failed to get file: %s", err),
+			)
+			return
+		}
+
+		if fileInfo.IsDir() {
+			resp.Diagnostics.AddError(
+				"Invalid file path",
+				"The provided path is a directory, not a file: "+data.RawVdiPath.ValueString(),
+			)
+			return
+		}
+
+		if fileInfo.Size() == 0 {
+			resp.Diagnostics.AddError(
+				"Empty file",
+				"The provided file is empty: "+data.RawVdiPath.ValueString(),
+			)
+			return
+		}
+
+		record.VirtualSize = int(fileInfo.Size())
+	}
+
 	vdiRef, err := xenapi.VDI.Create(r.session, record)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -80,6 +117,38 @@ func (r *vdiResource) Create(ctx context.Context, req resource.CreateRequest, re
 		)
 		return
 	}
+
+	if !data.RawVdiPath.IsNull() {
+		vdiUUID, err := xenapi.VDI.GetUUID(r.session, vdiRef)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Unable to get VDI UUID",
+				fmt.Sprintf("Error getting VDI UUID: %s", err),
+			)
+			return
+		}
+
+		err = importRawVdiTask(ctx, r.session, r.coordinatorConf, r.sessionRef, vdiRef, data.RawVdiPath.ValueString(), fileInfo.Size())
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Unable to import VDI",
+				fmt.Sprintf("Error importing VDI: %s", err),
+			)
+
+			err = removeVDI(r.session, vdiRef)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Unable to remove VDI",
+					fmt.Sprintf("Error removing VDI: %s", err),
+				)
+				tflog.Debug(ctx, "Failed to destroy VDI for UUID: "+vdiUUID)
+				return
+			}
+
+			return
+		}
+	}
+
 	vdiRecord, err := xenapi.VDI.GetRecord(r.session, vdiRef)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -95,7 +164,8 @@ func (r *vdiResource) Create(ctx context.Context, req resource.CreateRequest, re
 		}
 		return
 	}
-	err = updateVDIResourceModelComputed(ctx, vdiRecord, &data)
+
+	err = updateVDIResourceModelComputed(ctx, r.session, vdiRecord, &data)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to update the computed fields of VDIResourceModel",
@@ -110,8 +180,8 @@ func (r *vdiResource) Create(ctx context.Context, req resource.CreateRequest, re
 		}
 		return
 	}
-	tflog.Debug(ctx, "VDI created")
 
+	tflog.Debug(ctx, "VDI created")
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
@@ -197,7 +267,7 @@ func (r *vdiResource) Update(ctx context.Context, req resource.UpdateRequest, re
 		)
 		return
 	}
-	err = updateVDIResourceModelComputed(ctx, vdiRecord, &plan)
+	err = updateVDIResourceModelComputed(ctx, r.session, vdiRecord, &plan)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to update the computed fields of VDIResourceModel",
