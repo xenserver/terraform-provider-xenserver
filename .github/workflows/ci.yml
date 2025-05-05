@@ -52,7 +52,7 @@ jobs:
           mv sdk_temp/sdk_go/src/* goSDK/
           rm -rf sdk_temp xenserver-sdk.zip
       - name: Run linters
-        uses: golangci/golangci-lint-action@v7
+        uses: golangci/golangci-lint-action@v8
         with:
           version: v2.0
 
