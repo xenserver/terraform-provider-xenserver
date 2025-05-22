@@ -153,7 +153,7 @@ func poolJoin(ctx context.Context, coordinatorSession *xenapi.Session, coordinat
 		}
 		supportersHosts = append(supportersHosts, supporter.Host.ValueString())
 
-		supporterSession, err := loginServer(supporter.Host.ValueString(), supporter.Username.ValueString(), supporter.Password.ValueString())
+		supporterSession, _, err := loginServer(supporter.Host.ValueString(), supporter.Username.ValueString(), supporter.Password.ValueString())
 		if err != nil {
 			if strings.Contains(err.Error(), "HOST_IS_SLAVE") {
 				// check if the supporter in current pool
