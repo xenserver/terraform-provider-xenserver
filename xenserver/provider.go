@@ -21,6 +21,7 @@ import (
 // Ensure Provider satisfies various provider interfaces.
 var _ provider.Provider = &xsProvider{}
 var _ provider.ProviderWithFunctions = &xsProvider{}
+var terraformProviderVersion string
 
 // xsProvider defines the provider implementation.
 type xsProvider struct {
@@ -91,6 +92,7 @@ func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureReques
 		return
 	}
 
+	terraformProviderVersion = p.version
 	host := os.Getenv("XENSERVER_HOST")
 	username := os.Getenv("XENSERVER_USERNAME")
 	password := os.Getenv("XENSERVER_PASSWORD")
@@ -178,7 +180,7 @@ func loginServer(host string, username string, password string) (*xenapi.Session
 	session := xenapi.NewSession(&xenapi.ClientOpts{
 		URL: host,
 		Headers: map[string]string{
-			"User-Agent": "XS SDK for Go v1.0",
+			"User-Agent": "XenServer Terraform Provider/" + terraformProviderVersion,
 		},
 	})
 
