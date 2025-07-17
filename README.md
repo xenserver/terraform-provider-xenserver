@@ -132,7 +132,7 @@ golangci-lint run --config=/app/.golangci.yml
 
 ## Contributing
 
-See [DEVELOP.md](DEVELOP.md)
+See [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## License
 
