@@ -180,7 +180,7 @@ func loginServer(host string, username string, password string) (*xenapi.Session
 	session := xenapi.NewSession(&xenapi.ClientOpts{
 		URL: host,
 		Headers: map[string]string{
-			"User-Agent": "XenServer Terraform Provider/" + terraformProviderVersion,
+			"User-Agent": "XenServerTerraformProvider/" + terraformProviderVersion,
 		},
 	})
 
