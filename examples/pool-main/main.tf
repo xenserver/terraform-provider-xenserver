@@ -14,6 +14,7 @@ provider "xenserver" {
   host     = local.env_vars["XENSERVER_HOST"]
   username = local.env_vars["XENSERVER_USERNAME"]
   password = local.env_vars["XENSERVER_PASSWORD"]
+  server_cert_path = local.env_vars["XENSERVER_SERVER_CERT_PATH"]
 }
 
 # get the existing supporter hosts
@@ -29,6 +30,7 @@ resource "xenserver_pool" "pool" {
       host = local.env_vars["SUPPORTER_HOST"]
       username = local.env_vars["SUPPORTER_USERNAME"]
       password = local.env_vars["SUPPORTER_PASSWORD"]
+      server_cert_path = local.env_vars["SUPPORTER_SERVER_CERT_PATH"]
     }
   ]
   eject_supporters = [ data.xenserver_host.supporter.data_items[0].uuid ]
