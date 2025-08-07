@@ -31,9 +31,10 @@ type poolResourceModel struct {
 }
 
 type joinSupporterResourceModel struct {
-	Host     types.String `tfsdk:"host"`
-	Username types.String `tfsdk:"username"`
-	Password types.String `tfsdk:"password"`
+	Host           types.String `tfsdk:"host"`
+	Username       types.String `tfsdk:"username"`
+	Password       types.String `tfsdk:"password"`
+	ServerCertPath types.String `tfsdk:"server_cert_path"`
 }
 
 type poolParams struct {
@@ -87,6 +88,10 @@ func PoolSchema() map[string]schema.Attribute {
 						MarkdownDescription: "The password of the host.",
 						Optional:            true,
 						Sensitive:           true,
+					},
+					"server_cert_path": schema.StringAttribute{
+						MarkdownDescription: "The path to the server certificate file for secure connections.",
+						Optional:            true,
 					},
 				},
 			},
@@ -153,7 +158,7 @@ func poolJoin(ctx context.Context, coordinatorSession *xenapi.Session, coordinat
 		}
 		supportersHosts = append(supportersHosts, supporter.Host.ValueString())
 
-		supporterSession, err := loginServer(supporter.Host.ValueString(), supporter.Username.ValueString(), supporter.Password.ValueString())
+		supporterSession, err := loginServer(supporter.Host.ValueString(), supporter.Username.ValueString(), supporter.Password.ValueString(), supporter.ServerCertPath.ValueString())
 		if err != nil {
 			if strings.Contains(err.Error(), "HOST_IS_SLAVE") {
 				// check if the supporter in current pool

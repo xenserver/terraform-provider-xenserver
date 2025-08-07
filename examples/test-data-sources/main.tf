@@ -14,6 +14,7 @@ provider "xenserver" {
   host     = local.env_vars["XENSERVER_HOST"]
   username = local.env_vars["XENSERVER_USERNAME"]
   password = local.env_vars["XENSERVER_PASSWORD"]
+  server_cert_path = local.env_vars["XENSERVER_SERVER_CERT_PATH"]
 }
 
 data "xenserver_host" "host" {}

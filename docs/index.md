@@ -16,6 +16,7 @@ provider "xenserver" {
   host     = "https://192.0.2.1"
   username = "root"
   password = var.password
+  server_cert_path = "/opt/cert.pem"
 }
 ```
 
@@ -26,4 +27,5 @@ provider "xenserver" {
 
 - `host` (String) The address of target XenServer host.<br />Can be set by using the environment variable **XENSERVER_HOST**.
 - `password` (String, Sensitive) The password of target XenServer host.<br />Can be set by using the environment variable **XENSERVER_PASSWORD**.
+- `server_cert_path` (String) The path to the server certificate file for secure connections.<br />Can be set by using the environment variable **XENSERVER_SERVER_CERT_PATH**.
 - `username` (String) The user name of target XenServer host.<br />Can be set by using the environment variable **XENSERVER_USERNAME**.

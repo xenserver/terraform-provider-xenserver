@@ -34,9 +34,10 @@ type xsProvider struct {
 }
 
 type coordinatorConf struct {
-	Host     string
-	Username string
-	Password string
+	Host           string
+	Username       string
+	Password       string
+	ServerCertPath string
 }
 
 func New(version string) func() provider.Provider {
@@ -49,9 +50,10 @@ func New(version string) func() provider.Provider {
 
 // providerModel describes the provider data model.
 type providerModel struct {
-	Host     types.String `tfsdk:"host"`
-	Username types.String `tfsdk:"username"`
-	Password types.String `tfsdk:"password"`
+	Host           types.String `tfsdk:"host"`
+	Username       types.String `tfsdk:"username"`
+	Password       types.String `tfsdk:"password"`
+	ServerCertPath types.String `tfsdk:"server_cert_path"`
 }
 
 func (p *xsProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -79,6 +81,11 @@ func (p *xsProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *p
 				Optional:  true,
 				Sensitive: true,
 			},
+			"server_cert_path": schema.StringAttribute{
+				MarkdownDescription: "The path to the server certificate file for secure connections." + "<br />" +
+					"Can be set by using the environment variable **XENSERVER_SERVER_CERT_PATH**.",
+				Optional: true,
+			},
 		},
 	}
 }
@@ -96,6 +103,7 @@ func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureReques
 	host := os.Getenv("XENSERVER_HOST")
 	username := os.Getenv("XENSERVER_USERNAME")
 	password := os.Getenv("XENSERVER_PASSWORD")
+	server_cert_path := os.Getenv("XENSERVER_SERVER_CERT_PATH")
 
 	if !data.Host.IsNull() {
 		host = data.Host.ValueString()
@@ -105,6 +113,9 @@ func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureReques
 	}
 	if !data.Password.IsNull() {
 		password = data.Password.ValueString()
+	}
+	if !data.ServerCertPath.IsNull() {
+		server_cert_path = data.ServerCertPath.ValueString()
 	}
 
 	// If any of the expected configurations are missing, return
@@ -144,9 +155,10 @@ func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureReques
 
 	ctx = tflog.SetField(ctx, "host", host)
 	ctx = tflog.SetField(ctx, "username", username)
+	ctx = tflog.SetField(ctx, "server_cert_path", server_cert_path)
 	tflog.Debug(ctx, "Creating XenServer API session")
 
-	session, err := loginServer(host, username, password)
+	session, err := loginServer(host, username, password, server_cert_path)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to create XenServer API client",
@@ -167,7 +179,7 @@ func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureReques
 	resp.ResourceData = p
 }
 
-func loginServer(host string, username string, password string) (*xenapi.Session, error) {
+func loginServer(host string, username string, password string, server_cert_path string) (*xenapi.Session, error) {
 	// check if host, username, password are non-empty
 	if host == "" || username == "" || password == "" {
 		return nil, errors.New("host, username, password cannot be empty")
@@ -177,12 +189,18 @@ func loginServer(host string, username string, password string) (*xenapi.Session
 		host = "https://" + host
 	}
 
-	session := xenapi.NewSession(&xenapi.ClientOpts{
+	opts := &xenapi.ClientOpts{
 		URL: host,
 		Headers: map[string]string{
 			"User-Agent": "XenServerTerraformProvider/" + terraformProviderVersion,
 		},
-	})
+	}
+	if server_cert_path != "" {
+		opts.SecureOpts = &xenapi.SecureOpts{
+			ServerCert: server_cert_path,
+		}
+	}
+	session := xenapi.NewSession(opts)
 
 	_, err := session.LoginWithPassword(username, password, "1.0", "terraform provider")
 	if err != nil {

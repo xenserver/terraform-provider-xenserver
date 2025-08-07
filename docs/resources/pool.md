@@ -58,6 +58,7 @@ resource "xenserver_pool" "pool" {
       host = local.env_vars["SUPPORTER_HOST"]
       username = local.env_vars["SUPPORTER_USERNAME"]
       password = local.env_vars["SUPPORTER_PASSWORD"]
+      server_cert_path = local.env_vars["SUPPORTER_SERVER_CERT_PATH"]
     }
   ]
 }
@@ -104,6 +105,7 @@ Optional:
 
 - `host` (String) The address of the host.
 - `password` (String, Sensitive) The password of the host.
+- `server_cert_path` (String) The path to the server certificate file for secure connections.
 - `username` (String) The user name of the host.
 
 ## Import
