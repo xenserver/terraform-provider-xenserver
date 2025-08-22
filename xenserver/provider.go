@@ -30,6 +30,7 @@ type xsProvider struct {
 	// testing.
 	version         string
 	session         *xenapi.Session
+	sessionRef      xenapi.SessionRef
 	coordinatorConf coordinatorConf
 }
 
@@ -146,7 +147,7 @@ func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureReques
 	ctx = tflog.SetField(ctx, "username", username)
 	tflog.Debug(ctx, "Creating XenServer API session")
 
-	session, err := loginServer(host, username, password)
+	session, sessionRef, err := loginServer(host, username, password)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to create XenServer API client",
@@ -161,16 +162,17 @@ func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureReques
 	p.coordinatorConf.Username = username
 	p.coordinatorConf.Password = password
 	p.session = session
+	p.sessionRef = sessionRef
 
 	// the xsProvider type itself is made available for resources and data sources
 	resp.DataSourceData = p
 	resp.ResourceData = p
 }
 
-func loginServer(host string, username string, password string) (*xenapi.Session, error) {
+func loginServer(host string, username string, password string) (*xenapi.Session, xenapi.SessionRef, error) {
 	// check if host, username, password are non-empty
 	if host == "" || username == "" || password == "" {
-		return nil, errors.New("host, username, password cannot be empty")
+		return nil, "", errors.New("host, username, password cannot be empty")
 	}
 
 	if !strings.HasPrefix(host, "http") {
@@ -184,12 +186,12 @@ func loginServer(host string, username string, password string) (*xenapi.Session
 		},
 	})
 
-	_, err := session.LoginWithPassword(username, password, "1.0", "terraform provider")
+	sessionRef, err := session.LoginWithPassword(username, password, "1.0", "terraform provider")
 	if err != nil {
-		return nil, errors.New(err.Error())
+		return nil, "", errors.New(err.Error())
 	}
 
-	return session, nil
+	return session, sessionRef, nil
 }
 
 func (p *xsProvider) Resources(_ context.Context) []func() resource.Resource {

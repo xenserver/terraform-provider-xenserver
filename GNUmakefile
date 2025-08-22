@@ -18,21 +18,33 @@ doc:  ## make doc for terraform provider documentation
 	go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate --provider-name xenserver
 
 provider: go.mod  ## make provider
-	if [ -z "$(GOBIN)" ]; then echo "GOBIN is not set" && exit 1; fi
 	rm -f $(GOBIN)/terraform-provider-xenserver
 	go mod tidy
 	go install .
 	md5sum $(GOBIN)/terraform-provider-xenserver
 
-apply: .env provider  ## make apply
+$(HOME)/.terraformrc:  ## Generate .terraformrc file with local provider path
+	@GOBIN_PATH=$$(go env GOBIN); \
+    if [ -z "$$GOBIN_PATH" ]; then \
+        echo "GOBIN not set, using default path: $$GOBIN_PATH"; \
+		exit 1; \
+    fi; \
+	printf "%s\n" "provider_installation {" > $@; \
+	printf "%s\n" "  dev_overrides {" >> $@; \
+	printf "%s\n" "    \"registry.terraform.io/xenserver/xenserver\" = \"$$GOBIN_PATH\"" >> $@; \
+	printf "%s\n" "  }" >> $@; \
+	printf "%s\n" "  direct {}" >> $@; \
+	printf "%s\n" "}" >> $@
+
+apply: $(HOME)/.terraformrc .env provider  ## make apply
 	cd $(WORKDIR) && \
     terraform plan && \
     terraform apply -auto-approve
 
-apply_vm: .env provider  ## make apply_vm
+apply_vm:  ## make apply_vm
 	$(MAKE) WORKDIR=examples/vm-main apply
 
-apply_pool: .env provider  ## make apply_pool
+apply_pool: ## make apply_pool
 	$(MAKE) WORKDIR=examples/pool-main apply
 
 show_state: .env  ## make show_state resource=xenserver_vm.vm
@@ -50,6 +62,12 @@ remove: .env  ## make remove resource=xenserver_vm.vm
 	@cd $(WORKDIR) && \
 	if [ -z "$(resource)" ]; then echo "USAGE: make remove resource=<>"; exit 1; fi && \
 	terraform state rm $(resource)
+
+upgrade: go.mod  ## make upgrade
+	@echo "Upgrading provider dependencies..."
+	go get -u ./...
+	go mod tidy
+	@echo "Upgrade complete."
 
 destroy:
 	cd $(WORKDIR) && \
