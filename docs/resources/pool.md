@@ -55,9 +55,10 @@ resource "xenserver_pool" "pool" {
   name_label   = "pool"
   join_supporters = [
     {
-      host = local.env_vars["SUPPORTER_HOST"]
-      username = local.env_vars["SUPPORTER_USERNAME"]
-      password = local.env_vars["SUPPORTER_PASSWORD"]
+      host             = local.env_vars["SUPPORTER_HOST"]
+      username         = local.env_vars["SUPPORTER_USERNAME"]
+      password         = local.env_vars["SUPPORTER_PASSWORD"]
+      skip_verify      = local.env_vars["SUPPORTER_SKIP_VERIFY"]
       server_cert_path = local.env_vars["SUPPORTER_SERVER_CERT_PATH"]
     }
   ]
@@ -87,7 +88,7 @@ resource "xenserver_pool" "pool" {
 - `eject_supporters` (Set of String) The set of pool supporters which will be ejected from the pool.
 - `join_supporters` (Attributes Set) The set of pool supporters which will join the pool.
 
--> **Note:** 1. It would raise error if a supporter is in both join_supporters and eject_supporters.<br>2. The join operation would be performed only when the host, username, and password are provided.<br> (see [below for nested schema](#nestedatt--join_supporters))
+-> **Note:** 1. It would raise error if a supporter is in both join_supporters and eject_supporters.<br>2. The join operation would be performed only when the host, username, password and skip_verify are provided.<br>3. If skip_verify set to false, the server_cert_path must be provided.<br> (see [below for nested schema](#nestedatt--join_supporters))
 - `management_network` (String) The management network UUID of the pool.
 
 -> **Note:** 1. The management network would be reconfigured only when the management network UUID is provided.<br>2. All of the hosts in the pool should have the same management network with network configuration, and you can set network configuration by resource `pif_configure`.<br>3. It is not recommended to set the `management_network` with the `join_supporters` and `eject_supporters` attributes together.<br>
@@ -106,6 +107,7 @@ Optional:
 - `host` (String) The address of the host.
 - `password` (String, Sensitive) The password of the host.
 - `server_cert_path` (String) The path to the server certificate file for secure connections.
+- `skip_verify` (Boolean) If set to true, the provider will skip TLS verification.
 - `username` (String) The user name of the host.
 
 ## Import

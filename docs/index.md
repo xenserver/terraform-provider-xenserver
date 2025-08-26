@@ -13,9 +13,10 @@ The XenServer provider facilitates the management and deployment of XenServer re
 
 ```terraform
 provider "xenserver" {
-  host     = "https://192.0.2.1"
-  username = "root"
-  password = var.password
+  host             = "https://192.0.2.1"
+  username         = "root"
+  password         = var.password
+  skip_verify      = false
   server_cert_path = "/opt/cert.pem"
 }
 ```
@@ -28,4 +29,5 @@ provider "xenserver" {
 - `host` (String) The address of target XenServer host.<br />Can be set by using the environment variable **XENSERVER_HOST**.
 - `password` (String, Sensitive) The password of target XenServer host.<br />Can be set by using the environment variable **XENSERVER_PASSWORD**.
 - `server_cert_path` (String) The path to the server certificate file for secure connections.<br />Can be set by using the environment variable **XENSERVER_SERVER_CERT_PATH**.
+- `skip_verify` (Boolean) If set to true, the provider will skip TLS verification. If set to false, `server_cert_path` must be set.<br />Can be set by using the environment variable **XENSERVER_SKIP_VERIFY**.
 - `username` (String) The user name of target XenServer host.<br />Can be set by using the environment variable **XENSERVER_USERNAME**.

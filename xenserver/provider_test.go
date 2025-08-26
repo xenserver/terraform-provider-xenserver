@@ -22,7 +22,9 @@ provider "xenserver" {
 	host     = "%s"
 	username = "%s"
 	password = "%s"
+	skip_verify = %s
 	server_cert_path = "%s"
 }
-`, os.Getenv("XENSERVER_HOST"), os.Getenv("XENSERVER_USERNAME"), os.Getenv("XENSERVER_PASSWORD"), os.Getenv("XENSERVER_SERVER_CERT_PATH"))
+`, os.Getenv("XENSERVER_HOST"), os.Getenv("XENSERVER_USERNAME"), os.Getenv("XENSERVER_PASSWORD"),
+		os.Getenv("XENSERVER_SKIP_VERIFY"), os.Getenv("XENSERVER_SERVER_CERT_PATH"))
 )

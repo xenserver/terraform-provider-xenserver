@@ -37,9 +37,10 @@ resource "xenserver_pool" "pool" {
   name_label   = "pool"
   join_supporters = [
     {
-      host = local.env_vars["SUPPORTER_HOST"]
-      username = local.env_vars["SUPPORTER_USERNAME"]
-      password = local.env_vars["SUPPORTER_PASSWORD"]
+      host             = local.env_vars["SUPPORTER_HOST"]
+      username         = local.env_vars["SUPPORTER_USERNAME"]
+      password         = local.env_vars["SUPPORTER_PASSWORD"]
+      skip_verify      = local.env_vars["SUPPORTER_SKIP_VERIFY"]
       server_cert_path = local.env_vars["SUPPORTER_SERVER_CERT_PATH"]
     }
   ]

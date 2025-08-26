@@ -66,7 +66,7 @@ resource "xenserver_sr_nfs" "nfs" {
 `, storage_location, extra)
 }
 
-func joinSupporterParams(name_label string, name_description string, supporterHost string, supporterUsername string, supporterPassowd string, supporterServerCertPath string) string {
+func joinSupporterParams(name_label string, name_description string, supporterHost string, supporterUsername string, supporterPassword string, supporterSkipVerify string, supporterServerCertPath string) string {
 	return fmt.Sprintf(`
 resource "xenserver_pool" "pool" {
     name_label   = "%s"
@@ -77,11 +77,12 @@ resource "xenserver_pool" "pool" {
 		    host = "%s"
 			username = "%s"
 			password = "%s"
+			skip_verify = %s
 			server_cert_path = "%s"
 		}
     ]
 }
-`, name_label, name_description, supporterHost, supporterUsername, supporterPassowd, supporterServerCertPath)
+`, name_label, name_description, supporterHost, supporterUsername, supporterPassword, supporterSkipVerify, supporterServerCertPath)
 }
 
 func TestAccPoolResource(t *testing.T) {
@@ -102,6 +103,7 @@ func TestAccPoolResource(t *testing.T) {
 					os.Getenv("SUPPORTER_HOST"),
 					os.Getenv("SUPPORTER_USERNAME"),
 					os.Getenv("SUPPORTER_PASSWORD"),
+					os.Getenv("SUPPORTER_SKIP_VERIFY"),
 					os.Getenv("SUPPORTER_SERVER_CERT_PATH"))),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("xenserver_pool.pool", "name_label", "Test Pool A"),
@@ -115,6 +117,7 @@ func TestAccPoolResource(t *testing.T) {
 					os.Getenv("SUPPORTER_HOST"),
 					os.Getenv("SUPPORTER_USERNAME"),
 					os.Getenv("SUPPORTER_PASSWORD"),
+					os.Getenv("SUPPORTER_SKIP_VERIFY"),
 					os.Getenv("SUPPORTER_SERVER_CERT_PATH"))),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("xenserver_pool.pool", "name_label", "Test Pool B"),

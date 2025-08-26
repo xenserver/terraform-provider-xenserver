@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -37,6 +38,7 @@ type coordinatorConf struct {
 	Host           string
 	Username       string
 	Password       string
+	SkipVerify     bool
 	ServerCertPath string
 }
 
@@ -53,6 +55,7 @@ type providerModel struct {
 	Host           types.String `tfsdk:"host"`
 	Username       types.String `tfsdk:"username"`
 	Password       types.String `tfsdk:"password"`
+	SkipVerify     types.Bool   `tfsdk:"skip_verify"`
 	ServerCertPath types.String `tfsdk:"server_cert_path"`
 }
 
@@ -81,6 +84,11 @@ func (p *xsProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *p
 				Optional:  true,
 				Sensitive: true,
 			},
+			"skip_verify": schema.BoolAttribute{
+				MarkdownDescription: "If set to true, the provider will skip TLS verification. If set to false, `server_cert_path` must be set." + "<br />" +
+					"Can be set by using the environment variable **XENSERVER_SKIP_VERIFY**.",
+				Optional: true,
+			},
 			"server_cert_path": schema.StringAttribute{
 				MarkdownDescription: "The path to the server certificate file for secure connections." + "<br />" +
 					"Can be set by using the environment variable **XENSERVER_SERVER_CERT_PATH**.",
@@ -93,6 +101,7 @@ func (p *xsProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *p
 func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	tflog.Debug(ctx, "Configuring XenServer Client")
 	var data providerModel
+	var skip_verify bool
 
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -103,6 +112,7 @@ func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureReques
 	host := os.Getenv("XENSERVER_HOST")
 	username := os.Getenv("XENSERVER_USERNAME")
 	password := os.Getenv("XENSERVER_PASSWORD")
+	skip_verify_str := os.Getenv("XENSERVER_SKIP_VERIFY")
 	server_cert_path := os.Getenv("XENSERVER_SERVER_CERT_PATH")
 
 	if !data.Host.IsNull() {
@@ -116,6 +126,10 @@ func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureReques
 	}
 	if !data.ServerCertPath.IsNull() {
 		server_cert_path = data.ServerCertPath.ValueString()
+	}
+	if !data.SkipVerify.IsNull() {
+		skip_verify = data.SkipVerify.ValueBool()
+		skip_verify_str = strconv.FormatBool(skip_verify)
 	}
 
 	// If any of the expected configurations are missing, return
@@ -148,6 +162,35 @@ func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureReques
 				"If either is already set, ensure the value is not empty.",
 		)
 	}
+	skip_verify_str = strings.ToLower(skip_verify_str)
+	switch skip_verify_str {
+	case "":
+		resp.Diagnostics.AddAttributeError(
+			path.Root("skip_verify"),
+			"Missing Skip Verify Configuration",
+			"The provider cannot create the XenServer API client as there is a missing or empty value for the skip_verify. "+
+				"Set the skip_verify value in the configuration or use the XENSERVER_SKIP_VERIFY environment variable. "+
+				"If either is already set, ensure the value is not empty.",
+		)
+	case "true", "false":
+		skip_verify = skip_verify_str == "true"
+	default:
+		resp.Diagnostics.AddAttributeError(
+			path.Root("skip_verify"),
+			"Invalid Skip Verify Configuration",
+			"The provider cannot create the XenServer API client as the skip_verify value is not a valid boolean. "+
+				"Set the skip_verify value to 'true' or 'false'.",
+		)
+	}
+	if server_cert_path == "" && !skip_verify {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("server_cert_path"),
+			"Missing Server Certificate Path Configuration",
+			"The provider cannot create the XenServer API client as there is a missing or empty value for the server_cert_path. "+
+				"Set the server_cert_path value in the configuration or use the XENSERVER_SERVER_CERT_PATH environment variable. "+
+				"If either is already set, ensure the value is not empty.",
+		)
+	}
 
 	if resp.Diagnostics.HasError() {
 		return
@@ -156,9 +199,10 @@ func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureReques
 	ctx = tflog.SetField(ctx, "host", host)
 	ctx = tflog.SetField(ctx, "username", username)
 	ctx = tflog.SetField(ctx, "server_cert_path", server_cert_path)
+	ctx = tflog.SetField(ctx, "skip_verify", skip_verify)
 	tflog.Debug(ctx, "Creating XenServer API session")
 
-	session, err := loginServer(host, username, password, server_cert_path)
+	session, err := loginServer(host, username, password, skip_verify, server_cert_path)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to create XenServer API client",
@@ -179,10 +223,14 @@ func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureReques
 	resp.ResourceData = p
 }
 
-func loginServer(host string, username string, password string, server_cert_path string) (*xenapi.Session, error) {
+func loginServer(host string, username string, password string, skip_verify bool, server_cert_path string) (*xenapi.Session, error) {
 	// check if host, username, password are non-empty
 	if host == "" || username == "" || password == "" {
 		return nil, errors.New("host, username, password cannot be empty")
+	}
+
+	if !skip_verify && server_cert_path == "" {
+		return nil, errors.New("server_cert_path cannot be empty when skip_verify is false")
 	}
 
 	if !strings.HasPrefix(host, "http") {
@@ -195,7 +243,7 @@ func loginServer(host string, username string, password string, server_cert_path
 			"User-Agent": "XenServerTerraformProvider/" + terraformProviderVersion,
 		},
 	}
-	if server_cert_path != "" {
+	if !skip_verify {
 		opts.SecureOpts = &xenapi.SecureOpts{
 			ServerCert: server_cert_path,
 		}
