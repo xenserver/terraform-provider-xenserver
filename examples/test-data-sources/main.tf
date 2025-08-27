@@ -11,9 +11,11 @@ terraform {
 }
 
 provider "xenserver" {
-  host     = local.env_vars["XENSERVER_HOST"]
-  username = local.env_vars["XENSERVER_USERNAME"]
-  password = local.env_vars["XENSERVER_PASSWORD"]
+  host             = local.env_vars["XENSERVER_HOST"]
+  username         = local.env_vars["XENSERVER_USERNAME"]
+  password         = local.env_vars["XENSERVER_PASSWORD"]
+  skip_verify      = local.env_vars["XENSERVER_SKIP_VERIFY"]
+  server_cert_path = local.env_vars["XENSERVER_SERVER_CERT_PATH"]
 }
 
 data "xenserver_host" "host" {}

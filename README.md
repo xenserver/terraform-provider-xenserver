@@ -57,6 +57,8 @@ In order to run the full suite of acceptance tests, prepare a local `.env` file 
 export XENSERVER_HOST=https://<xenserver-host-ip>
 export XENSERVER_USERNAME=<username>
 export XENSERVER_PASSWORD=<password>
+export XENSERVER_SKIP_VERIFY=<skip-verify>
+export XENSERVER_SERVER_CERT_PATH=<server-cert-path>
 export NFS_SERVER=<nfs-server-ip>
 export NFS_SERVER_PATH=<nfs-server-path>
 export SMB_SERVER_PATH=<smb-server-path>
@@ -65,6 +67,8 @@ export SMB_SERVER_PASSWORD=<smb-server-password>
 export SUPPORTER_HOST=<supporter-ip>
 export SUPPORTER_USERNAME=<supporter-username>
 export SUPPORTER_PASSWORD=<supporter-password>
+export SUPPORTER_SKIP_VERIFY=<supporter-skip-verify>
+export SUPPORTER_SERVER_CERT_PATH=<supporter-server-cert-path>
 ```
 
 Run `"make testacc"`. *Note:* Acceptance tests generate actual resources and frequently incur costs when run.

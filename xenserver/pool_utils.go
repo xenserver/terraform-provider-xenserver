@@ -31,9 +31,11 @@ type poolResourceModel struct {
 }
 
 type joinSupporterResourceModel struct {
-	Host     types.String `tfsdk:"host"`
-	Username types.String `tfsdk:"username"`
-	Password types.String `tfsdk:"password"`
+	Host           types.String `tfsdk:"host"`
+	Username       types.String `tfsdk:"username"`
+	Password       types.String `tfsdk:"password"`
+	SkipVerify     types.Bool   `tfsdk:"skip_verify"`
+	ServerCertPath types.String `tfsdk:"server_cert_path"`
 }
 
 type poolParams struct {
@@ -72,7 +74,8 @@ func PoolSchema() map[string]schema.Attribute {
 		"join_supporters": schema.SetNestedAttribute{
 			MarkdownDescription: "The set of pool supporters which will join the pool." +
 				"\n\n-> **Note:** 1. It would raise error if a supporter is in both join_supporters and eject_supporters.<br>" +
-				"2. The join operation would be performed only when the host, username, and password are provided.<br>",
+				"2. The join operation would be performed only when the host, username, password and skip_verify are provided.<br>" +
+				"3. If skip_verify set to false, the server_cert_path must be provided.<br>",
 			NestedObject: schema.NestedAttributeObject{
 				Attributes: map[string]schema.Attribute{
 					"host": schema.StringAttribute{
@@ -87,6 +90,14 @@ func PoolSchema() map[string]schema.Attribute {
 						MarkdownDescription: "The password of the host.",
 						Optional:            true,
 						Sensitive:           true,
+					},
+					"skip_verify": schema.BoolAttribute{
+						MarkdownDescription: "If set to true, the provider will skip TLS verification.",
+						Optional:            true,
+					},
+					"server_cert_path": schema.StringAttribute{
+						MarkdownDescription: "The path to the server certificate file for secure connections.",
+						Optional:            true,
 					},
 				},
 			},
@@ -153,7 +164,7 @@ func poolJoin(ctx context.Context, coordinatorSession *xenapi.Session, coordinat
 		}
 		supportersHosts = append(supportersHosts, supporter.Host.ValueString())
 
-		supporterSession, err := loginServer(supporter.Host.ValueString(), supporter.Username.ValueString(), supporter.Password.ValueString())
+		supporterSession, err := loginServer(supporter.Host.ValueString(), supporter.Username.ValueString(), supporter.Password.ValueString(), supporter.SkipVerify.ValueBool(), supporter.ServerCertPath.ValueString())
 		if err != nil {
 			if strings.Contains(err.Error(), "HOST_IS_SLAVE") {
 				// check if the supporter in current pool
