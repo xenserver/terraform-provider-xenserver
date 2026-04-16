@@ -137,5 +137,3 @@ See [CONTRIBUTING.md](CONTRIBUTING.md)
 ## License
 
 The source code in this repository is licensed under the Mozilla Public License 2.0 (MPL-2.0). See [LICENSE.md](LICENSE.md).
-
-Third-party software notices and dependency guidance for source code are documented in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
