@@ -134,6 +134,12 @@ golangci-lint run --config=/app/.golangci.yml
 
 See [CONTRIBUTING.md](CONTRIBUTING.md)
 
+## Third Party Notice
+
+See [THIRD_PARTY_NOTICE.md](THIRD_PARTY_NOTICE.md).
+
 ## License
 
 The source code in this repository is licensed under the Mozilla Public License 2.0 (MPL-2.0). See [LICENSE.md](LICENSE.md).
+
+<sub>Copyright © 2026. Citrix Systems, Inc.</sub>
