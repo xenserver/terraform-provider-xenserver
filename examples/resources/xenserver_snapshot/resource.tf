@@ -1,3 +1,6 @@
+# Copyright © 2026. Citrix Systems, Inc. All Rights Reserved.
+# Licensed under the Mozilla Public License 2.0 (MPL-2.0).
+
 # snapshot from an exist running VM 
 data "xenserver_vm" "vm_data" {
   name_label = "Test VM"

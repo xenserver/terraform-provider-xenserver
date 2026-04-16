@@ -1,3 +1,6 @@
+# Copyright © 2026. Citrix Systems, Inc. All Rights Reserved.
+# Licensed under the Mozilla Public License 2.0 (MPL-2.0).
+
 resource "xenserver_sr_nfs" "nfs" {
   name_label       = "NFS shared storage"
   name_description = "A test NFS storage repository"

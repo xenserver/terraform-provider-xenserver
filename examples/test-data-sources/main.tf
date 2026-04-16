@@ -1,3 +1,6 @@
+# Copyright © 2026. Citrix Systems, Inc. All Rights Reserved.
+# Licensed under the Mozilla Public License 2.0 (MPL-2.0).
+
 locals {
   env_vars = { for tuple in regexall("export\\s*(\\S*)\\s*=\\s*(\\S*)\\s*", file("../../.env")) : tuple[0] => tuple[1] }
 }
