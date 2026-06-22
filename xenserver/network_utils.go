@@ -67,7 +67,12 @@ func updateNetworkRecordData(ctx context.Context, session *xenapi.Session, recor
 	if diags.HasError() {
 		return errors.New("unable to read network PIFs")
 	}
-	data.MTU = types.Int32Value(int32(record.MTU))
+
+	mtu, err := ToInt32(record.MTU)
+	if err != nil {
+		return err
+	}
+	data.MTU = types.Int32Value(mtu)
 	data.OtherConfig, diags = types.MapValueFrom(ctx, types.StringType, record.OtherConfig)
 	if diags.HasError() {
 		return errors.New("unable to read network other config")
@@ -261,7 +266,12 @@ func updateVlanResourceModel(ctx context.Context, session *xenapi.Session, recor
 	if err != nil {
 		return errors.New(err.Error())
 	}
-	data.Tag = types.Int32Value(int32(pifRecord.VLAN))
+
+	vlan, err := ToInt32(pifRecord.VLAN)
+	if err != nil {
+		return err
+	}
+	data.Tag = types.Int32Value(vlan)
 	nicName, err := getNICFromPIF(session, pifRecord)
 	if err != nil {
 		return err
@@ -275,7 +285,11 @@ func updateVlanResourceModelComputed(ctx context.Context, record xenapi.NetworkR
 	data.UUID = types.StringValue(record.UUID)
 	data.ID = types.StringValue(record.UUID)
 	data.NameDescription = types.StringValue(record.NameDescription)
-	data.MTU = types.Int32Value(int32(record.MTU))
+	mtu, err := ToInt32(record.MTU)
+	if err != nil {
+		return err
+	}
+	data.MTU = types.Int32Value(mtu)
 	data.Managed = types.BoolValue(record.Managed)
 	var diags diag.Diagnostics
 	data.OtherConfig, diags = types.MapValueFrom(ctx, types.StringType, record.OtherConfig)

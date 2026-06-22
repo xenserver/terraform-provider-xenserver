@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"regexp"
 	"slices"
@@ -303,7 +304,11 @@ func updateVMRecordData(ctx context.Context, session *xenapi.Session, record xen
 	data.NameLabel = types.StringValue(record.NameLabel)
 	data.NameDescription = types.StringValue(record.NameDescription)
 	data.PowerState = types.StringValue(string(record.PowerState))
-	data.UserVersion = types.Int32Value(int32(record.UserVersion))
+	userVersion, err := ToInt32(record.UserVersion)
+	if err != nil {
+		return err
+	}
+	data.UserVersion = types.Int32Value(userVersion)
 	data.IsATemplate = types.BoolValue(record.IsATemplate)
 	data.IsDefaultTemplate = types.BoolValue(record.IsDefaultTemplate)
 	suspendVDI, err := getUUIDFromVDIRef(session, record.SuspendVDI)
@@ -336,8 +341,16 @@ func updateVMRecordData(ctx context.Context, session *xenapi.Session, record xen
 	if diags.HasError() {
 		return errors.New("unable to read VM VCPUs params")
 	}
-	data.VCPUsMax = types.Int32Value(int32(record.VCPUsMax))
-	data.VCPUsAtStartup = types.Int32Value(int32(record.VCPUsAtStartup))
+	vcpusMax, err := ToInt32(record.VCPUsMax)
+	if err != nil {
+		return err
+	}
+	data.VCPUsMax = types.Int32Value(vcpusMax)
+	vcpusAtStartup, err := ToInt32(record.VCPUsAtStartup)
+	if err != nil {
+		return err
+	}
+	data.VCPUsAtStartup = types.Int32Value(vcpusAtStartup)
 	data.ActionsAfterSoftreboot = types.StringValue(string(record.ActionsAfterSoftreboot))
 	data.ActionsAfterShutdown = types.StringValue(string(record.ActionsAfterShutdown))
 	data.ActionsAfterReboot = types.StringValue(string(record.ActionsAfterReboot))
@@ -411,7 +424,11 @@ func updateVMRecordData(ctx context.Context, session *xenapi.Session, record xen
 	if diags.HasError() {
 		return errors.New("unable to read VM other config")
 	}
-	data.Domid = types.Int32Value(int32(record.Domid))
+	domId, err := ToInt32(record.Domid)
+	if err != nil {
+		return err
+	}
+	data.Domid = types.Int32Value(domId)
 	data.Domarch = types.StringValue(record.Domarch)
 	data.LastBootCPUFlags, diags = types.MapValueFrom(ctx, types.StringType, record.LastBootCPUFlags)
 	if diags.HasError() {
@@ -511,7 +528,11 @@ func updateVMRecordData(ctx context.Context, session *xenapi.Session, record xen
 	data.Appliance = types.StringValue(appliance)
 	data.StartDelay = types.Int64Value(int64(record.StartDelay))
 	data.ShutdownDelay = types.Int64Value(int64(record.ShutdownDelay))
-	data.Order = types.Int32Value(int32(record.Order))
+	order, err := ToInt32(record.Order)
+	if err != nil {
+		return err
+	}
+	data.Order = types.Int32Value(order)
 	vgpus, err := getVGPUUUIDs(session, record.VGPUs)
 	if err != nil {
 		return err
@@ -533,9 +554,17 @@ func updateVMRecordData(ctx context.Context, session *xenapi.Session, record xen
 		return err
 	}
 	data.SuspendSR = types.StringValue(suspendSR)
-	data.Version = types.Int32Value(int32(record.Version))
+	version, err := ToInt32(record.Version)
+	if err != nil {
+		return err
+	}
+	data.Version = types.Int32Value(version)
 	data.GenerationID = types.StringValue(record.GenerationID)
-	data.HardwarePlatformVersion = types.Int32Value(int32(record.HardwarePlatformVersion))
+	hwPlatVer, err := ToInt32(record.HardwarePlatformVersion)
+	if err != nil {
+		return err
+	}
+	data.HardwarePlatformVersion = types.Int32Value(hwPlatVer)
 	data.HasVendorDevice = types.BoolValue(record.HasVendorDevice)
 	data.RequiresReboot = types.BoolValue(record.RequiresReboot)
 	data.ReferenceLabel = types.StringValue(record.ReferenceLabel)
@@ -721,6 +750,9 @@ func getCorePerSocket(vmRecord xenapi.VMRecord) (int32, error) {
 	if err != nil {
 		return 0, errors.New("unable to convert cores-per-socket to an int value")
 	}
+	if socketInt < math.MinInt32 || socketInt > math.MaxInt32 {
+		return 0, errors.New("integer overflow")
+	}
 
 	return int32(socketInt), nil // #nosec G109
 }
@@ -800,7 +832,11 @@ func updateVMResourceModel(ctx context.Context, session *xenapi.Session, vmRecor
 	data.NameLabel = types.StringValue(vmRecord.NameLabel)
 	data.TemplateName = types.StringValue(vmRecord.OtherConfig["tf_template_name"])
 	data.StaticMemMax = types.Int64Value(int64(vmRecord.MemoryStaticMax))
-	data.VCPUs = types.Int32Value(int32(vmRecord.VCPUsMax))
+	vcpusMax, err := ToInt32(vmRecord.VCPUsMax)
+	if err != nil {
+		return err
+	}
+	data.VCPUs = types.Int32Value(vcpusMax)
 	return updateVMResourceModelComputed(ctx, session, vmRecord, data)
 }
 
@@ -1247,7 +1283,7 @@ func isValidIpAddress(ip net.IP) bool {
 	if ip == nil {
 		return false
 	}
-	return !(ip.IsLinkLocalMulticast() || ip.IsLinkLocalUnicast() || ip.IsLoopback() || ip.IsMulticast())
+	return ip.IsGlobalUnicast()
 }
 
 func startVM(session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel) error {
@@ -1378,4 +1414,11 @@ func vmResourceModelUpdateCheck(plan vmResourceModel, state vmResourceModel) err
 		return errors.New(`"sr_for_full_disk_copy" doesn't expected to be updated`)
 	}
 	return nil
+}
+
+func ToInt32(n int) (int32, error) {
+	if n < math.MinInt32 || n > math.MaxInt32 {
+		return 0, errors.New("integer overflow")
+	}
+	return int32(n), nil
 }
