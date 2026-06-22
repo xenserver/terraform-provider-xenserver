@@ -1,0 +1,97 @@
+# Terraform Provider CI workflow.
+name: Continuous Integration
+
+# This GitHub action runs your tests for each pull request and push.
+# Optionally, you can turn it on using a schedule for regular testing.
+on:
+  pull_request:
+    paths-ignore:
+      - "README.md"
+      - "DEVELOP.md"
+      - "LICENSE.md"
+  push:
+    paths-ignore:
+      - "README.md"
+      - "DEVELOP.md"
+      - "LICENSE.md"
+
+# Testing only needs permissions to read the repository contents.
+permissions:
+  contents: read
+
+jobs:
+  # Ensure project builds before running testing matrix
+  scan:
+    name: Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+          go-version: "1.22.0"
+          cache: true
+      - name: Download and extract SDK
+        shell: bash
+        # If "XENSERVER_SDK_URL" is setup in the repository variable, will use it
+        # as SDK URL, otherwise, will extract the SDK version from https://www.xenserver.com/downloads.
+        # and download the SDK from https://github.com/xapi-project/xen-api/releases accordingly.
+        # it will help to ignore the "Download Agreement" from the official XenServer SDK download page.
+        run: |
+          url=${{ vars.XENSERVER_SDK_URL }}
+          if [ -z "$url" ]; then
+            version=$(curl -s 'https://www.xenserver.com/downloads' | \
+              grep -oE 'Software Development Kit \(SDK\) [0-9]+\.[0-9]+\.[0-9]+' | \
+              grep -oE '[0-9]+\.[0-9]+\.[0-9]+$')
+            url="https://github.com/xapi-project/xen-api/releases/download/v${version}/Go-SDK-prerelease-unsigned.zip"
+          fi
+          curl -L "$url" -o xenserver-sdk.zip
+          unzip xenserver-sdk.zip -d sdk_temp
+          mkdir -p goSDK
+          mv sdk_temp/sdk_go/src/* goSDK/
+          rm -rf sdk_temp xenserver-sdk.zip
+      - name: Run linters
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+          go-version: "1.22.0"
+          cache: true
+      - name: Download and extract SDK
+        shell: bash
+        # If "XENSERVER_SDK_URL" is setup in the repository variable, will use it
+        # as SDK URL, otherwise, will extract the SDK version from https://www.xenserver.com/downloads.
+        # and download the SDK from https://github.com/xapi-project/xen-api/releases accordingly.
+        # it will help to ignore the "Download Agreement" from the official XenServer SDK download page.
+        run: |
+          url=${{ vars.XENSERVER_SDK_URL }}
+          if [ -z "$url" ]; then
+            version=$(curl -s 'https://www.xenserver.com/downloads' | \
+              grep -oE 'Software Development Kit \(SDK\) [0-9]+\.[0-9]+\.[0-9]+' | \
+              grep -oE '[0-9]+\.[0-9]+\.[0-9]+$')
+            url="https://github.com/xapi-project/xen-api/releases/download/v${version}/Go-SDK-prerelease-unsigned.zip"
+          fi
+          curl -L "$url" -o xenserver-sdk.zip
+          unzip xenserver-sdk.zip -d sdk_temp
+          mkdir -p goSDK
+          mv sdk_temp/sdk_go/src/* goSDK/
+          rm -rf sdk_temp xenserver-sdk.zip
+      - run: go mod download
+      - run: go build -v .
+      - run: go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate --provider-name xenserver
+      - name: git diff
+        run: |
+          git diff --compact-summary --exit-code || \
+            (echo; echo "Unexpected difference in directories after code generation. Run 'go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate --provider-name xenserver' command and commit."; exit 1)
+  # TODO:
+  # As the UT now using un-mocked XenAPI, so skip the UT in CI for now.
+  # test:

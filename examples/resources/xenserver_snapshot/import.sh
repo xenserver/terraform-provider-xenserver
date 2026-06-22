@@ -1,0 +1,1 @@
+terraform import xenserver_snapshot.snapshot 00000000-0000-0000-0000-000000000000
