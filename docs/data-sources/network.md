@@ -40,8 +40,8 @@ output "network_output" {
 Read-Only:
 
 - `allowed_operations` (List of String) The list of the operations allowed in this state.
-- `assigned_ips` (Map of String) The IP addresses assigned to VIFs on networks that have active [xapi-managed](https://github.com/xapi-project/xen-api) DHCP.
-- `blobs` (Map of String) The binary blobs associated with this SR.
+- `assigned_ips` (Map of String) The IP addresses assigned to VIFs(UUID) on networks that have active [xapi-managed](https://github.com/xapi-project/xen-api) DHCP.
+- `blobs` (Map of String) The binary blobs(UUID) associated with this SR.
 - `bridge` (String) The name of the bridge corresponding to this network on the local host.
 - `current_operations` (Map of String) The links each of the running tasks using this object (by reference) to a current_operation enum which describes the nature of the task.
 - `default_locking_mode` (String) The network will use this value to determine the behavior of all VIFs where `locking_mode = default`.
@@ -50,8 +50,8 @@ Read-Only:
 - `name_description` (String) The human-readable description of the network.
 - `name_label` (String) The name of the network.
 - `other_config` (Map of String) The additional configuration.
-- `pifs` (List of String) The list of connected PIFs.
+- `pifs` (List of String) The list of connected PIFs(UUID).
 - `purpose` (List of String) Set of purposes for which the server will use this network.
 - `tags` (List of String) The user-specified tags for categorization purposes.
 - `uuid` (String) The UUID of the network.
-- `vifs` (List of String) The list of connected VIFs.
+- `vifs` (List of String) The list of connected VIFs(UUID).

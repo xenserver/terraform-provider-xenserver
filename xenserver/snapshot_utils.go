@@ -22,9 +22,9 @@ type snapshotResourceModel struct {
 
 func updateSnapshotResourceModel(ctx context.Context, session *xenapi.Session, record xenapi.VMRecord, data *snapshotResourceModel) error {
 	data.NameLabel = types.StringValue(record.NameLabel)
-	vmUUID, err := xenapi.VM.GetUUID(session, record.SnapshotOf)
+	vmUUID, err := getUUIDFromVMRef(session, record.SnapshotOf)
 	if err != nil {
-		return errors.New(err.Error())
+		return err
 	}
 	data.VM = types.StringValue(vmUUID)
 
@@ -75,9 +75,9 @@ func updateSnapshotResourceModelComputed(ctx context.Context, session *xenapi.Se
 			if err != nil {
 				return errors.New(err.Error())
 			}
-			srUUID, err := xenapi.SR.GetUUID(session, vdiRecord.SR)
+			srUUID, err := getUUIDFromSRRef(session, vdiRecord.SR)
 			if err != nil {
-				return errors.New(err.Error())
+				return err
 			}
 			otherConfig, diags := types.MapValueFrom(ctx, types.StringType, vdiRecord.OtherConfig)
 			if diags.HasError() {

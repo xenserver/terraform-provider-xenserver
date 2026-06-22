@@ -127,29 +127,31 @@ type vmRecordData struct {
 	PendingGuidances            types.List    `tfsdk:"pending_guidances"`
 	PendingGuidancesRecommended types.List    `tfsdk:"pending_guidances_recommended"`
 	PendingGuidancesFull        types.List    `tfsdk:"pending_guidances_full"`
+	Groups                      types.List    `tfsdk:"groups"`
 }
 
 // vmResourceModel describes the resource data model.
 type vmResourceModel struct {
-	NameLabel        types.String `tfsdk:"name_label"`
-	NameDescription  types.String `tfsdk:"name_description"`
-	TemplateName     types.String `tfsdk:"template_name"`
-	StaticMemMin     types.Int64  `tfsdk:"static_mem_min"`
-	StaticMemMax     types.Int64  `tfsdk:"static_mem_max"`
-	DynamicMemMin    types.Int64  `tfsdk:"dynamic_mem_min"`
-	DynamicMemMax    types.Int64  `tfsdk:"dynamic_mem_max"`
-	VCPUs            types.Int32  `tfsdk:"vcpus"`
-	BootMode         types.String `tfsdk:"boot_mode"`
-	BootOrder        types.String `tfsdk:"boot_order"`
-	CorePerSocket    types.Int32  `tfsdk:"cores_per_socket"`
-	OtherConfig      types.Map    `tfsdk:"other_config"`
-	HardDrive        types.Set    `tfsdk:"hard_drive"`
-	NetworkInterface types.Set    `tfsdk:"network_interface"`
-	CDROM            types.String `tfsdk:"cdrom"`
-	UUID             types.String `tfsdk:"uuid"`
-	ID               types.String `tfsdk:"id"`
-	DefaultIP        types.String `tfsdk:"default_ip"`
-	CheckIPTimeout   types.Int64  `tfsdk:"check_ip_timeout"`
+	NameLabel         types.String `tfsdk:"name_label"`
+	NameDescription   types.String `tfsdk:"name_description"`
+	TemplateName      types.String `tfsdk:"template_name"`
+	StaticMemMin      types.Int64  `tfsdk:"static_mem_min"`
+	StaticMemMax      types.Int64  `tfsdk:"static_mem_max"`
+	DynamicMemMin     types.Int64  `tfsdk:"dynamic_mem_min"`
+	DynamicMemMax     types.Int64  `tfsdk:"dynamic_mem_max"`
+	VCPUs             types.Int32  `tfsdk:"vcpus"`
+	BootMode          types.String `tfsdk:"boot_mode"`
+	BootOrder         types.String `tfsdk:"boot_order"`
+	CorePerSocket     types.Int32  `tfsdk:"cores_per_socket"`
+	OtherConfig       types.Map    `tfsdk:"other_config"`
+	HardDrive         types.Set    `tfsdk:"hard_drive"`
+	SRForFullDiskCopy types.String `tfsdk:"sr_for_full_disk_copy"`
+	NetworkInterface  types.Set    `tfsdk:"network_interface"`
+	CDROM             types.String `tfsdk:"cdrom"`
+	UUID              types.String `tfsdk:"uuid"`
+	ID                types.String `tfsdk:"id"`
+	DefaultIP         types.String `tfsdk:"default_ip"`
+	CheckIPTimeout    types.Int64  `tfsdk:"check_ip_timeout"`
 }
 
 func vmSchema() map[string]schema.Attribute {
@@ -229,6 +231,13 @@ func vmSchema() map[string]schema.Attribute {
 			Optional: true,
 			Computed: true,
 		},
+		"sr_for_full_disk_copy": schema.StringAttribute{
+			MarkdownDescription: "Use storage-level full disk copy. Give a SR uuid or set as `\"origin\"` to keep use the origin SR of template disks. Only support custom template." +
+				"\n\n-> **Note:** `sr_for_full_disk_copy` is not allowed to be updated.",
+			Optional: true,
+			Computed: true,
+			Default:  stringdefault.StaticString(""),
+		},
 		"network_interface": schema.SetNestedAttribute{
 			MarkdownDescription: "A set of network interface attributes to attach to the virtual machine." + "<br />" +
 				"Set at least one item in this attribute when use it.",
@@ -280,7 +289,7 @@ func vmSchema() map[string]schema.Attribute {
 	}
 }
 
-func updateVMRecordData(ctx context.Context, record xenapi.VMRecord, data *vmRecordData) error {
+func updateVMRecordData(ctx context.Context, session *xenapi.Session, record xenapi.VMRecord, data *vmRecordData) error {
 	data.UUID = types.StringValue(record.UUID)
 	var diags diag.Diagnostics
 	data.AllowedOperations, diags = types.ListValueFrom(ctx, types.StringType, record.AllowedOperations)
@@ -297,10 +306,26 @@ func updateVMRecordData(ctx context.Context, record xenapi.VMRecord, data *vmRec
 	data.UserVersion = types.Int32Value(int32(record.UserVersion))
 	data.IsATemplate = types.BoolValue(record.IsATemplate)
 	data.IsDefaultTemplate = types.BoolValue(record.IsDefaultTemplate)
-	data.SuspendVDI = types.StringValue(string(record.SuspendVDI))
-	data.ResidentOn = types.StringValue(string(record.ResidentOn))
-	data.ScheduledToBeResidentOn = types.StringValue(string(record.ScheduledToBeResidentOn))
-	data.Affinity = types.StringValue(string(record.Affinity))
+	suspendVDI, err := getUUIDFromVDIRef(session, record.SuspendVDI)
+	if err != nil {
+		return err
+	}
+	data.SuspendVDI = types.StringValue(suspendVDI)
+	residentOn, err := getUUIDFromHostRef(session, record.ResidentOn)
+	if err != nil {
+		return err
+	}
+	data.ResidentOn = types.StringValue(residentOn)
+	scheduledToBeResidentOn, err := getUUIDFromHostRef(session, record.ScheduledToBeResidentOn)
+	if err != nil {
+		return err
+	}
+	data.ScheduledToBeResidentOn = types.StringValue(scheduledToBeResidentOn)
+	affinity, err := getUUIDFromHostRef(session, record.Affinity)
+	if err != nil {
+		return err
+	}
+	data.Affinity = types.StringValue(affinity)
 	data.MemoryOverhead = types.Int64Value(int64(record.MemoryOverhead))
 	data.MemoryTarget = types.Int64Value(int64(record.MemoryTarget))
 	data.MemoryStaticMax = types.Int64Value(int64(record.MemoryStaticMax))
@@ -317,27 +342,51 @@ func updateVMRecordData(ctx context.Context, record xenapi.VMRecord, data *vmRec
 	data.ActionsAfterShutdown = types.StringValue(string(record.ActionsAfterShutdown))
 	data.ActionsAfterReboot = types.StringValue(string(record.ActionsAfterReboot))
 	data.ActionsAfterCrash = types.StringValue(string(record.ActionsAfterCrash))
-	data.Consoles, diags = types.ListValueFrom(ctx, types.StringType, record.Consoles)
+	consoles, err := getConsoleUUIDs(session, record.Consoles)
+	if err != nil {
+		return err
+	}
+	data.Consoles, diags = types.ListValueFrom(ctx, types.StringType, consoles)
 	if diags.HasError() {
 		return errors.New("unable to read VM consoles")
 	}
-	data.VIFs, diags = types.ListValueFrom(ctx, types.StringType, record.VIFs)
+	vifUUIDs, err := getVIFUUIDs(session, record.VIFs)
+	if err != nil {
+		return err
+	}
+	data.VIFs, diags = types.ListValueFrom(ctx, types.StringType, vifUUIDs)
 	if diags.HasError() {
 		return errors.New("unable to read VM VIFs")
 	}
-	data.VBDs, diags = types.ListValueFrom(ctx, types.StringType, record.VBDs)
+	vbdUUIDs, err := getVBDUUIDs(session, record.VBDs)
+	if err != nil {
+		return err
+	}
+	data.VBDs, diags = types.ListValueFrom(ctx, types.StringType, vbdUUIDs)
 	if diags.HasError() {
 		return errors.New("unable to read VM VBDs")
 	}
-	data.VUSBs, diags = types.ListValueFrom(ctx, types.StringType, record.VUSBs)
+	vusbUUIDs, err := getVUSBUUIDs(session, record.VUSBs)
+	if err != nil {
+		return err
+	}
+	data.VUSBs, diags = types.ListValueFrom(ctx, types.StringType, vusbUUIDs)
 	if diags.HasError() {
 		return errors.New("unable to read VM VUSBs")
 	}
-	data.CrashDumps, diags = types.ListValueFrom(ctx, types.StringType, record.CrashDumps)
+	crashDumps, err := getCrashdumpUUIDs(session, record.CrashDumps)
+	if err != nil {
+		return err
+	}
+	data.CrashDumps, diags = types.ListValueFrom(ctx, types.StringType, crashDumps)
 	if diags.HasError() {
 		return errors.New("unable to read VM crash dumps")
 	}
-	data.VTPMs, diags = types.ListValueFrom(ctx, types.StringType, record.VTPMs)
+	vtpms, err := getVTPMUUIDs(session, record.VTPMs)
+	if err != nil {
+		return err
+	}
+	data.VTPMs, diags = types.ListValueFrom(ctx, types.StringType, vtpms)
 	if diags.HasError() {
 		return errors.New("unable to read VM VTPMs")
 	}
@@ -369,8 +418,16 @@ func updateVMRecordData(ctx context.Context, record xenapi.VMRecord, data *vmRec
 		return errors.New("unable to read VM last boot CPU flags")
 	}
 	data.IsControlDomain = types.BoolValue(record.IsControlDomain)
-	data.Metrics = types.StringValue(string(record.Metrics))
-	data.GuestMetrics = types.StringValue(string(record.GuestMetrics))
+	metrics, err := getUUIDFromVMMetricsRef(session, record.Metrics)
+	if err != nil {
+		return err
+	}
+	data.Metrics = types.StringValue(metrics)
+	guestMetrics, err := getUUIDFromVMGuestMetricsRef(session, record.GuestMetrics)
+	if err != nil {
+		return err
+	}
+	data.GuestMetrics = types.StringValue(guestMetrics)
 	data.LastBootedRecord = types.StringValue(record.LastBootedRecord)
 	data.Recommendations = types.StringValue(record.Recommendations)
 	data.XenstoreData, diags = types.MapValueFrom(ctx, types.StringType, record.XenstoreData)
@@ -380,15 +437,28 @@ func updateVMRecordData(ctx context.Context, record xenapi.VMRecord, data *vmRec
 	data.HaAlwaysRun = types.BoolValue(record.HaAlwaysRun)
 	data.HaRestartPriority = types.StringValue(record.HaRestartPriority)
 	data.IsASnapshot = types.BoolValue(record.IsASnapshot)
-	data.SnapshotOf = types.StringValue(string(record.SnapshotOf))
-	data.Snapshots, diags = types.ListValueFrom(ctx, types.StringType, record.Snapshots)
+	snapshotOf, err := getUUIDFromVMRef(session, record.SnapshotOf)
+	if err != nil {
+		return err
+	}
+	data.SnapshotOf = types.StringValue(snapshotOf)
+	var emptyRef xenapi.VMRef
+	snapshots, err := getVMUUIDs(session, record.Snapshots, emptyRef)
+	if err != nil {
+		return err
+	}
+	data.Snapshots, diags = types.ListValueFrom(ctx, types.StringType, snapshots)
 	if diags.HasError() {
 		return errors.New("unable to read VM snapshots")
 	}
 	// Transfer time.Time to string
 	data.SnapshotTime = types.StringValue(record.SnapshotTime.String())
 	data.TransportableSnapshotID = types.StringValue(record.TransportableSnapshotID)
-	data.Blobs, diags = types.MapValueFrom(ctx, types.StringType, record.Blobs)
+	blobs, err := getBlobUUIDsMap(session, record.Blobs)
+	if err != nil {
+		return err
+	}
+	data.Blobs, diags = types.MapValueFrom(ctx, types.StringType, blobs)
 	if diags.HasError() {
 		return errors.New("unable to read VM blobs")
 	}
@@ -405,8 +475,16 @@ func updateVMRecordData(ctx context.Context, record xenapi.VMRecord, data *vmRec
 		return errors.New("unable to read VM snapshot info")
 	}
 	data.SnapshotMetadata = types.StringValue(record.SnapshotMetadata)
-	data.Parent = types.StringValue(string(record.Parent))
-	data.Children, diags = types.ListValueFrom(ctx, types.StringType, record.Children)
+	parent, err := getUUIDFromVMRef(session, record.Parent)
+	if err != nil {
+		return err
+	}
+	data.Parent = types.StringValue(parent)
+	children, err := getVMUUIDs(session, record.Children, emptyRef)
+	if err != nil {
+		return err
+	}
+	data.Children, diags = types.ListValueFrom(ctx, types.StringType, children)
 	if diags.HasError() {
 		return errors.New("unable to read VM children")
 	}
@@ -414,23 +492,47 @@ func updateVMRecordData(ctx context.Context, record xenapi.VMRecord, data *vmRec
 	if diags.HasError() {
 		return errors.New("unable to read VM bios strings")
 	}
-	data.ProtectionPolicy = types.StringValue(string(record.ProtectionPolicy))
+	protectionPolicy, err := getUUIDFromVMPPRef(session, record.ProtectionPolicy)
+	if err != nil {
+		return err
+	}
+	data.ProtectionPolicy = types.StringValue(protectionPolicy)
 	data.IsSnapshotFromVmpp = types.BoolValue(record.IsSnapshotFromVmpp)
-	data.SnapshotSchedule = types.StringValue(string(record.SnapshotSchedule))
+	snapshotSchedule, err := getUUIDFromVMSSRef(session, record.SnapshotSchedule)
+	if err != nil {
+		return err
+	}
+	data.SnapshotSchedule = types.StringValue(snapshotSchedule)
 	data.IsVmssSnapshot = types.BoolValue(record.IsVmssSnapshot)
-	data.Appliance = types.StringValue(string(record.Appliance))
+	appliance, err := getUUIDFromVMApplianceRef(session, record.Appliance)
+	if err != nil {
+		return err
+	}
+	data.Appliance = types.StringValue(appliance)
 	data.StartDelay = types.Int64Value(int64(record.StartDelay))
 	data.ShutdownDelay = types.Int64Value(int64(record.ShutdownDelay))
 	data.Order = types.Int32Value(int32(record.Order))
-	data.VGPUs, diags = types.ListValueFrom(ctx, types.StringType, record.VGPUs)
+	vgpus, err := getVGPUUUIDs(session, record.VGPUs)
+	if err != nil {
+		return err
+	}
+	data.VGPUs, diags = types.ListValueFrom(ctx, types.StringType, vgpus)
 	if diags.HasError() {
 		return errors.New("unable to read VM VGPUs")
 	}
-	data.AttachedPCIs, diags = types.ListValueFrom(ctx, types.StringType, record.AttachedPCIs)
+	attachedPCIs, err := getPCIUUIDs(session, record.AttachedPCIs)
+	if err != nil {
+		return err
+	}
+	data.AttachedPCIs, diags = types.ListValueFrom(ctx, types.StringType, attachedPCIs)
 	if diags.HasError() {
 		return errors.New("unable to read VM attached PCIs")
 	}
-	data.SuspendSR = types.StringValue(string(record.SuspendSR))
+	suspendSR, err := getUUIDFromSRRef(session, record.SuspendSR)
+	if err != nil {
+		return err
+	}
+	data.SuspendSR = types.StringValue(suspendSR)
 	data.Version = types.Int32Value(int32(record.Version))
 	data.GenerationID = types.StringValue(record.GenerationID)
 	data.HardwarePlatformVersion = types.Int32Value(int32(record.HardwarePlatformVersion))
@@ -454,6 +556,14 @@ func updateVMRecordData(ctx context.Context, record xenapi.VMRecord, data *vmRec
 	if diags.HasError() {
 		return errors.New("unable to read VM pending guidances full")
 	}
+	groups, err := getVMGroupUUIDs(session, record.Groups)
+	if err != nil {
+		return err
+	}
+	data.Groups, diags = types.ListValueFrom(ctx, types.StringType, groups)
+	if diags.HasError() {
+		return errors.New("unable to read VM groups")
+	}
 	return nil
 }
 
@@ -471,6 +581,45 @@ func getFirstTemplate(session *xenapi.Session, templateName string) (xenapi.VMRe
 		}
 	}
 	return vmRef, errors.New("unable to find the VM template with the name: " + templateName)
+}
+
+func checkIfSupportFullCopy(session *xenapi.Session, templateRef xenapi.VMRef, srUUID string) (xenapi.SRRef, error) {
+	var srRef xenapi.SRRef
+	// show error if choose the XS default template
+	isDefaultTemplate, err := xenapi.VM.GetIsDefaultTemplate(session, templateRef)
+	if err != nil {
+		return srRef, errors.New("can't get is_default_template. " + err.Error())
+	}
+	if isDefaultTemplate {
+		return srRef, errors.New("don't support default template")
+	}
+
+	// check if VM template disk allow copy
+	templateHardDrives, err := getAllDiskTypeVBDs(session, templateRef)
+	if err != nil {
+		return srRef, err
+	}
+	for _, vbdRefStr := range templateHardDrives {
+		vdiRef, err := xenapi.VBD.GetVDI(session, xenapi.VBDRef(vbdRefStr))
+		if err != nil {
+			return srRef, errors.New("can't get VDI ref. " + err.Error())
+		}
+		allowedOps, err := xenapi.VDI.GetAllowedOperations(session, vdiRef)
+		if err != nil {
+			return srRef, errors.New("can't get VDI allowed_operations. " + err.Error())
+		}
+		if !slices.Contains(allowedOps, xenapi.VdiOperationsCopy) {
+			return srRef, errors.New("template disk doesn't allow copy")
+		}
+	}
+
+	if srUUID != "origin" {
+		srRef, err = xenapi.SR.GetByUUID(session, srUUID)
+		if err != nil {
+			return srRef, errors.New("can't get SR ref. " + err.Error())
+		}
+	}
+	return srRef, nil
 }
 
 func setOtherConfigWhenCreate(session *xenapi.Session, vmRef xenapi.VMRef) error {
@@ -535,6 +684,7 @@ func updateOtherConfigFromPlan(ctx context.Context, session *xenapi.Session, vmR
 	vmOtherConfig["tf_other_config_keys"] = strings.Join(tfOtherConfigKeys, ",")
 	vmOtherConfig["tf_check_ip_timeout"] = plan.CheckIPTimeout.String()
 	vmOtherConfig["tf_template_name"] = plan.TemplateName.ValueString()
+	vmOtherConfig["tf_sr_for_full_disk_copy"] = plan.SRForFullDiskCopy.ValueString()
 
 	err = xenapi.VM.SetOtherConfig(session, vmRef, vmOtherConfig)
 	if err != nil {
@@ -636,6 +786,10 @@ func updateVMResourceModelComputed(ctx context.Context, session *xenapi.Session,
 			return err
 		}
 		data.DefaultIP = types.StringValue(ip)
+	}
+
+	if _, ok := vmRecord.OtherConfig["tf_sr_for_full_disk_copy"]; ok {
+		data.SRForFullDiskCopy = types.StringValue(vmRecord.OtherConfig["tf_sr_for_full_disk_copy"])
 	}
 
 	return nil
@@ -1219,6 +1373,9 @@ func vmResourceModelUpdateCheck(plan vmResourceModel, state vmResourceModel) err
 	}
 	if !plan.BootMode.IsUnknown() && plan.BootMode != state.BootMode {
 		return errors.New(`"boot_mode" doesn't expected to be updated`)
+	}
+	if !plan.SRForFullDiskCopy.IsUnknown() && plan.SRForFullDiskCopy != state.SRForFullDiskCopy {
+		return errors.New(`"sr_for_full_disk_copy" doesn't expected to be updated`)
 	}
 	return nil
 }

@@ -63,20 +63,14 @@ func updatePIFRecordData(ctx context.Context, session *xenapi.Session, record xe
 	data.UUID = types.StringValue(record.UUID)
 	data.Device = types.StringValue(record.Device)
 	data.Management = types.BoolValue(record.Management)
-
-	var err error
-	networkUUID := ""
-	if record.Network != "OpaqueRef:NULL" {
-		networkUUID, err = xenapi.Network.GetUUID(session, record.Network)
-		if err != nil {
-			return errors.New("unable to read PIF network UUID")
-		}
+	networkUUID, err := getUUIDFromNetworkRef(session, record.Network)
+	if err != nil {
+		return err
 	}
 	data.Network = types.StringValue(networkUUID)
-
-	hostUUID, err := xenapi.Host.GetUUID(session, record.Host)
+	hostUUID, err := getUUIDFromHostRef(session, record.Host)
 	if err != nil {
-		return errors.New("unable to read PIF host UUID")
+		return err
 	}
 	data.Host = types.StringValue(hostUUID)
 	data.MAC = types.StringValue(record.MAC)
@@ -89,62 +83,51 @@ func updatePIFRecordData(ctx context.Context, session *xenapi.Session, record xe
 	data.Netmask = types.StringValue(record.Netmask)
 	data.Gateway = types.StringValue(record.Gateway)
 	data.DNS = types.StringValue(record.DNS)
-
-	bondUUID := ""
-	if record.BondSlaveOf != "OpaqueRef:NULL" {
-		bondUUID, err = xenapi.Bond.GetUUID(session, record.BondSlaveOf)
-		if err != nil {
-			return errors.New(err.Error())
-		}
+	bondUUID, err := getUUIDFromBondRef(session, record.BondSlaveOf)
+	if err != nil {
+		return err
 	}
 	data.BondSlaveOf = types.StringValue(bondUUID)
-
 	var diags diag.Diagnostics
-	bondMasterOf := []string{}
-	for _, bondMasterRef := range record.BondMasterOf {
-		bondUUID, err := xenapi.Bond.GetUUID(session, bondMasterRef)
-		if err != nil {
-			return errors.New(err.Error())
-		}
-		bondMasterOf = append(bondMasterOf, bondUUID)
+	bondMasterOf, err := getBondUUIDs(session, record.BondMasterOf)
+	if err != nil {
+		return err
 	}
 	data.BondMasterOf, diags = types.ListValueFrom(ctx, types.StringType, bondMasterOf)
 	if diags.HasError() {
 		return errors.New("unable to read PIF bond master of")
 	}
-
-	vlanUUID := ""
-	if record.VLANMasterOf != "OpaqueRef:NULL" {
-		vlanUUID, err = xenapi.VLAN.GetUUID(session, record.VLANMasterOf)
-		if err != nil {
-			return errors.New(err.Error())
-		}
+	vlanUUID, err := getUUIDFromVLANRef(session, record.VLANMasterOf)
+	if err != nil {
+		return err
 	}
 	data.VLANMasterOf = types.StringValue(vlanUUID)
-
-	vlanSlaveOf := []string{}
-	for _, vlanSlaveRef := range record.VLANSlaveOf {
-		vlanUUID, err := xenapi.VLAN.GetUUID(session, vlanSlaveRef)
-		if err != nil {
-			return errors.New(err.Error())
-		}
-		vlanSlaveOf = append(vlanSlaveOf, vlanUUID)
+	vlanSlaveOf, err := getVLANUUIDs(session, record.VLANSlaveOf)
+	if err != nil {
+		return err
 	}
 	data.VLANSlaveOf, diags = types.ListValueFrom(ctx, types.StringType, vlanSlaveOf)
 	if diags.HasError() {
 		return errors.New("unable to read PIF VLAN slave of")
 	}
-
 	data.OtherConfig, diags = types.MapValueFrom(ctx, types.StringType, record.OtherConfig)
 	if diags.HasError() {
 		return errors.New("unable to read PIF other config")
 	}
 	data.DisallowUnplug = types.BoolValue(record.DisallowUnplug)
-	data.TunnelAccessPIFOf, diags = types.ListValueFrom(ctx, types.StringType, record.TunnelAccessPIFOf)
+	tunnelAccessPIFOf, err := getTunnelUUIDs(session, record.TunnelAccessPIFOf)
+	if err != nil {
+		return err
+	}
+	data.TunnelAccessPIFOf, diags = types.ListValueFrom(ctx, types.StringType, tunnelAccessPIFOf)
 	if diags.HasError() {
 		return errors.New("unable to read PIF tunnel access PIF of")
 	}
-	data.TunnelTransportPIFOf, diags = types.ListValueFrom(ctx, types.StringType, record.TunnelTransportPIFOf)
+	tunnelTransportPIFOf, err := getTunnelUUIDs(session, record.TunnelTransportPIFOf)
+	if err != nil {
+		return err
+	}
+	data.TunnelTransportPIFOf, diags = types.ListValueFrom(ctx, types.StringType, tunnelTransportPIFOf)
 	if diags.HasError() {
 		return errors.New("unable to read PIF tunnel transport PIF of")
 	}
@@ -165,21 +148,25 @@ func updatePIFRecordData(ctx context.Context, session *xenapi.Session, record xe
 		return errors.New("unable to read PIF capabilities")
 	}
 	data.IGMPSnoopingStatus = types.StringValue(string(record.IgmpSnoopingStatus))
-	data.SRIOVPhysicalPIFOf, diags = types.ListValueFrom(ctx, types.StringType, record.SriovPhysicalPIFOf)
+	sriovPhysicalPIFOf, err := getNetworkSriovUUIDs(session, record.SriovPhysicalPIFOf)
+	if err != nil {
+		return err
+	}
+	data.SRIOVPhysicalPIFOf, diags = types.ListValueFrom(ctx, types.StringType, sriovPhysicalPIFOf)
 	if diags.HasError() {
 		return errors.New("unable to read PIF SR-IOV physical PIF of")
 	}
-	data.SRIOVLogicalPIFOf, diags = types.ListValueFrom(ctx, types.StringType, record.SriovLogicalPIFOf)
+	sriovLogicalPIFOf, err := getNetworkSriovUUIDs(session, record.SriovLogicalPIFOf)
+	if err != nil {
+		return err
+	}
+	data.SRIOVLogicalPIFOf, diags = types.ListValueFrom(ctx, types.StringType, sriovLogicalPIFOf)
 	if diags.HasError() {
 		return errors.New("unable to read PIF SR-IOV logical PIF of")
 	}
-
-	pciUUID := ""
-	if record.PCI != "OpaqueRef:NULL" {
-		pciUUID, err = xenapi.PCI.GetUUID(session, record.PCI)
-		if err != nil {
-			return errors.New("unable to read PIF PCI UUID" + string(record.PCI))
-		}
+	pciUUID, err := getUUIDFromPCIRef(session, record.PCI)
+	if err != nil {
+		return err
 	}
 	data.PCI = types.StringValue(pciUUID)
 	return nil

@@ -62,6 +62,9 @@ export NFS_SERVER_PATH=<nfs-server-path>
 export SMB_SERVER_PATH=<smb-server-path>
 export SMB_SERVER_USERNAME=<smb-server-username>
 export SMB_SERVER_PASSWORD=<smb-server-password>
+export SUPPORTER_HOST=<supporter-ip>
+export SUPPORTER_USERNAME=<supporter-username>
+export SUPPORTER_PASSWORD=<supporter-password>
 ```
 
 Run `"make testacc"`. *Note:* Acceptance tests generate actual resources and frequently incur costs when run.

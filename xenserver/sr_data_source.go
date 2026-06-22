@@ -75,12 +75,12 @@ func (d *srDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, res
 							ElementType:         types.StringType,
 						},
 						"vdis": schema.ListAttribute{
-							MarkdownDescription: "The all virtual disks known to this storage repository.",
+							MarkdownDescription: "The UUID list of all virtual disks known to this storage repository.",
 							Computed:            true,
 							ElementType:         types.StringType,
 						},
 						"pbds": schema.ListAttribute{
-							MarkdownDescription: "Describes how particular hosts can see this storage repository.",
+							MarkdownDescription: "The UUID list of PBDs. Describes how particular hosts can see this storage repository.",
 							Computed:            true,
 							ElementType:         types.StringType,
 						},
@@ -124,7 +124,7 @@ func (d *srDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, res
 							ElementType:         types.StringType,
 						},
 						"blobs": schema.MapAttribute{
-							MarkdownDescription: "The binary blobs associated with this SR.",
+							MarkdownDescription: "The binary blobs(UUID) associated with this SR.",
 							Computed:            true,
 							ElementType:         types.StringType,
 						},
@@ -133,7 +133,7 @@ func (d *srDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, res
 							Computed:            true,
 						},
 						"introduced_by": schema.StringAttribute{
-							MarkdownDescription: "The disaster recovery task which introduced this SR.",
+							MarkdownDescription: "The UUID of disaster recovery task which introduced this SR.",
 							Computed:            true,
 						},
 						"clustered": schema.BoolAttribute{
@@ -194,7 +194,7 @@ func (d *srDataSource) Read(ctx context.Context, req datasource.ReadRequest, res
 		}
 
 		var srData srRecordData
-		err = updateSRRecordData(ctx, srRecord, &srData)
+		err = updateSRRecordData(ctx, d.session, srRecord, &srData)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Unable to update SR record data",

@@ -74,6 +74,23 @@ resource "xenserver_vm" "windows_vm" {
   }
 }
 
+# Create a Windows 11 VM that is copy from the custom template
+resource "xenserver_vm" "windows_vm_copy" {
+  name_label       = "Windows VM Copy From Custom Template"
+  template_name    = "Custom Windows 11 Template"
+  static_mem_max   = 4 * 1024 * 1024 * 1024
+  vcpus            = 4
+  cores_per_socket = 2
+  sr_for_full_disk_copy = data.xenserver_sr.sr.data_items[0].uuid
+
+  network_interface = [
+    {
+      device       = "0"
+      network_uuid = data.xenserver_network.network.data_items[0].uuid,
+    },
+  ]
+}
+
 # Create a Linux VM that is cloned from the custom template
 resource "xenserver_vm" "linux_vm" {
   name_label       = "Linux VM"
@@ -200,6 +217,9 @@ output "vm_out" {
 - `hard_drive` (Attributes Set) A set of hard drive attributes to attach to the virtual machine, default inherited from the template. (see [below for nested schema](#nestedatt--hard_drive))
 - `name_description` (String) The description of the virtual machine, default to be `""`.
 - `other_config` (Map of String) The additional configuration of the virtual machine, default to be `{}`.
+- `sr_for_full_disk_copy` (String) Use storage-level full disk copy. Give a SR uuid or set as `"origin"` to keep use the origin SR of template disks. Only support custom template.
+
+-> **Note:** `sr_for_full_disk_copy` is not allowed to be updated.
 - `static_mem_min` (Number) Statically-set (absolute) minimum memory (bytes), default same with `static_mem_max`. The least amount of memory this VM can boot with without crashing.
 
 ### Read-Only

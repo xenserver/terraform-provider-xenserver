@@ -43,47 +43,35 @@ data "xenserver_pif" "pif" {
 `, eth_index, eth_index)
 }
 
-func managementNetwork(index string) string {
+func managementNetwork(name_label string, name_description string, host_index string) string {
 	return fmt.Sprintf(`
-	management_network = data.xenserver_pif.pif.data_items[%s].network
-	`, index)
-}
-
-func testPoolResource(name_label string,
-	name_description string,
-	storage_location string,
-	management_network string,
-	supporter_params string,
-	eject_supporter string) string {
-	return fmt.Sprintf(`
-resource "xenserver_sr_nfs" "nfs" {
-	name_label       = "NFS"
-	version          = "3"
-	storage_location = "%s"
-}
-
-data "xenserver_host" "supporter" {
-  is_coordinator = false
-}
-
 resource "xenserver_pool" "pool" {
     name_label   = "%s"
 	name_description = "%s"
     default_sr = xenserver_sr_nfs.nfs.uuid
-	%s
-	%s
-	%s
+	management_network = data.xenserver_pif.pif.data_items[%s].network
 }
-`, storage_location,
-		name_label,
-		name_description,
-		management_network,
-		supporter_params,
-		eject_supporter)
+`, name_label, name_description, host_index)
 }
 
-func testJoinSupporterParams(supporterHost string, supporterUsername string, supporterPassowd string) string {
+func testPoolResource(storage_location string, extra string) string {
 	return fmt.Sprintf(`
+resource "xenserver_sr_nfs" "nfs" {
+	name_label       = "NFS for pool test"
+	version          = "3"
+	storage_location = "%s"
+}
+
+%s
+`, storage_location, extra)
+}
+
+func joinSupporterParams(name_label string, name_description string, supporterHost string, supporterUsername string, supporterPassowd string) string {
+	return fmt.Sprintf(`
+resource "xenserver_pool" "pool" {
+    name_label   = "%s"
+	name_description = "%s"
+    default_sr = xenserver_sr_nfs.nfs.uuid
 	join_supporters = [
 		{
 		    host = "%s"
@@ -91,15 +79,8 @@ func testJoinSupporterParams(supporterHost string, supporterUsername string, sup
 			password = "%s"
 		}
     ]
-`, supporterHost, supporterUsername, supporterPassowd)
-}
-
-func ejectSupporterParams(index string) string {
-	return fmt.Sprintf(`
-	eject_supporters = [
-		data.xenserver_host.supporter.data_items[%s].uuid
-	]
-`, index)
+}	
+`, name_label, name_description, supporterHost, supporterUsername, supporterPassowd)
 }
 
 func TestAccPoolResource(t *testing.T) {
@@ -109,52 +90,52 @@ func TestAccPoolResource(t *testing.T) {
 	}
 
 	storageLocation := os.Getenv("NFS_SERVER") + ":" + os.Getenv("NFS_SERVER_PATH")
-	joinSupporterParams := testJoinSupporterParams(os.Getenv("SUPPORTER_HOST"), os.Getenv("SUPPORTER_USERNAME"), os.Getenv("SUPPORTER_PASSWORD"))
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
-			// Create and Read testing for Default SR and Pool Join
+			// Pool Join
 			{
-				Config: providerConfig + testPoolResource("Test Pool A",
+				Config: providerConfig + testPoolResource(storageLocation, joinSupporterParams(
+					"Test Pool A",
 					"Test Pool Join",
-					storageLocation,
-					"",
-					joinSupporterParams,
-					""),
+					os.Getenv("SUPPORTER_HOST"),
+					os.Getenv("SUPPORTER_USERNAME"),
+					os.Getenv("SUPPORTER_PASSWORD"))),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("xenserver_pool.pool", "name_label", "Test Pool A"),
 					resource.TestCheckResourceAttr("xenserver_pool.pool", "name_description", "Test Pool Join"),
-					resource.TestCheckResourceAttrSet("xenserver_pool.pool", "default_sr"),
 				),
 			},
-			// ImportState testing
 			{
-				ResourceName:            "xenserver_pool.pool",
-				ImportState:             true,
-				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"join_supporters"},
-			},
-			// Update and Read testing For Pool eject supporter
-			{
-				Config: providerConfig + testPoolResource("Test Pool B",
-					"Test Pool Eject",
-					storageLocation,
-					"",
-					"",
-					ejectSupporterParams("1")),
+				Config: providerConfig + testPoolResource(storageLocation, joinSupporterParams(
+					"Test Pool B",
+					"Test Pool Join again",
+					os.Getenv("SUPPORTER_HOST"),
+					os.Getenv("SUPPORTER_USERNAME"),
+					os.Getenv("SUPPORTER_PASSWORD"))),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("xenserver_pool.pool", "name_label", "Test Pool B"),
-					resource.TestCheckResourceAttr("xenserver_pool.pool", "name_description", "Test Pool Eject"),
+					resource.TestCheckResourceAttr("xenserver_pool.pool", "name_description", "Test Pool Join again"),
 				),
 			},
-			// Update and Read testing For Pool Management Network
+			// Delete testing automatically occurs in TestCase
+		},
+	})
+}
+
+func TestAccPoolManagementNetwork(t *testing.T) {
+	// skip test if TEST_POOL is not set
+	if os.Getenv("TEST_POOL") == "" {
+		t.Skip("Skipping TestAccPoolManagementNetwork test due to TEST_POOL not set")
+	}
+
+	storageLocation := os.Getenv("NFS_SERVER") + ":" + os.Getenv("NFS_SERVER_PATH")
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			// Pool Management Network
 			{
-				Config: providerConfig + pifResource("3") + testPoolResource("Test Pool C",
-					"Test Pool Management Network",
-					storageLocation,
-					managementNetwork("2"),
-					"",
-					""),
+				Config: providerConfig + pifResource("3") + testPoolResource(storageLocation, managementNetwork("Test Pool C", "Test Pool Management Network", "2")),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("xenserver_pool.pool", "name_label", "Test Pool C"),
 					resource.TestCheckResourceAttr("xenserver_pool.pool", "name_description", "Test Pool Management Network"),

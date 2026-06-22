@@ -134,9 +134,9 @@ func getVDICreateParams(ctx context.Context, session *xenapi.Session, data vdiRe
 
 func updateVDIResourceModel(ctx context.Context, session *xenapi.Session, record xenapi.VDIRecord, data *vdiResourceModel) error {
 	data.NameLabel = types.StringValue(record.NameLabel)
-	srUUID, err := xenapi.SR.GetUUID(session, record.SR)
+	srUUID, err := getUUIDFromSRRef(session, record.SR)
 	if err != nil {
-		return errors.New(err.Error())
+		return err
 	}
 	data.SR = types.StringValue(srUUID)
 	data.VirtualSize = types.Int64Value(int64(record.VirtualSize))
