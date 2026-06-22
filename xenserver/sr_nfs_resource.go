@@ -51,9 +51,20 @@ func (r *nfsResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 				Computed:            true,
 				Default:             stringdefault.StaticString(""),
 			},
+			"type": schema.StringAttribute{
+				MarkdownDescription: "The type of the NFS storage repository, default to be `\"nfs\"`." + "<br />" +
+					"Can be set as `\"nfs\"` or `\"iso\"`." +
+					"\n\n-> **Note:** `type` is not allowed to be updated.",
+				Optional: true,
+				Computed: true,
+				Default:  stringdefault.StaticString("nfs"),
+				Validators: []validator.String{
+					stringvalidator.OneOf("nfs", "iso"),
+				},
+			},
 			"storage_location": schema.StringAttribute{
 				MarkdownDescription: "The server and server path of the NFS storage repository." + "<br />" +
-					"Follow the format `\"1.1.1.1:/server/path\"`." +
+					"Follow the format `\"server:/path\"`." +
 					"\n\n-> **Note:** `storage_location` is not allowed to be updated.",
 				Required: true,
 			},
@@ -97,15 +108,15 @@ func (r *nfsResource) Configure(_ context.Context, req resource.ConfigureRequest
 	if req.ProviderData == nil {
 		return
 	}
-	session, ok := req.ProviderData.(*xenapi.Session)
+	providerData, ok := req.ProviderData.(*xsProvider)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *xenapi.Session, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *xenserver.xsProvider, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
-	r.session = session
+	r.session = providerData.session
 }
 
 func (r *nfsResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -124,7 +135,7 @@ func (r *nfsResource) Create(ctx context.Context, req resource.CreateRequest, re
 		)
 		return
 	}
-	srRef, err := xenapi.SR.Create(r.session, params.Host, params.DeviceConfig, params.PhysicalSize, params.NameLabel, params.NameDescription, params.TypeKey, params.ContentType, params.Shared, params.SmConfig)
+	srRef, err := createSRResource(r.session, params)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to create SR",
@@ -180,7 +191,7 @@ func (r *nfsResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 	srRef, err := xenapi.SR.GetByUUID(r.session, data.UUID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to get SR ref",
+			"Unable to get SR ref in Read stage",
 			err.Error(),
 		)
 		return
@@ -230,7 +241,7 @@ func (r *nfsResource) Update(ctx context.Context, req resource.UpdateRequest, re
 	srRef, err := xenapi.SR.GetByUUID(r.session, plan.UUID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to get SR ref",
+			"Unable to get SR ref in Update stage",
 			err.Error(),
 		)
 		return
@@ -273,7 +284,7 @@ func (r *nfsResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 	srRef, err := xenapi.SR.GetByUUID(r.session, data.UUID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to get SR ref",
+			"Unable to get SR ref in Delete stage",
 			err.Error(),
 		)
 		return

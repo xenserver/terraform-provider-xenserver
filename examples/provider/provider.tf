@@ -1,5 +1,5 @@
 provider "xenserver" {
-  host     = "https://1.1.1.1"
+  host     = "https://192.0.2.1"
   username = "root"
-  password = "test123"
+  password = var.password
 }

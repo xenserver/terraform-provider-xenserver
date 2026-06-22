@@ -3,10 +3,15 @@ package xenserver
 import (
 	"context"
 	"errors"
-	"xenapi"
+	"net"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
+
+	"xenapi"
 )
 
 // pifDataSourceModel describes the data source data model.
@@ -54,12 +59,26 @@ type pifRecordData struct {
 	PCI                   types.String `tfsdk:"pci"`
 }
 
-func updatePIFRecordData(ctx context.Context, record xenapi.PIFRecord, data *pifRecordData) error {
+func updatePIFRecordData(ctx context.Context, session *xenapi.Session, record xenapi.PIFRecord, data *pifRecordData) error {
 	data.UUID = types.StringValue(record.UUID)
 	data.Device = types.StringValue(record.Device)
 	data.Management = types.BoolValue(record.Management)
-	data.Network = types.StringValue(string(record.Network))
-	data.Host = types.StringValue(string(record.Host))
+
+	var err error
+	networkUUID := ""
+	if record.Network != "OpaqueRef:NULL" {
+		networkUUID, err = xenapi.Network.GetUUID(session, record.Network)
+		if err != nil {
+			return errors.New("unable to read PIF network UUID")
+		}
+	}
+	data.Network = types.StringValue(networkUUID)
+
+	hostUUID, err := xenapi.Host.GetUUID(session, record.Host)
+	if err != nil {
+		return errors.New("unable to read PIF host UUID")
+	}
+	data.Host = types.StringValue(hostUUID)
 	data.MAC = types.StringValue(record.MAC)
 	data.MTU = types.Int32Value(int32(record.MTU))
 	data.VLAN = types.Int32Value(int32(record.VLAN))
@@ -70,17 +89,52 @@ func updatePIFRecordData(ctx context.Context, record xenapi.PIFRecord, data *pif
 	data.Netmask = types.StringValue(record.Netmask)
 	data.Gateway = types.StringValue(record.Gateway)
 	data.DNS = types.StringValue(record.DNS)
-	data.BondSlaveOf = types.StringValue(string(record.BondSlaveOf))
+
+	bondUUID := ""
+	if record.BondSlaveOf != "OpaqueRef:NULL" {
+		bondUUID, err = xenapi.Bond.GetUUID(session, record.BondSlaveOf)
+		if err != nil {
+			return errors.New(err.Error())
+		}
+	}
+	data.BondSlaveOf = types.StringValue(bondUUID)
+
 	var diags diag.Diagnostics
-	data.BondMasterOf, diags = types.ListValueFrom(ctx, types.StringType, record.BondMasterOf)
+	bondMasterOf := []string{}
+	for _, bondMasterRef := range record.BondMasterOf {
+		bondUUID, err := xenapi.Bond.GetUUID(session, bondMasterRef)
+		if err != nil {
+			return errors.New(err.Error())
+		}
+		bondMasterOf = append(bondMasterOf, bondUUID)
+	}
+	data.BondMasterOf, diags = types.ListValueFrom(ctx, types.StringType, bondMasterOf)
 	if diags.HasError() {
 		return errors.New("unable to read PIF bond master of")
 	}
-	data.VLANMasterOf = types.StringValue(string(record.VLANMasterOf))
-	data.VLANSlaveOf, diags = types.ListValueFrom(ctx, types.StringType, record.VLANSlaveOf)
+
+	vlanUUID := ""
+	if record.VLANMasterOf != "OpaqueRef:NULL" {
+		vlanUUID, err = xenapi.VLAN.GetUUID(session, record.VLANMasterOf)
+		if err != nil {
+			return errors.New(err.Error())
+		}
+	}
+	data.VLANMasterOf = types.StringValue(vlanUUID)
+
+	vlanSlaveOf := []string{}
+	for _, vlanSlaveRef := range record.VLANSlaveOf {
+		vlanUUID, err := xenapi.VLAN.GetUUID(session, vlanSlaveRef)
+		if err != nil {
+			return errors.New(err.Error())
+		}
+		vlanSlaveOf = append(vlanSlaveOf, vlanUUID)
+	}
+	data.VLANSlaveOf, diags = types.ListValueFrom(ctx, types.StringType, vlanSlaveOf)
 	if diags.HasError() {
 		return errors.New("unable to read PIF VLAN slave of")
 	}
+
 	data.OtherConfig, diags = types.MapValueFrom(ctx, types.StringType, record.OtherConfig)
 	if diags.HasError() {
 		return errors.New("unable to read PIF other config")
@@ -119,6 +173,141 @@ func updatePIFRecordData(ctx context.Context, record xenapi.PIFRecord, data *pif
 	if diags.HasError() {
 		return errors.New("unable to read PIF SR-IOV logical PIF of")
 	}
-	data.PCI = types.StringValue(string(record.PCI))
+
+	pciUUID := ""
+	if record.PCI != "OpaqueRef:NULL" {
+		pciUUID, err = xenapi.PCI.GetUUID(session, record.PCI)
+		if err != nil {
+			return errors.New("unable to read PIF PCI UUID" + string(record.PCI))
+		}
+	}
+	data.PCI = types.StringValue(pciUUID)
 	return nil
+}
+
+type pifConfigureResourceModel struct {
+	DisallowUnplug types.Bool   `tfsdk:"disallow_unplug"`
+	Interface      types.Object `tfsdk:"interface"`
+	UUID           types.String `tfsdk:"uuid"`
+	ID             types.String `tfsdk:"id"`
+}
+
+type InterfaceObject struct {
+	NameLabel types.String `tfsdk:"name_label"`
+	Mode      types.String `tfsdk:"mode"`
+	IP        types.String `tfsdk:"ip"`
+	Gateway   types.String `tfsdk:"gateway"`
+	Netmask   types.String `tfsdk:"netmask"`
+	DNS       types.String `tfsdk:"dns"`
+}
+
+func getIPConfigurationMode(mode string) xenapi.IPConfigurationMode {
+	var value xenapi.IPConfigurationMode
+	switch mode {
+	case "None":
+		value = xenapi.IPConfigurationModeNone
+	case "DHCP":
+		value = xenapi.IPConfigurationModeDHCP
+	case "Static":
+		value = xenapi.IPConfigurationModeStatic
+	default:
+		value = xenapi.IPConfigurationModeUnrecognized
+	}
+	return value
+}
+
+func pifConfigureResourceModelUpdate(ctx context.Context, session *xenapi.Session, data pifConfigureResourceModel) error {
+	pifRef, err := xenapi.PIF.GetByUUID(session, data.UUID.ValueString())
+	if err != nil {
+		return errors.New(err.Error() + ", uuid: " + data.UUID.ValueString())
+	}
+
+	if !data.DisallowUnplug.IsNull() {
+		err := xenapi.PIF.SetDisallowUnplug(session, pifRef, data.DisallowUnplug.ValueBool())
+		if err != nil {
+			tflog.Error(ctx, "unable to update the PIF 'disallow_unplug'")
+			return errors.New(err.Error())
+		}
+	}
+
+	if !data.Interface.IsNull() {
+		pifMetricsRef, err := xenapi.PIF.GetMetrics(session, pifRef)
+		if err != nil {
+			return errors.New(err.Error())
+		}
+
+		isPIFConnected, err := xenapi.PIFMetrics.GetCarrier(session, pifMetricsRef)
+		if err != nil {
+			return errors.New(err.Error())
+		}
+
+		if !isPIFConnected {
+			return errors.New("the PIF with uuid " + data.UUID.ValueString() + " is not connected")
+		}
+
+		var interfaceObject InterfaceObject
+		diags := data.Interface.As(ctx, &interfaceObject, basetypes.ObjectAsOptions{})
+		if diags.HasError() {
+			return errors.New("unable to read PIF interface config")
+		}
+
+		if !interfaceObject.NameLabel.IsNull() {
+			oc, err := xenapi.PIF.GetOtherConfig(session, pifRef)
+			if err != nil {
+				return errors.New(err.Error())
+			}
+
+			oc["management_purpose"] = interfaceObject.NameLabel.ValueString()
+
+			err = xenapi.PIF.SetOtherConfig(session, pifRef, oc)
+			if err != nil {
+				return errors.New(err.Error())
+			}
+		}
+
+		mode := getIPConfigurationMode(interfaceObject.Mode.ValueString())
+		ip := interfaceObject.IP.ValueString()
+		netmask := interfaceObject.Netmask.ValueString()
+		gateway := interfaceObject.Gateway.ValueString()
+		dns := interfaceObject.DNS.ValueString()
+
+		tflog.Debug(ctx, "Reconfigure PIF IP with mode: "+string(mode)+", ip: "+ip+", netmask: "+netmask+", gateway: "+gateway+", dns: "+dns)
+		err = xenapi.PIF.ReconfigureIP(session, pifRef, mode, ip, netmask, gateway, dns)
+		if err != nil {
+			tflog.Error(ctx, "unable to update the PIF 'interface'")
+			return errors.New(err.Error())
+		}
+		if string(mode) == "DHCP" {
+			err := checkPIFHasIP(ctx, session, pifRef)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func checkPIFHasIP(ctx context.Context, session *xenapi.Session, ref xenapi.PIFRef) error {
+	// set timeout channel to check if IP address is available
+	timeoutChan := time.After(time.Duration(60) * time.Second)
+	for {
+		select {
+		case <-timeoutChan:
+			return errors.New("get PIF IP timeout in 60 seconds, please check if the interface is connected")
+		default:
+			ip, err := xenapi.PIF.GetIP(session, ref)
+			if err != nil {
+				tflog.Error(ctx, "unable to get the PIF IP")
+				return errors.New(err.Error())
+			}
+			if isValidIpAddress(net.ParseIP(ip)) {
+				tflog.Debug(ctx, "PIF IP is available: "+ip)
+				return nil
+			}
+
+			tflog.Debug(ctx, "-----> Retry get PIF IP")
+			time.Sleep(5 * time.Second)
+		}
+	}
 }

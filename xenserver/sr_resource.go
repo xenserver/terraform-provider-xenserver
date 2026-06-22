@@ -119,15 +119,15 @@ func (r *srResource) Configure(_ context.Context, req resource.ConfigureRequest,
 	if req.ProviderData == nil {
 		return
 	}
-	session, ok := req.ProviderData.(*xenapi.Session)
+	providerData, ok := req.ProviderData.(*xsProvider)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *xenapi.Session, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *xenserver.xsProvider, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
-	r.session = session
+	r.session = providerData.session
 }
 
 func (r *srResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -146,7 +146,7 @@ func (r *srResource) Create(ctx context.Context, req resource.CreateRequest, res
 		)
 		return
 	}
-	srRef, err := xenapi.SR.Create(r.session, params.Host, params.DeviceConfig, params.PhysicalSize, params.NameLabel, params.NameDescription, params.TypeKey, params.ContentType, params.Shared, params.SmConfig)
+	srRef, err := createSRResource(r.session, params)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to create SR",

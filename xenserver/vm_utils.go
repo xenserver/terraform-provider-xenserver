@@ -152,7 +152,7 @@ type vmResourceModel struct {
 	CheckIPTimeout   types.Int64  `tfsdk:"check_ip_timeout"`
 }
 
-func VMSchema() map[string]schema.Attribute {
+func vmSchema() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"name_label": schema.StringAttribute{
 			MarkdownDescription: "The name of the virtual machine.",
@@ -222,22 +222,18 @@ func VMSchema() map[string]schema.Attribute {
 			Computed:            true,
 		},
 		"hard_drive": schema.SetNestedAttribute{
-			MarkdownDescription: "A set of hard drive attributes to attach to the virtual machine, default inherited from the template." + "<br />" +
-				"Set at least one item in this attribute when use it.",
+			MarkdownDescription: "A set of hard drive attributes to attach to the virtual machine, default inherited from the template.",
 			NestedObject: schema.NestedAttributeObject{
-				Attributes: VBDSchema(),
+				Attributes: vbdSchema(),
 			},
 			Optional: true,
 			Computed: true,
-			Validators: []validator.Set{
-				setvalidator.SizeAtLeast(1),
-			},
 		},
 		"network_interface": schema.SetNestedAttribute{
 			MarkdownDescription: "A set of network interface attributes to attach to the virtual machine." + "<br />" +
 				"Set at least one item in this attribute when use it.",
 			NestedObject: schema.NestedAttributeObject{
-				Attributes: VIFSchema(),
+				Attributes: vifSchema(),
 			},
 			Required: true,
 			Validators: []validator.Set{
@@ -628,17 +624,19 @@ func updateVMResourceModelComputed(ctx context.Context, session *xenapi.Session,
 		return err
 	}
 
-	checkIPDuration, err := strconv.Atoi(vmRecord.OtherConfig["tf_check_ip_timeout"])
-	if err != nil {
-		return errors.New("unable to convert check_ip_timeout to an int value")
-	}
-	data.CheckIPTimeout = types.Int64Value(int64(checkIPDuration))
+	if _, ok := vmRecord.OtherConfig["tf_check_ip_timeout"]; ok {
+		checkIPDuration, err := strconv.Atoi(vmRecord.OtherConfig["tf_check_ip_timeout"])
+		if err != nil {
+			return errors.New("unable to convert check_ip_timeout to an int value")
+		}
+		data.CheckIPTimeout = types.Int64Value(int64(checkIPDuration))
 
-	ip, err := checkIP(ctx, session, vmRecord)
-	if err != nil {
-		return err
+		ip, err := checkIP(ctx, session, vmRecord)
+		if err != nil {
+			return err
+		}
+		data.DefaultIP = types.StringValue(ip)
 	}
-	data.DefaultIP = types.StringValue(ip)
 
 	return nil
 }
@@ -653,7 +651,7 @@ func updateVMResourceModel(ctx context.Context, session *xenapi.Session, vmRecor
 }
 
 func getVBDsFromVMRecord(ctx context.Context, session *xenapi.Session, vmRecord xenapi.VMRecord, vbdType xenapi.VbdType) (basetypes.SetValue, []vbdResourceModel, error) {
-	var vbdSet []vbdResourceModel
+	vbdSet := []vbdResourceModel{}
 	var setValue basetypes.SetValue
 
 	for _, vbdRef := range vmRecord.VBDs {
@@ -668,7 +666,7 @@ func getVBDsFromVMRecord(ctx context.Context, session *xenapi.Session, vmRecord 
 
 		// for CD type VBD, VDI can be NULL
 		vdiUUID := ""
-		if vbdRecord.VDI != "OpaqueRef:NULL" {
+		if string(vbdRecord.VDI) != "OpaqueRef:NULL" {
 			vdiRecord, err := xenapi.VDI.GetRecord(session, vbdRecord.VDI)
 			if err != nil {
 				return setValue, vbdSet, errors.New("unable to get VDI record")
@@ -710,7 +708,7 @@ func getOtherConfigFromVMRecord(ctx context.Context, vmRecord xenapi.VMRecord) (
 }
 
 func getVIFsFromVMRecord(ctx context.Context, session *xenapi.Session, vmRecord xenapi.VMRecord) (basetypes.SetValue, error) {
-	var vifSet []vifResourceModel
+	vifSet := []vifResourceModel{}
 	var setValue basetypes.SetValue
 	var diags diag.Diagnostics
 	for _, vifRef := range vmRecord.VIFs {

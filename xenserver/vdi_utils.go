@@ -4,7 +4,14 @@ import (
 	"context"
 	"errors"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"xenapi"
@@ -21,6 +28,86 @@ type vdiResourceModel struct {
 	OtherConfig     types.Map    `tfsdk:"other_config"`
 	UUID            types.String `tfsdk:"uuid"`
 	ID              types.String `tfsdk:"id"`
+}
+
+var vdiResourceModelAttrTypes = map[string]attr.Type{
+	"name_label":       types.StringType,
+	"name_description": types.StringType,
+	"sr_uuid":          types.StringType,
+	"virtual_size":     types.Int64Type,
+	"type":             types.StringType,
+	"sharable":         types.BoolType,
+	"read_only":        types.BoolType,
+	"other_config":     types.MapType{ElemType: types.StringType},
+	"uuid":             types.StringType,
+	"id":               types.StringType,
+}
+
+func vdiSchema() map[string]schema.Attribute {
+	return map[string]schema.Attribute{
+		"name_label": schema.StringAttribute{
+			MarkdownDescription: "The name of the virtual disk image.",
+			Required:            true,
+		},
+		"name_description": schema.StringAttribute{
+			MarkdownDescription: "The description of the virtual disk image, default to be `\"\"`.",
+			Optional:            true,
+			Computed:            true,
+			Default:             stringdefault.StaticString(""),
+		},
+		"sr_uuid": schema.StringAttribute{
+			MarkdownDescription: "The UUID of the storage repository used." +
+				"\n\n-> **Note:** `sr_uuid` is not allowed to be updated.",
+			Required: true,
+		},
+		"virtual_size": schema.Int64Attribute{
+			MarkdownDescription: "The size of virtual disk image (in bytes)." +
+				"\n\n-> **Note:** `virtual_size` is not allowed to be updated.",
+			Required: true,
+		},
+		"type": schema.StringAttribute{
+			MarkdownDescription: "The type of the virtual disk image, default to be `\"user\"`." +
+				"\n\n-> **Note:** `type` is not allowed to be updated.",
+			Optional: true,
+			Computed: true,
+			Default:  stringdefault.StaticString("user"),
+		},
+		"sharable": schema.BoolAttribute{
+			MarkdownDescription: "True if this disk may be shared, default to be `false`." +
+				"\n\n-> **Note:** `sharable` is not allowed to be updated.",
+			Optional: true,
+			Computed: true,
+			Default:  booldefault.StaticBool(false),
+		},
+		"read_only": schema.BoolAttribute{
+			MarkdownDescription: "True if this SR is (capable of being) shared between multiple hosts, default to be `false`." +
+				"\n\n-> **Note:** `read_only` is not allowed to be updated.",
+			Optional: true,
+			Computed: true,
+			Default:  booldefault.StaticBool(false),
+		},
+		"other_config": schema.MapAttribute{
+			MarkdownDescription: "The additional configuration of the virtual disk image, default to be `{}`.",
+			Optional:            true,
+			Computed:            true,
+			Default:             mapdefault.StaticValue(types.MapValueMust(types.StringType, map[string]attr.Value{})),
+			ElementType:         types.StringType,
+		},
+		"uuid": schema.StringAttribute{
+			MarkdownDescription: "The UUID of the virtual disk image.",
+			Computed:            true,
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.UseStateForUnknown(),
+			},
+		},
+		"id": schema.StringAttribute{
+			MarkdownDescription: "The test ID of the virtual disk image.",
+			Computed:            true,
+			PlanModifiers: []planmodifier.String{
+				stringplanmodifier.UseStateForUnknown(),
+			},
+		},
+	}
 }
 
 func getVDICreateParams(ctx context.Context, session *xenapi.Session, data vdiResourceModel) (xenapi.VDIRecord, error) {

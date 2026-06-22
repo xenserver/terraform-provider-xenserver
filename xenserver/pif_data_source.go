@@ -1,5 +1,3 @@
-// Example of data source
-
 package xenserver
 
 import (
@@ -35,7 +33,7 @@ func (d *pifDataSource) Metadata(_ context.Context, req datasource.MetadataReque
 	resp.TypeName = req.ProviderTypeName + "_pif"
 }
 
-func pifSchema() map[string]schema.Attribute {
+func pifDataSchema() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"uuid": schema.StringAttribute{
 			MarkdownDescription: "The UUID of the storage repository.",
@@ -206,7 +204,7 @@ func (d *pifDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, re
 				MarkdownDescription: "The return items of physical network interfaces.",
 				Computed:            true,
 				NestedObject: schema.NestedAttributeObject{
-					Attributes: pifSchema(),
+					Attributes: pifDataSchema(),
 				},
 			},
 		},
@@ -217,15 +215,15 @@ func (d *pifDataSource) Configure(_ context.Context, req datasource.ConfigureReq
 	if req.ProviderData == nil {
 		return
 	}
-	session, ok := req.ProviderData.(*xenapi.Session)
+	providerData, ok := req.ProviderData.(*xsProvider)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *xenapi.Session, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *xenserver.xsProvider, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
-	d.session = session
+	d.session = providerData.session
 }
 
 // Read refreshes the Terraform state with the latest data.
@@ -272,7 +270,7 @@ func (d *pifDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 		}
 
 		var pifData pifRecordData
-		err = updatePIFRecordData(ctx, pifRecord, &pifData)
+		err = updatePIFRecordData(ctx, d.session, pifRecord, &pifData)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Unable to update PIF record data",

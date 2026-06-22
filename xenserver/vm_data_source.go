@@ -1,5 +1,3 @@
-// Example of data source
-
 package xenserver
 
 import (
@@ -35,7 +33,7 @@ func (d *vmDataSource) Metadata(_ context.Context, req datasource.MetadataReques
 	resp.TypeName = req.ProviderTypeName + "_vm"
 }
 
-func vmSchema() map[string]schema.Attribute {
+func vmDataSchema() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"uuid": schema.StringAttribute{
 			MarkdownDescription: "The UUID of the virtual machine.",
@@ -443,7 +441,7 @@ func (d *vmDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, res
 				MarkdownDescription: "The return items of virtual machines.",
 				Computed:            true,
 				NestedObject: schema.NestedAttributeObject{
-					Attributes: vmSchema(),
+					Attributes: vmDataSchema(),
 				},
 			},
 		},
@@ -454,15 +452,15 @@ func (d *vmDataSource) Configure(_ context.Context, req datasource.ConfigureRequ
 	if req.ProviderData == nil {
 		return
 	}
-	session, ok := req.ProviderData.(*xenapi.Session)
+	providerData, ok := req.ProviderData.(*xsProvider)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *xenapi.Session, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *xenserver.xsProvider, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
-	d.session = session
+	d.session = providerData.session
 }
 
 // Read refreshes the Terraform state with the latest data.
@@ -494,7 +492,7 @@ func (d *vmDataSource) Read(ctx context.Context, req datasource.ReadRequest, res
 			continue
 		}
 
-		if vmRecord.IsATemplate || vmRecord.IsDefaultTemplate || vmRecord.SnapshotOf != "OpaqueRef:NULL" || vmRecord.Domid == 0 {
+		if vmRecord.IsATemplate || vmRecord.IsDefaultTemplate || string(vmRecord.SnapshotOf) != "OpaqueRef:NULL" || vmRecord.Domid == 0 {
 			continue
 		}
 

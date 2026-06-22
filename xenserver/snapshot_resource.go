@@ -49,11 +49,31 @@ func (r *snapshotResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				Required: true,
 			},
 			"with_memory": schema.BoolAttribute{
-				MarkdownDescription: "True if snapshot with the VM's memory (VM must in running state), default to be `false`." +
-					"\n\n-> **Note:** `with_memory` is not allowed to be updated.",
+				MarkdownDescription: "True if snapshot with the VM's memory, default to be `false`." +
+					"\n\n-> **Note:** " +
+					"1. `with_memory` field is not allowed to be updated.<br>" +
+					"2. the VM must be in a running state and have the [XenServer VM Tool](https://www.xenserver.com/downloads) installed.<br>",
 				Optional: true,
 				Computed: true,
 				Default:  booldefault.StaticBool(false),
+			},
+			"revert": schema.BoolAttribute{
+				MarkdownDescription: "Set to `true` if you want to revert this snapshot to VM, default to be `false`." +
+					"\n\n-> **Note:** `revert` only works after the snapshot resource created. When `revert` is true, the snapshot resource attributes will be updated first, for example `name_label`. And then revert to VM." +
+					"\n\n~> **Warning:** After revert, the VM `hard_drive` will be updated. If snapshot revert to the VM resource defined in 'main.tf', it'll cause issue when continue execute terraform commands. There's a suggest solution to resolve this issue, follow the steps: <br>" +
+					"1. run `terraform state show xenserver_snapshot.<snapshot_resource_name>`, get the revert VM's UUID 'vm_uuid' and revert VDIs' UUID 'vdi_uuid'.<br>" +
+					"2. run `terraform state rm xenserver_vm.<vm_resource_name>` to remove the VM resource state.<br>" +
+					"3. run `terraform import xenserver_vm.<vm_resource_name> <vm_uuid>` to import the VM resource new state.<br>" +
+					"4. run `terraform state rm xenserver_vdi.<vdi_resource_name>` to remove the VDI resource state. Be careful, you only need to remove the VDI resource used in above VM resource. If there're multiple VDI resources, remove them all.<br>" +
+					"5. run `terraform import xenserver_vdi.<vdi_resource_name> <vdi_uuid>` to import the VDI resource new state. If there're multiple VDI resources, import them all.<br>",
+				Optional: true,
+			},
+			"revert_vdis": schema.SetNestedAttribute{
+				MarkdownDescription: "The new VDIs created for VM after revert. Used for resume terraform state after revert.",
+				Computed:            true,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: vdiSchema(),
+				},
 			},
 			"uuid": schema.StringAttribute{
 				MarkdownDescription: "The UUID of the snapshot.",
@@ -79,15 +99,16 @@ func (r *snapshotResource) Configure(_ context.Context, req resource.ConfigureRe
 	if req.ProviderData == nil {
 		return
 	}
-	session, ok := req.ProviderData.(*xenapi.Session)
+
+	providerData, ok := req.ProviderData.(*xsProvider)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *xenapi.Session, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *xenserver.xsProvider, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
-	r.session = session
+	r.session = providerData.session
 }
 
 func (r *snapshotResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -132,7 +153,7 @@ func (r *snapshotResource) Create(ctx context.Context, req resource.CreateReques
 			return
 		}
 		// Set the suspend SR to default SR if it is not set
-		if srRef == "OpaqueRef:NULL" {
+		if string(srRef) == "OpaqueRef:NULL" {
 			poolRefs, err := xenapi.Pool.GetAll(r.session)
 			if err != nil {
 				resp.Diagnostics.AddError(
@@ -151,7 +172,7 @@ func (r *snapshotResource) Create(ctx context.Context, req resource.CreateReques
 			}
 			srRef = defaultSRRef
 			// Set the suspend SR to available SR if default SR is not set
-			if defaultSRRef == "OpaqueRef:NULL" {
+			if string(defaultSRRef) == "OpaqueRef:NULL" {
 				srRecords, err := xenapi.SR.GetAllRecords(r.session)
 				if err != nil {
 					resp.Diagnostics.AddError(
@@ -217,7 +238,7 @@ func (r *snapshotResource) Create(ctx context.Context, req resource.CreateReques
 		}
 		return
 	}
-	err = updateSnapshotResourceModelComputed(snapshotRecord, &data)
+	err = updateSnapshotResourceModelComputed(ctx, r.session, snapshotRecord, &data)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to update the computed fields of snapshotResourceModel",
@@ -270,7 +291,7 @@ func (r *snapshotResource) Read(ctx context.Context, req resource.ReadRequest, r
 		return
 	}
 
-	err = updateSnapshotResourceModel(r.session, snapshotRecord, &data)
+	err = updateSnapshotResourceModel(ctx, r.session, snapshotRecord, &data)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to update the fields of snapshotResourceModel",
@@ -326,7 +347,29 @@ func (r *snapshotResource) Update(ctx context.Context, req resource.UpdateReques
 		)
 		return
 	}
-	err = updateSnapshotResourceModelComputed(snapshotRecord, &plan)
+
+	if !plan.Revert.IsNull() && plan.Revert.ValueBool() {
+		tflog.Debug(ctx, "Reverting snapshot")
+		err := revertSnapshot(r.session, snapshotRef)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Unable to revert snapshot to VM",
+				err.Error(),
+			)
+			return
+		}
+		tflog.Debug(ctx, "Reverting VM power state")
+		err = revertPowerState(r.session, snapshotRecord)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Unable to revert VM power state",
+				err.Error(),
+			)
+			return
+		}
+	}
+
+	err = updateSnapshotResourceModelComputed(ctx, r.session, snapshotRecord, &plan)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to update the computed fields of snapshotResourceModel",

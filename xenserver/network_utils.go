@@ -203,7 +203,7 @@ func getNICFromPIF(session *xenapi.Session, pifRecord xenapi.PIFRecord) (string,
 	if strings.HasPrefix(pifRecord.Device, "eth") {
 		index := strings.Split(pifRecord.Device, "eth")[1]
 		name = "NIC " + index
-		if !pifRecord.Physical && pifRecord.VLANMasterOf != "OpaqueRef:NULL" {
+		if !pifRecord.Physical && string(pifRecord.VLANMasterOf) != "OpaqueRef:NULL" {
 			vlanRecord, err := xenapi.VLAN.GetRecord(session, pifRecord.VLANMasterOf)
 			if err != nil {
 				return name, errors.New(err.Error())

@@ -34,7 +34,7 @@ var vifResourceModelAttrTypes = map[string]attr.Type{
 	"other_config": types.MapType{ElemType: types.StringType},
 }
 
-func VIFSchema() map[string]schema.Attribute {
+func vifSchema() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"network_uuid": schema.StringAttribute{
 			MarkdownDescription: "Network UUID to attach to VIF.",

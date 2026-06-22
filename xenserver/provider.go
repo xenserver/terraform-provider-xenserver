@@ -2,7 +2,9 @@ package xenserver
 
 import (
 	"context"
+	"errors"
 	"os"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/function"
@@ -25,7 +27,15 @@ type xsProvider struct {
 	// version is set to the provider version on release, "dev" when the
 	// provider is built and ran locally, and "test" when running acceptance
 	// testing.
-	version string
+	version         string
+	session         *xenapi.Session
+	coordinatorConf coordinatorConf
+}
+
+type coordinatorConf struct {
+	Host     string
+	Username string
+	Password string
 }
 
 func New(version string) func() provider.Provider {
@@ -50,22 +60,22 @@ func (p *xsProvider) Metadata(_ context.Context, _ provider.MetadataRequest, res
 
 func (p *xsProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "The XenServer provider can be used to manage and deploy XenServer resources. Before using it, you must configure the provider with the appropriate credentials. Documentation regarding the data sources and resources supported by the XenServer provider can be found in the navigation on the left.",
+		MarkdownDescription: "The XenServer provider facilitates the management and deployment of XenServer resources. Prior to utilisation, it is necessary to configure the provider with the required credentials. For security purposes, please ensure you have reviewed the document to [protect sensitive input variables](https://developer.hashicorp.com/terraform/tutorials/configuration-language/sensitive-variables). Comprehensive information regarding resource and data source usage is available within the left-hand navigation panel.",
 		Attributes: map[string]schema.Attribute{
 			"host": schema.StringAttribute{
-				MarkdownDescription: "The base URL of target XenServer host." + "<br />" +
+				MarkdownDescription: "The address of target XenServer host." + "<br />" +
 					"Can be set by using the environment variable **XENSERVER_HOST**.",
-				Required: true,
+				Optional: true,
 			},
 			"username": schema.StringAttribute{
 				MarkdownDescription: "The user name of target XenServer host." + "<br />" +
 					"Can be set by using the environment variable **XENSERVER_USERNAME**.",
-				Required: true,
+				Optional: true,
 			},
 			"password": schema.StringAttribute{
 				MarkdownDescription: "The password of target XenServer host." + "<br />" +
 					"Can be set by using the environment variable **XENSERVER_PASSWORD**.",
-				Required:  true,
+				Optional:  true,
 				Sensitive: true,
 			},
 		},
@@ -77,37 +87,6 @@ func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureReques
 	var data providerModel
 
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	// If practitioner provided a configuration value for any of the
-	// attributes, it must be a known value.
-
-	if data.Host.IsUnknown() {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("host"),
-			"Unknown XenServer API Host",
-			"The provider cannot create the XenServer API client as there is an unknown configuration value for the XenServer API host. "+
-				"Either target apply the source of the value first, set the value statically in the configuration, or use the XENSERVER_HOST environment variable.",
-		)
-	}
-	if data.Username.IsUnknown() {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("username"),
-			"Unknown XenServer API Username",
-			"The provider cannot create the XenServer API client as there is an unknown configuration value for the XenServer API username. "+
-				"Either target apply the source of the value first, set the value statically in the configuration, or use the XENSERVER_USERNAME environment variable.",
-		)
-	}
-	if data.Password.IsUnknown() {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("password"),
-			"Unknown XenServer API Password",
-			"The provider cannot create the XenServer API client as there is an unknown configuration value for the XenServer API password. "+
-				"Either target apply the source of the value first, set the value statically in the configuration, or use the XENSERVER_PASSWORD environment variable.",
-		)
-	}
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -132,8 +111,8 @@ func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureReques
 	if host == "" {
 		resp.Diagnostics.AddAttributeError(
 			path.Root("host"),
-			"Missing XenServer API Host",
-			"The provider cannot create the XenServer API client as there is a missing or empty value for the XenServer API host. "+
+			"Missing Host Configuration",
+			"The provider cannot create the XenServer API client as there is a missing or empty value for the host. "+
 				"Set the host value in the configuration or use the XENSERVER_HOST environment variable. "+
 				"If either is already set, ensure the value is not empty.",
 		)
@@ -141,8 +120,8 @@ func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureReques
 	if username == "" {
 		resp.Diagnostics.AddAttributeError(
 			path.Root("username"),
-			"Missing XenServer API Username",
-			"The provider cannot create the XenServer API client as there is a missing or empty value for the XenServer API username. "+
+			"Missing Username Configuration",
+			"The provider cannot create the XenServer API client as there is a missing or empty value for the username. "+
 				"Set the username value in the configuration or use the XENSERVER_USERNAME environment variable. "+
 				"If either is already set, ensure the value is not empty.",
 		)
@@ -150,21 +129,51 @@ func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureReques
 	if password == "" {
 		resp.Diagnostics.AddAttributeError(
 			path.Root("password"),
-			"Missing XenServer API Password",
-			"The provider cannot create the XenServer API client as there is a missing or empty value for the XenServer API password. "+
+			"Missing Password Configuration",
+			"The provider cannot create the XenServer API client as there is a missing or empty value for the password. "+
 				"Set the password value in the configuration or use the XENSERVER_PASSWORD environment variable. "+
 				"If either is already set, ensure the value is not empty.",
 		)
 	}
+
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	ctx = tflog.SetField(ctx, "host", host)
 	ctx = tflog.SetField(ctx, "username", username)
-	ctx = tflog.SetField(ctx, "password", password)
-	ctx = tflog.MaskFieldValuesWithFieldKeys(ctx, "password")
 	tflog.Debug(ctx, "Creating XenServer API session")
+
+	session, err := loginServer(host, username, password)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to create XenServer API client",
+			"An unexpected error occurred when creating the XenServer API client. "+
+				"If the error is not clear, please contact the provider developers.\n\n"+
+				"XenServer client Error: "+err.Error(),
+		)
+		return
+	}
+
+	p.coordinatorConf.Host = host
+	p.coordinatorConf.Username = username
+	p.coordinatorConf.Password = password
+	p.session = session
+
+	// the xsProvider type itself is made available for resources and data sources
+	resp.DataSourceData = p
+	resp.ResourceData = p
+}
+
+func loginServer(host string, username string, password string) (*xenapi.Session, error) {
+	// check if host, username, password are non-empty
+	if host == "" || username == "" || password == "" {
+		return nil, errors.New("host, username, password cannot be empty")
+	}
+
+	if !strings.HasPrefix(host, "http") {
+		host = "https://" + host
+	}
 
 	session := xenapi.NewSession(&xenapi.ClientOpts{
 		URL: host,
@@ -172,29 +181,26 @@ func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureReques
 			"User-Agent": "XS SDK for Go v1.0",
 		},
 	})
+
 	_, err := session.LoginWithPassword(username, password, "1.0", "terraform provider")
 	if err != nil {
-		resp.Diagnostics.AddError(
-			"Unable to create XENSERVER API client",
-			"An unexpected error occurred when creating the XENSERVER API client. "+
-				"If the error is not clear, please contact the provider developers.\n\n"+
-				"XENSERVER client Error: "+err.Error(),
-		)
-		return
+		return nil, errors.New(err.Error())
 	}
 
-	resp.DataSourceData = session
-	resp.ResourceData = session
+	return session, nil
 }
 
 func (p *xsProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewVMResource,
+		NewPoolResource,
 		NewSRResource,
 		NewNFSResource,
+		NewSMBResource,
 		NewVDIResource,
 		NewVlanResource,
 		NewSnapshotResource,
+		NewPIFConfigureResource,
 	}
 }
 
@@ -205,12 +211,10 @@ func (p *xsProvider) DataSources(_ context.Context) []func() datasource.DataSour
 		NewVMDataSource,
 		NewNetworkDataSource,
 		NewNICDataSource,
+		NewHostDataSource,
 	}
 }
 
 func (p *xsProvider) Functions(_ context.Context) []func() function.Function {
 	return nil
-	// return []func() function.Function{
-	// 	NewExampleFunction,
-	// }
 }
