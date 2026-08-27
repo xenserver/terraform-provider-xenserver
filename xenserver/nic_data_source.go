@@ -1,3 +1,8 @@
+// Copyright © 2026. Citrix Systems, Inc. All Rights Reserved.
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 package xenserver
 
 import (
@@ -85,8 +90,16 @@ func (d *nicDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 		resp.Diagnostics.AddError("Failed to get PIF records", err.Error())
 		return
 	}
-	physicalWithoutBondNICs := getPhysicalWithoutBondNICs(pifRecords)
-	nonPhysicalSRIOVNICs := getNonPhysicalSRIOVNICs(pifRecords)
+	physicalWithoutBondNICs, err := getPhysicalWithoutBondNICs(d.session, pifRecords)
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to get physical NICs", err.Error())
+		return
+	}
+	nonPhysicalSRIOVNICs, err := getNonPhysicalSRIOVNICs(d.session, pifRecords)
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to get SR-IOV NICs", err.Error())
+		return
+	}
 
 	var availableNICs []string
 	if !data.NetworkType.IsNull() {
@@ -96,12 +109,21 @@ func (d *nicDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 		case "bond":
 			availableNICs = physicalWithoutBondNICs
 		case "sriov":
-			availableNICs = getPhysicalSRIOVNICs(pifRecords, true)
+			availableNICs, err = getPhysicalSRIOVNICs(d.session, pifRecords, true)
+			if err != nil {
+				resp.Diagnostics.AddError("Failed to get available SR-IOV NICs", err.Error())
+				return
+			}
 		default:
 			availableNICs = []string{}
 		}
 	} else {
-		availableNICs = slices.Concat(bondNICs, getPhysicalNICs(pifRecords), nonPhysicalSRIOVNICs)
+		physicalNICs, err := getPhysicalNICs(d.session, pifRecords)
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to get physical NICs", err.Error())
+			return
+		}
+		availableNICs = slices.Concat(bondNICs, physicalNICs, nonPhysicalSRIOVNICs)
 	}
 	data.DataItems = unique(availableNICs)
 

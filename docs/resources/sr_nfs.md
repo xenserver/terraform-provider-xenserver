@@ -61,6 +61,8 @@ resource "xenserver_sr_nfs" "nfs_iso_test" {
 
 Import is supported using the following syntax:
 
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
 ```shell
 terraform import xenserver_sr_nfs.nfs_test 00000000-0000-0000-0000-000000000000
 ```

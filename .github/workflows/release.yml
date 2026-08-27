@@ -14,17 +14,49 @@ permissions:
   contents: write
 
 jobs:
+  # Skip the automated GoReleaser build when a signed release was already
+  # published manually for this tag.
+  check_release:
+    name: Check for pre-published signed release
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.guard.outputs.should_release }}
+    steps:
+      - name: Detect pre-published signed release
+        id: guard
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # A manually published release already carries a signed checksum asset (*_SHA256SUMS.sig).
+          # If one exists for this tag, skip the automated release so GoReleaser does not rebuild from
+          # public source or overwrite the correctly signed, manually uploaded assets.
+          if ! gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" --json assets > release.json 2>/dev/null; then
+            echo "No existing release for ${TAG}; running automated GoReleaser release."
+            echo "should_release=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          if jq -e '[.assets[]?.name | select(endswith("_SHA256SUMS.sig"))] | length > 0' release.json >/dev/null; then
+            echo "::notice::Release ${TAG} already has a signed checksum asset; skipping automated GoReleaser run."
+            echo "should_release=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "Release ${TAG} exists but has no signed checksum asset; running automated GoReleaser release."
+            echo "should_release=true" >> "${GITHUB_OUTPUT}"
+          fi
+
   goreleaser:
+    needs: check_release
+    if: needs.check_release.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           # Allow goreleaser to access older tag information.
           fetch-depth: 0
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: "go.mod"
-          go-version: "1.24.1"
           cache: true
       - name: Import GPG key
         uses: crazy-max/ghaction-import-gpg@v6
@@ -44,9 +76,12 @@ jobs:
             version=$(curl -s 'https://www.xenserver.com/downloads' | \
               grep -oE 'Software Development Kit \(SDK\) [0-9]+\.[0-9]+\.[0-9]+' | \
               grep -oE '[0-9]+\.[0-9]+\.[0-9]+$')
+            # xenserver.com zero-pads components (e.g. 26.16.01) but the xen-api tag
+            # does not (v26.16.1), so strip leading zeros before building the URL.
+            version=$(echo "$version" | awk -F. '{printf "%d.%d.%d", $1, $2, $3}')
             url="https://github.com/xapi-project/xen-api/releases/download/v${version}/Go-SDK-prerelease-unsigned.zip"
           fi
-          curl -L "$url" -o xenserver-sdk.zip
+          curl -fL "$url" -o xenserver-sdk.zip
           unzip xenserver-sdk.zip -d sdk_temp
           mkdir -p goSDK
           mv sdk_temp/sdk_go/src/* goSDK/

@@ -1,8 +1,18 @@
+// Copyright © 2026. Citrix Systems, Inc. All Rights Reserved.
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 package xenserver
 
 import (
 	"context"
+	"crypto/x509"
 	"errors"
+	"fmt"
+	"os"
+	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -13,6 +23,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"xenapi"
 )
@@ -200,10 +211,35 @@ func vdiResourceModelUpdate(ctx context.Context, session *xenapi.Session, ref xe
 	return nil
 }
 
-func cleanupVDIResource(session *xenapi.Session, ref xenapi.VDIRef) error {
+func cleanupVDIResource(ctx context.Context, session *xenapi.Session, ref xenapi.VDIRef) error {
 	err := xenapi.VDI.Destroy(session, ref)
 	if err != nil {
-		return errors.New(err.Error())
+		// if error message VDI_IN_USE, retry 10 times
+		if strings.Contains(err.Error(), "VDI_IN_USE") {
+			for range 10 {
+				tflog.Warn(ctx, "VDI is in use, retrying to destroy VDI...")
+				time.Sleep(5 * time.Second)
+				err = xenapi.VDI.Destroy(session, ref)
+				if err == nil {
+					return nil
+				}
+			}
+		}
+		return errors.New("failed to destroy VDI: " + err.Error())
 	}
 	return nil
+}
+
+// loadCACertPool reads and parses the CA certificate at caCertPath,
+// returning a clear error if the file is missing or not valid PEM.
+func loadCACertPool(caCertPath string) (*x509.CertPool, error) {
+	caCert, err := os.ReadFile(caCertPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read CA certificate %q: %w", caCertPath, err)
+	}
+	caCertPool := x509.NewCertPool()
+	if !caCertPool.AppendCertsFromPEM(caCert) {
+		return nil, fmt.Errorf("failed to parse CA certificate %q", caCertPath)
+	}
+	return caCertPool, nil
 }

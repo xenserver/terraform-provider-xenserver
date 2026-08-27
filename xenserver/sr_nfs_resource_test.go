@@ -1,3 +1,8 @@
+// Copyright © 2026. Citrix Systems, Inc. All Rights Reserved.
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 package xenserver
 
 import (
@@ -22,6 +27,7 @@ resource "xenserver_sr_nfs" "test_nfs" {
 }
 
 func TestAccNFSResource(t *testing.T) {
+	skipIfEnvUnset(t, "NFS_SERVER", "NFS_SERVER_PATH")
 	storage_location := os.Getenv("NFS_SERVER") + ":" + os.Getenv("NFS_SERVER_PATH")
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -84,6 +90,7 @@ func TestAccNFSResource(t *testing.T) {
 }
 
 func TestAccNFSISOResource(t *testing.T) {
+	skipIfEnvUnset(t, "NFS_SERVER", "NFS_SERVER_PATH")
 	storage_location := os.Getenv("NFS_SERVER") + ":" + os.Getenv("NFS_SERVER_PATH")
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,

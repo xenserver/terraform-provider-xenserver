@@ -14,7 +14,7 @@ data "xenserver_pif" "pif1" {
 }
 
 locals {
-  pif1_data = tomap({for element in data.xenserver_pif.pif1.data_items: element.uuid => element})
+  pif1_data = tomap({ for element in data.xenserver_pif.pif1.data_items : element.uuid => element })
 }
 
 resource "xenserver_pif_configure" "pif_update" {
@@ -27,19 +27,21 @@ resource "xenserver_pif_configure" "pif_update" {
 
 # Configure default SR and Management Network of the pool
 resource "xenserver_pool" "pool" {
-  name_label   = "pool"
-  default_sr = xenserver_sr_nfs.nfs.uuid
+  name_label         = "pool"
+  default_sr         = xenserver_sr_nfs.nfs.uuid
   management_network = data.xenserver_pif.pif.data_items[0].network
 }
 
 # Join supporter into the pool
 resource "xenserver_pool" "pool" {
-  name_label   = "pool"
+  name_label = "pool"
   join_supporters = [
     {
-      host = local.env_vars["SUPPORTER_HOST"]
-      username = local.env_vars["SUPPORTER_USERNAME"]
-      password = local.env_vars["SUPPORTER_PASSWORD"]
+      host         = local.env_vars["SUPPORTER_HOST"]
+      username     = local.env_vars["SUPPORTER_USERNAME"]
+      password     = local.env_vars["SUPPORTER_PASSWORD"]
+      insecure     = local.env_vars["SUPPORTER_INSECURE"]
+      ca_cert_path = local.env_vars["SUPPORTER_CA_CERT_PATH"]
     }
   ]
 }
@@ -50,6 +52,6 @@ data "xenserver_host" "supporter" {
 }
 
 resource "xenserver_pool" "pool" {
-  name_label   = "pool"
-  eject_supporters = [ data.xenserver_host.supporter.data_items[1].uuid ]
+  name_label       = "pool"
+  eject_supporters = [data.xenserver_host.supporter.data_items[1].uuid]
 }

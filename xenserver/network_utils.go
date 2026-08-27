@@ -1,9 +1,13 @@
+// Copyright © 2026. Citrix Systems, Inc. All Rights Reserved.
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 package xenserver
 
 import (
 	"context"
 	"errors"
-	"fmt"
 	"slices"
 	"strings"
 
@@ -140,35 +144,6 @@ func getNetworkCreateParams(ctx context.Context, data vlanResourceModel) (xenapi
 	return record, nil
 }
 
-func getBondNICDevice(session *xenapi.Session, nic string) (string, error) {
-	// nic eg. "Bond 0+1+2" return eg. "bond0"
-	// slavesDevices eg. ["0", "1", "2"]
-	slavesDevices := strings.Split(strings.Split(nic, " ")[1], "+")
-	bondRecords, err := xenapi.Bond.GetAllRecords(session)
-	if err != nil {
-		return "", errors.New(err.Error())
-	}
-	for _, bondRecord := range bondRecords {
-		devices := []string{}
-		for _, slave := range bondRecord.Slaves {
-			pifRecord, err := xenapi.PIF.GetRecord(session, slave)
-			if err != nil {
-				return "", errors.New(err.Error())
-			}
-			devices = append(devices, strings.Split(pifRecord.Device, "eth")[1])
-		}
-		slices.Sort(devices)
-		if slices.Equal(slavesDevices, devices) {
-			record, err := xenapi.PIF.GetRecord(session, bondRecord.Master)
-			if err != nil {
-				return "", errors.New(err.Error())
-			}
-			return record.Device, nil
-		}
-	}
-	return "", fmt.Errorf("unable to find device for %s", nic)
-}
-
 func getPifRefsForNIC(session *xenapi.Session, nic string) ([]xenapi.PIFRef, error) {
 	// nic eg. 1. NIC 0 2. NIC-SR-IOV 0 3. Bond 0+1+2
 	var pifRefs []xenapi.PIFRef
@@ -176,27 +151,48 @@ func getPifRefsForNIC(session *xenapi.Session, nic string) ([]xenapi.PIFRef, err
 	if err != nil {
 		return pifRefs, errors.New(err.Error())
 	}
-	device := "eth" + strings.Split(nic, " ")[1]
-	if strings.HasPrefix(nic, "Bond") {
-		device, err = getBondNICDevice(session, nic)
-		if err != nil {
-			return pifRefs, err
+	// identifier is the trailing part of the nic name: "0" for "NIC 0"/"NIC-SR-IOV 0",
+	// or the sorted member numbers "0+1+2" for "Bond 0+1+2".
+	identifier := strings.Split(nic, " ")[1]
+	isSriov := strings.HasPrefix(nic, "NIC-SR-IOV")
+	isBond := strings.HasPrefix(nic, "Bond")
+
+	for ref, pifRecord := range pifRecords {
+		var match bool
+		switch {
+		case isSriov:
+			if !pifRecord.Physical && len(pifRecord.SriovLogicalPIFOf) > 0 {
+				number, err := getNICNumber(session, pifRecord)
+				if err != nil {
+					return pifRefs, err
+				}
+				match = number == identifier
+			}
+		case isBond:
+			if !pifRecord.Physical && len(pifRecord.BondMasterOf) > 0 {
+				bondRecord, err := xenapi.Bond.GetRecord(session, pifRecord.BondMasterOf[0])
+				if err != nil {
+					return pifRefs, errors.New(err.Error())
+				}
+				numbers, err := getBondSlaveNICNumbers(session, bondRecord.Slaves)
+				if err != nil {
+					return pifRefs, err
+				}
+				slices.Sort(numbers)
+				match = strings.Join(numbers, "+") == identifier
+			}
+		default: // "NIC N"
+			if pifRecord.Physical && string(pifRecord.BondSlaveOf) == "OpaqueRef:NULL" {
+				number, err := getNICNumber(session, pifRecord)
+				if err != nil {
+					return pifRefs, err
+				}
+				match = number == identifier
+			}
 		}
-	}
-	uuids := []string{}
-	for _, pifRecord := range pifRecords {
-		if pifRecord.Device == device && ((strings.HasPrefix(nic, "NIC-SR-IOV") && !pifRecord.Physical && len(pifRecord.SriovLogicalPIFOf) > 0) ||
-			(strings.HasPrefix(nic, "NIC") && pifRecord.Physical && string(pifRecord.BondSlaveOf) == "OpaqueRef:NULL") ||
-			(strings.HasPrefix(nic, "Bond") && !pifRecord.Physical && len(pifRecord.BondMasterOf) > 0)) {
-			uuids = append(uuids, pifRecord.UUID)
+		if match {
+			pifRefs = append(pifRefs, ref)
 		}
-	}
-	for _, uuid := range uuids {
-		ref, err := xenapi.PIF.GetByUUID(session, uuid)
-		if err != nil {
-			return pifRefs, errors.New(err.Error())
-		}
-		pifRefs = append(pifRefs, ref)
 	}
 
 	return pifRefs, nil
@@ -219,45 +215,39 @@ func getVlanCreateParams(session *xenapi.Session, data vlanResourceModel, networ
 }
 
 func getNICFromPIF(session *xenapi.Session, pifRecord xenapi.PIFRecord) (string, error) {
-	// return eg. NIC 0, NIC-SR-IOV 0, Bond 0+1+2
-	name := ""
-	if strings.HasPrefix(pifRecord.Device, "eth") {
-		index := strings.Split(pifRecord.Device, "eth")[1]
-		name = "NIC " + index
-		if !pifRecord.Physical && string(pifRecord.VLANMasterOf) != "OpaqueRef:NULL" {
-			vlanRecord, err := xenapi.VLAN.GetRecord(session, pifRecord.VLANMasterOf)
-			if err != nil {
-				return name, errors.New(err.Error())
-			}
-			taggedPifRecord, err := xenapi.PIF.GetRecord(session, vlanRecord.TaggedPIF)
-			if err != nil {
-				return name, errors.New(err.Error())
-			}
-			if len(taggedPifRecord.SriovLogicalPIFOf) > 0 {
-				name = "NIC-SR-IOV " + index
-			}
-		}
-	} else if strings.HasPrefix(pifRecord.Device, "bond") {
-		vlanRecord, err := xenapi.VLAN.GetRecord(session, pifRecord.VLANMasterOf)
-		if err != nil {
-			return name, errors.New(err.Error())
-		}
-		taggedPifRecord, err := xenapi.PIF.GetRecord(session, vlanRecord.TaggedPIF)
-		if err != nil {
-			return name, errors.New(err.Error())
-		}
-		bondRecord, err := xenapi.Bond.GetRecord(session, taggedPifRecord.BondMasterOf[0])
-		if err != nil {
-			return name, errors.New(err.Error())
-		}
-		bondSlaveDevices, err := getBondSlaveDevices(session, bondRecord.Slaves)
-		if err != nil {
-			return name, err
-		}
-		name = getNICNameForBondDevices(bondSlaveDevices)
+	// pifRecord is the VLAN master PIF of an external network. Resolve the underlying
+	// tagged PIF to derive the NIC name. eg. NIC 0, NIC-SR-IOV 0, Bond 0+1+2.
+	vlanRecord, err := xenapi.VLAN.GetRecord(session, pifRecord.VLANMasterOf)
+	if err != nil {
+		return "", errors.New(err.Error())
+	}
+	taggedPifRecord, err := xenapi.PIF.GetRecord(session, vlanRecord.TaggedPIF)
+	if err != nil {
+		return "", errors.New(err.Error())
 	}
 
-	return name, nil
+	// Bond: name from the bond members' NIC numbers.
+	if len(taggedPifRecord.BondMasterOf) > 0 {
+		bondRecord, err := xenapi.Bond.GetRecord(session, taggedPifRecord.BondMasterOf[0])
+		if err != nil {
+			return "", errors.New(err.Error())
+		}
+		numbers, err := getBondSlaveNICNumbers(session, bondRecord.Slaves)
+		if err != nil {
+			return "", err
+		}
+		return getNICNameForBondNumbers(numbers), nil
+	}
+
+	// Physical NIC or SR-IOV: number from the (effective) physical network bridge.
+	number, err := getNICNumber(session, taggedPifRecord)
+	if err != nil {
+		return "", err
+	}
+	if len(taggedPifRecord.SriovLogicalPIFOf) > 0 {
+		return "NIC-SR-IOV " + number, nil
+	}
+	return "NIC " + number, nil
 }
 
 func updateVlanResourceModel(ctx context.Context, session *xenapi.Session, record xenapi.NetworkRecord, data *vlanResourceModel) error {
@@ -372,16 +362,52 @@ func unique(items []string) []string {
 	return items
 }
 
-func getBondSlaveDevices(session *xenapi.Session, bondSlaves []xenapi.PIFRef) ([]string, error) {
-	var bondSlaveDevices []string
+// getNICNumber returns the NIC number for a PIF, derived from the bridge name of
+// the physical network it maps to (eg. bridge "xenbr0" -> "0"). Since the network
+// rename feature the device name (eg. "eno12419np2") is no longer "ethN", so the
+// number is taken from the network bridge instead. For SR-IOV logical PIFs the
+// effective physical PIF's network is used.
+func getNICNumber(session *xenapi.Session, pifRecord xenapi.PIFRecord) (string, error) {
+	networkRef := pifRecord.Network
+	if !pifRecord.Physical && len(pifRecord.SriovLogicalPIFOf) > 0 {
+		physicalPIF, err := xenapi.NetworkSriov.GetPhysicalPIF(session, pifRecord.SriovLogicalPIFOf[0])
+		if err != nil {
+			return "", errors.New(err.Error())
+		}
+		networkRef, err = xenapi.PIF.GetNetwork(session, physicalPIF)
+		if err != nil {
+			return "", errors.New(err.Error())
+		}
+	}
+	bridge, err := xenapi.Network.GetBridge(session, networkRef)
+	if err != nil {
+		return "", errors.New(err.Error())
+	}
+	return strings.TrimPrefix(bridge, "xenbr"), nil
+}
+
+func getBondSlaveNICNumbers(session *xenapi.Session, bondSlaves []xenapi.PIFRef) ([]string, error) {
+	// Each bond slave keeps its own pool-wide network, so its NIC number is taken
+	// from that network's bridge. eg. slaves on "xenbr2" and "xenbr3" -> ["2", "3"].
+	var numbers []string
 	for _, slave := range bondSlaves {
 		record, err := xenapi.PIF.GetRecord(session, slave)
 		if err != nil {
-			return bondSlaveDevices, errors.New(err.Error())
+			return numbers, errors.New(err.Error())
 		}
-		bondSlaveDevices = append(bondSlaveDevices, record.Device)
+		number, err := getNICNumber(session, record)
+		if err != nil {
+			return numbers, err
+		}
+		numbers = append(numbers, number)
 	}
-	return bondSlaveDevices, nil
+	return numbers, nil
+}
+
+func getNICNameForBondNumbers(numbers []string) string {
+	// numbers := []string{"2", "3"} -> "Bond 2+3"
+	slices.Sort(numbers)
+	return "Bond " + strings.Join(numbers, "+")
 }
 
 func getBondNICs(session *xenapi.Session) ([]string, error) {
@@ -390,93 +416,72 @@ func getBondNICs(session *xenapi.Session) ([]string, error) {
 	if err != nil {
 		return nics, errors.New(err.Error())
 	}
-	var bondDevices []string
 	for _, bondRecord := range bondRecords {
-		pifRecord, err := xenapi.PIF.GetRecord(session, bondRecord.Master)
+		numbers, err := getBondSlaveNICNumbers(session, bondRecord.Slaves)
 		if err != nil {
-			return nics, errors.New(err.Error())
+			return nics, err
 		}
-		if !slices.Contains(bondDevices, pifRecord.Device) {
-			bondDevices = append(bondDevices, pifRecord.Device)
-			bondSlaveDevices, err := getBondSlaveDevices(session, bondRecord.Slaves)
-			if err != nil {
-				return nics, err
-			}
-			nics = append(nics, getNICNameForBondDevices(bondSlaveDevices))
-		}
+		nics = append(nics, getNICNameForBondNumbers(numbers))
 	}
 	return unique(nics), nil
 }
 
-func getPhysicalNICs(pifRecords map[xenapi.PIFRef]xenapi.PIFRecord) []string {
-	var devices []string
+func getNICNames(session *xenapi.Session, pifRecords []xenapi.PIFRecord, name string) ([]string, error) {
+	// name eg. "NIC" or "NIC-SR-IOV"; the number for each PIF is taken from its
+	// network bridge, then duplicates (same NIC across pool hosts) are removed.
+	var nics []string
+	for _, pifRecord := range pifRecords {
+		number, err := getNICNumber(session, pifRecord)
+		if err != nil {
+			return nics, err
+		}
+		nics = append(nics, name+" "+number)
+	}
+	return unique(nics), nil
+}
+
+func getPhysicalNICs(session *xenapi.Session, pifRecords map[xenapi.PIFRef]xenapi.PIFRecord) ([]string, error) {
+	var physicalPIFs []xenapi.PIFRecord
 	for _, pifRecord := range pifRecords {
 		if pifRecord.Physical {
-			devices = append(devices, pifRecord.Device)
+			physicalPIFs = append(physicalPIFs, pifRecord)
 		}
 	}
-	return getNICsNameForDevices(unique(devices), "NIC")
+	return getNICNames(session, physicalPIFs, "NIC")
 }
 
-func getPhysicalWithoutBondNICs(pifRecords map[xenapi.PIFRef]xenapi.PIFRecord) []string {
-	var devices []string
+func getPhysicalWithoutBondNICs(session *xenapi.Session, pifRecords map[xenapi.PIFRef]xenapi.PIFRecord) ([]string, error) {
+	var physicalPIFs []xenapi.PIFRecord
 	for _, pifRecord := range pifRecords {
 		if pifRecord.Physical && string(pifRecord.BondSlaveOf) == "OpaqueRef:NULL" {
-			devices = append(devices, pifRecord.Device)
+			physicalPIFs = append(physicalPIFs, pifRecord)
 		}
 	}
-	return getNICsNameForDevices(unique(devices), "NIC")
+	return getNICNames(session, physicalPIFs, "NIC")
 }
 
-func getNonPhysicalSRIOVNICs(pifRecords map[xenapi.PIFRef]xenapi.PIFRecord) []string {
-	var devices []string
+func getNonPhysicalSRIOVNICs(session *xenapi.Session, pifRecords map[xenapi.PIFRef]xenapi.PIFRecord) ([]string, error) {
+	var sriovPIFs []xenapi.PIFRecord
 	for _, pifRecord := range pifRecords {
 		if pifRecord.Physical && len(pifRecord.SriovPhysicalPIFOf) > 0 && string(pifRecord.BondSlaveOf) == "OpaqueRef:NULL" {
-			devices = append(devices, pifRecord.Device)
+			sriovPIFs = append(sriovPIFs, pifRecord)
 		}
 	}
-	return getNICsNameForDevices(unique(devices), "NIC-SR-IOV")
+	return getNICNames(session, sriovPIFs, "NIC-SR-IOV")
 }
 
-func getPhysicalSRIOVNICs(pifRecords map[xenapi.PIFRef]xenapi.PIFRecord, available bool) []string {
+func getPhysicalSRIOVNICs(session *xenapi.Session, pifRecords map[xenapi.PIFRef]xenapi.PIFRecord, available bool) ([]string, error) {
 	// At lease one of Host in Pool has the PIF with capabilities of "sriov"
 	// If available is true, then return the NICs which are not been used by any SR-IOV Network
-	var devices []string
+	var sriovPIFs []xenapi.PIFRecord
 	for _, pifRecord := range pifRecords {
 		if pifRecord.Physical && slices.Contains(pifRecord.Capabilities, "sriov") {
 			if available && len(pifRecord.SriovPhysicalPIFOf) > 0 {
 				continue
 			} else {
-				devices = append(devices, pifRecord.Device)
+				sriovPIFs = append(sriovPIFs, pifRecord)
 			}
 		}
 	}
-	return getNICsNameForDevices(unique(devices), "NIC")
-}
-
-func getNICsNameForDevices(devices []string, name string) []string {
-	// devices := []string{"eth0", "eth1", "eth2"}
-	// nics := []string{"NIC 0", "NIC 1", "NIC 2"}
-	// nics := []string{"NIC-SR-IOV 0", "NIC-SR-IOV 1", "NIC-SR-IOV 2"}
-	var nics []string
-	for _, device := range devices {
-		if strings.HasPrefix(device, "eth") {
-			nics = append(nics, name+" "+strings.Split(device, "eth")[1])
-		}
-	}
-	return nics
-}
-
-func getNICNameForBondDevices(devices []string) string {
-	// devices := []string{"eth0", "eth1", "eth2"}
-	// name := "Bond 0+1+2"
-	name := "Bond"
-	var deviceNumberStrings []string
-	for _, device := range devices {
-		if strings.HasPrefix(device, "eth") {
-			deviceNumberStrings = append(deviceNumberStrings, strings.Split(device, "eth")[1])
-		}
-	}
-	slices.Sort(deviceNumberStrings)
-	return name + " " + strings.Join(deviceNumberStrings, "+")
+	return getNICNames(session, sriovPIFs, "NIC")
 }

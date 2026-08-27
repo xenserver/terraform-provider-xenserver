@@ -1,3 +1,8 @@
+// Copyright © 2026. Citrix Systems, Inc. All Rights Reserved.
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 package xenserver
 
 import (
@@ -9,6 +14,8 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
@@ -31,9 +38,11 @@ type poolResourceModel struct {
 }
 
 type joinSupporterResourceModel struct {
-	Host     types.String `tfsdk:"host"`
-	Username types.String `tfsdk:"username"`
-	Password types.String `tfsdk:"password"`
+	Host       types.String `tfsdk:"host"`
+	Username   types.String `tfsdk:"username"`
+	Password   types.String `tfsdk:"password"`
+	Insecure   types.Bool   `tfsdk:"insecure"`
+	CACertPath types.String `tfsdk:"ca_cert_path"`
 }
 
 type poolParams struct {
@@ -72,21 +81,31 @@ func PoolSchema() map[string]schema.Attribute {
 		"join_supporters": schema.SetNestedAttribute{
 			MarkdownDescription: "The set of pool supporters which will join the pool." +
 				"\n\n-> **Note:** 1. It would raise error if a supporter is in both join_supporters and eject_supporters.<br>" +
-				"2. The join operation would be performed only when the host, username, and password are provided.<br>",
+				"2. The join operation would be performed only when the host, username and password are provided.<br>" +
+				"3. `insecure` defaults to false; when it is false, the ca_cert_path must be provided.<br>",
 			NestedObject: schema.NestedAttributeObject{
 				Attributes: map[string]schema.Attribute{
 					"host": schema.StringAttribute{
 						MarkdownDescription: "The address of the host.",
-						Optional:            true,
+						Required:            true,
 					},
 					"username": schema.StringAttribute{
 						MarkdownDescription: "The user name of the host.",
-						Optional:            true,
+						Required:            true,
+						Sensitive:           true,
 					},
 					"password": schema.StringAttribute{
 						MarkdownDescription: "The password of the host.",
-						Optional:            true,
+						Required:            true,
 						Sensitive:           true,
+					},
+					"insecure": schema.BoolAttribute{
+						MarkdownDescription: "Whether to skip TLS certificate verification. Defaults to false. Set to true for development and testing only. When false, ca_cert_path must be provided.",
+						Optional:            true,
+					},
+					"ca_cert_path": schema.StringAttribute{
+						MarkdownDescription: "The path to the CA certificate (PEM) used to verify the host. Required when insecure is false.",
+						Optional:            true,
 					},
 				},
 			},
@@ -126,6 +145,54 @@ func getPoolParams(plan poolResourceModel) poolParams {
 	return params
 }
 
+func validateJoinSupporters(ctx context.Context, set types.Set, diags *diag.Diagnostics) {
+	if set.IsNull() || set.IsUnknown() {
+		return
+	}
+	supporters := make([]joinSupporterResourceModel, 0, len(set.Elements()))
+	if d := set.ElementsAs(ctx, &supporters, false); d.HasError() {
+		diags.Append(d...)
+		return
+	}
+	for _, supporter := range supporters {
+		if !supporter.Host.IsUnknown() && supporter.Host.ValueString() == "" {
+			diags.AddAttributeError(
+				path.Root("join_supporters"),
+				"Empty Host Configuration",
+				"The supporter host value cannot be empty.",
+			)
+		}
+		if !supporter.Username.IsUnknown() && supporter.Username.ValueString() == "" {
+			diags.AddAttributeError(
+				path.Root("join_supporters"),
+				"Empty Username Configuration",
+				"The supporter username value cannot be empty.",
+			)
+		}
+		if !supporter.Password.IsUnknown() && supporter.Password.ValueString() == "" {
+			diags.AddAttributeError(
+				path.Root("join_supporters"),
+				"Empty Password Configuration",
+				"The supporter password value cannot be empty.",
+			)
+		}
+		if supporter.Insecure.IsUnknown() || supporter.CACertPath.IsUnknown() {
+			continue
+		}
+		insecure := false
+		if !supporter.Insecure.IsNull() {
+			insecure = supporter.Insecure.ValueBool()
+		}
+		if !insecure && supporter.CACertPath.ValueString() == "" {
+			diags.AddAttributeError(
+				path.Root("join_supporters"),
+				"Missing CA Certificate Path Configuration",
+				"The supporter ca_cert_path value cannot be empty when insecure is false.",
+			)
+		}
+	}
+}
+
 func poolJoin(ctx context.Context, coordinatorSession *xenapi.Session, coordinatorConf *coordinatorConf, plan poolResourceModel) error {
 	joinedSupporterUUIDs := []string{}
 	joinSupporters := make([]joinSupporterResourceModel, 0, len(plan.JoinSupporters.Elements()))
@@ -153,7 +220,15 @@ func poolJoin(ctx context.Context, coordinatorSession *xenapi.Session, coordinat
 		}
 		supportersHosts = append(supportersHosts, supporter.Host.ValueString())
 
-		supporterSession, err := loginServer(supporter.Host.ValueString(), supporter.Username.ValueString(), supporter.Password.ValueString())
+		insecure := false
+		if !supporter.Insecure.IsNull() && !supporter.Insecure.IsUnknown() {
+			insecure = supporter.Insecure.ValueBool()
+		}
+		if !insecure && supporter.CACertPath.ValueString() == "" {
+			return errors.New("ca_cert_path must be provided for supporter host " + supporter.Host.ValueString() + " when insecure is false")
+		}
+
+		supporterSession, err := loginServer(supporter.Host.ValueString(), supporter.Username.ValueString(), supporter.Password.ValueString(), insecure, supporter.CACertPath.ValueString())
 		if err != nil {
 			if strings.Contains(err.Error(), "HOST_IS_SLAVE") {
 				// check if the supporter in current pool

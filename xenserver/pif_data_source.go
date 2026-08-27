@@ -1,3 +1,8 @@
+// Copyright © 2026. Citrix Systems, Inc. All Rights Reserved.
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 package xenserver
 
 import (
@@ -40,7 +45,7 @@ func pifDataSchema() map[string]schema.Attribute {
 			Computed:            true,
 		},
 		"device": schema.StringAttribute{
-			MarkdownDescription: "The machine-readable name of the physical interface (PIF). (For example, `\"eth0\"`)",
+			MarkdownDescription: "The machine-readable name of the physical interface (PIF). (For example, `\"eth0\"` or `\"eno12409np1\"`)",
 			Computed:            true,
 		},
 		"management": schema.BoolAttribute{
@@ -189,7 +194,7 @@ func (d *pifDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, re
 		MarkdownDescription: "Provides information about the physical network interface (PIF).",
 		Attributes: map[string]schema.Attribute{
 			"device": schema.StringAttribute{
-				MarkdownDescription: "The machine-readable name of the physical interface (PIF). (eg. `\"eth0\"`)",
+				MarkdownDescription: "The machine-readable name of the physical interface (PIF). (eg. `\"eth0\"` or `\"eno12409np1\"`)",
 				Optional:            true,
 			},
 			"management": schema.BoolAttribute{

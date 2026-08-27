@@ -1,3 +1,8 @@
+// Copyright © 2026. Citrix Systems, Inc. All Rights Reserved.
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 package xenserver
 
 import (
@@ -24,6 +29,7 @@ resource "xenserver_sr_smb" "test_smb" {
 }
 
 func TestAccSMBResource(t *testing.T) {
+	skipIfEnvUnset(t, "SMB_SERVER_PATH", "SMB_SERVER_USERNAME", "SMB_SERVER_PASSWORD")
 	// SMB_SERVER_PATH should be like '\\\\10.70.41.7\\share', then expected_storage_location is '\\10.70.41.7\share'
 	expected_storage_location := os.Getenv("SMB_SERVER_PATH")
 	storage_location := strings.ReplaceAll(expected_storage_location, "\\", "\\\\")
@@ -78,6 +84,7 @@ func TestAccSMBResource(t *testing.T) {
 }
 
 func TestAccSMBISOResource(t *testing.T) {
+	skipIfEnvUnset(t, "SMB_SERVER_PATH", "SMB_SERVER_USERNAME", "SMB_SERVER_PASSWORD")
 	// SMB_SERVER_PATH should be like '\\\\10.70.41.7\\share', then expected_storage_location is '\\10.70.41.7\share'
 	expected_storage_location := os.Getenv("SMB_SERVER_PATH")
 	storage_location := strings.ReplaceAll(expected_storage_location, "\\", "\\\\")

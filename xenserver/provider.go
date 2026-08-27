@@ -1,12 +1,19 @@
+// Copyright © 2026. Citrix Systems, Inc. All Rights Reserved.
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 package xenserver
 
 import (
 	"context"
 	"errors"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/function"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
@@ -21,6 +28,8 @@ import (
 // Ensure Provider satisfies various provider interfaces.
 var _ provider.Provider = &xsProvider{}
 var _ provider.ProviderWithFunctions = &xsProvider{}
+var _ provider.ProviderWithValidateConfig = &xsProvider{}
+var terraformProviderVersion string
 
 // xsProvider defines the provider implementation.
 type xsProvider struct {
@@ -33,9 +42,11 @@ type xsProvider struct {
 }
 
 type coordinatorConf struct {
-	Host     string
-	Username string
-	Password string
+	Host       string
+	Username   string
+	Password   string
+	Insecure   bool
+	CACertPath string
 }
 
 func New(version string) func() provider.Provider {
@@ -48,9 +59,19 @@ func New(version string) func() provider.Provider {
 
 // providerModel describes the provider data model.
 type providerModel struct {
-	Host     types.String `tfsdk:"host"`
-	Username types.String `tfsdk:"username"`
-	Password types.String `tfsdk:"password"`
+	Host       types.String `tfsdk:"host"`
+	Username   types.String `tfsdk:"username"`
+	Password   types.String `tfsdk:"password"`
+	Insecure   types.Bool   `tfsdk:"insecure"`
+	CACertPath types.String `tfsdk:"ca_cert_path"`
+}
+
+type resolvedProviderConfig struct {
+	host       string
+	username   string
+	password   string
+	caCertPath string
+	insecure   bool
 }
 
 func (p *xsProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -70,7 +91,8 @@ func (p *xsProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *p
 			"username": schema.StringAttribute{
 				MarkdownDescription: "The user name of target XenServer host." + "<br />" +
 					"Can be set by using the environment variable **XENSERVER_USERNAME**.",
-				Optional: true,
+				Optional:  true,
+				Sensitive: true,
 			},
 			"password": schema.StringAttribute{
 				MarkdownDescription: "The password of target XenServer host." + "<br />" +
@@ -78,7 +100,114 @@ func (p *xsProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *p
 				Optional:  true,
 				Sensitive: true,
 			},
+			"insecure": schema.BoolAttribute{
+				MarkdownDescription: "Whether to skip TLS certificate verification when connecting to the XenServer host. Defaults to `false`. " +
+					"Set to `true` to disable verification — this is intended for **development and testing only** and must not be used in production or CI environments. " +
+					"When `false`, `ca_cert_path` must be set." + "<br />" +
+					"Can be set by using the environment variable **XENSERVER_INSECURE**.",
+				Optional: true,
+			},
+			"ca_cert_path": schema.StringAttribute{
+				MarkdownDescription: "The path to the CA certificate (PEM) used to verify the XenServer host. Required when `insecure` is `false`." + "<br />" +
+					"Can be set by using the environment variable **XENSERVER_CA_CERT_PATH**.",
+				Optional: true,
+			},
 		},
+	}
+}
+
+func (p *xsProvider) ValidateConfig(ctx context.Context, req provider.ValidateConfigRequest, resp *provider.ValidateConfigResponse) {
+	var data providerModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	validateProviderConfig(&data, &resp.Diagnostics)
+}
+
+func effectiveString(v types.String, envKey string) (value string, ok bool) {
+	if v.IsUnknown() {
+		return "", false
+	}
+	if !v.IsNull() {
+		return v.ValueString(), true
+	}
+	return os.Getenv(envKey), true
+}
+
+func effectiveInsecure(v types.Bool, diags *diag.Diagnostics) (insecure bool, known bool) {
+	if v.IsUnknown() {
+		return false, false
+	}
+	if !v.IsNull() {
+		return v.ValueBool(), true
+	}
+	env := os.Getenv("XENSERVER_INSECURE")
+	if env == "" {
+		return false, true
+	}
+	parsed, err := strconv.ParseBool(strings.ToLower(env))
+	if err != nil {
+		diags.AddAttributeError(
+			path.Root("insecure"),
+			"Invalid Insecure Configuration",
+			"The environment variable XENSERVER_INSECURE must be a valid boolean ('true' or 'false').",
+		)
+		return false, false
+	}
+	return parsed, true
+}
+
+func validateProviderConfig(data *providerModel, diags *diag.Diagnostics) resolvedProviderConfig {
+	host, hostKnown := effectiveString(data.Host, "XENSERVER_HOST")
+	username, usernameKnown := effectiveString(data.Username, "XENSERVER_USERNAME")
+	password, passwordKnown := effectiveString(data.Password, "XENSERVER_PASSWORD")
+	caCertPath, certKnown := effectiveString(data.CACertPath, "XENSERVER_CA_CERT_PATH")
+	insecure, insecureKnown := effectiveInsecure(data.Insecure, diags)
+
+	if hostKnown && host == "" {
+		diags.AddAttributeError(
+			path.Root("host"),
+			"Missing Host Configuration",
+			"The provider cannot create the XenServer API client as there is a missing or empty value for the host. "+
+				"Set the host value in the configuration or use the XENSERVER_HOST environment variable. "+
+				"If either is already set, ensure the value is not empty.",
+		)
+	}
+	if usernameKnown && username == "" {
+		diags.AddAttributeError(
+			path.Root("username"),
+			"Missing Username Configuration",
+			"The provider cannot create the XenServer API client as there is a missing or empty value for the username. "+
+				"Set the username value in the configuration or use the XENSERVER_USERNAME environment variable. "+
+				"If either is already set, ensure the value is not empty.",
+		)
+	}
+	if passwordKnown && password == "" {
+		diags.AddAttributeError(
+			path.Root("password"),
+			"Missing Password Configuration",
+			"The provider cannot create the XenServer API client as there is a missing or empty value for the password. "+
+				"Set the password value in the configuration or use the XENSERVER_PASSWORD environment variable. "+
+				"If either is already set, ensure the value is not empty.",
+		)
+	}
+	if insecureKnown && !insecure && certKnown && caCertPath == "" {
+		diags.AddAttributeError(
+			path.Root("ca_cert_path"),
+			"Missing CA Certificate Path Configuration",
+			"The provider cannot create the XenServer API client as there is a missing or empty value for the ca_cert_path. "+
+				"Set the ca_cert_path value in the configuration or use the XENSERVER_CA_CERT_PATH environment variable. "+
+				"Alternatively set insecure = true to skip verification (development and testing only).",
+		)
+	}
+
+	return resolvedProviderConfig{
+		host:       host,
+		username:   username,
+		password:   password,
+		caCertPath: caCertPath,
+		insecure:   insecure,
 	}
 }
 
@@ -91,60 +220,20 @@ func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureReques
 		return
 	}
 
-	host := os.Getenv("XENSERVER_HOST")
-	username := os.Getenv("XENSERVER_USERNAME")
-	password := os.Getenv("XENSERVER_PASSWORD")
+	terraformProviderVersion = p.version
 
-	if !data.Host.IsNull() {
-		host = data.Host.ValueString()
-	}
-	if !data.Username.IsNull() {
-		username = data.Username.ValueString()
-	}
-	if !data.Password.IsNull() {
-		password = data.Password.ValueString()
-	}
-
-	// If any of the expected configurations are missing, return
-	// errors with provider-specific guidance.
-
-	if host == "" {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("host"),
-			"Missing Host Configuration",
-			"The provider cannot create the XenServer API client as there is a missing or empty value for the host. "+
-				"Set the host value in the configuration or use the XENSERVER_HOST environment variable. "+
-				"If either is already set, ensure the value is not empty.",
-		)
-	}
-	if username == "" {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("username"),
-			"Missing Username Configuration",
-			"The provider cannot create the XenServer API client as there is a missing or empty value for the username. "+
-				"Set the username value in the configuration or use the XENSERVER_USERNAME environment variable. "+
-				"If either is already set, ensure the value is not empty.",
-		)
-	}
-	if password == "" {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("password"),
-			"Missing Password Configuration",
-			"The provider cannot create the XenServer API client as there is a missing or empty value for the password. "+
-				"Set the password value in the configuration or use the XENSERVER_PASSWORD environment variable. "+
-				"If either is already set, ensure the value is not empty.",
-		)
-	}
-
+	cfg := validateProviderConfig(&data, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	ctx = tflog.SetField(ctx, "host", host)
-	ctx = tflog.SetField(ctx, "username", username)
+	ctx = tflog.MaskFieldValuesWithFieldKeys(ctx, "username", "password")
+	ctx = tflog.SetField(ctx, "host", cfg.host)
+	ctx = tflog.SetField(ctx, "insecure", cfg.insecure)
+	ctx = tflog.SetField(ctx, "ca_cert_path", cfg.caCertPath)
 	tflog.Debug(ctx, "Creating XenServer API session")
 
-	session, err := loginServer(host, username, password)
+	session, err := loginServer(cfg.host, cfg.username, cfg.password, cfg.insecure, cfg.caCertPath)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to create XenServer API client",
@@ -155,9 +244,11 @@ func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureReques
 		return
 	}
 
-	p.coordinatorConf.Host = host
-	p.coordinatorConf.Username = username
-	p.coordinatorConf.Password = password
+	p.coordinatorConf.Host = ensureHTTPS(cfg.host)
+	p.coordinatorConf.Username = cfg.username
+	p.coordinatorConf.Password = cfg.password
+	p.coordinatorConf.Insecure = cfg.insecure
+	p.coordinatorConf.CACertPath = cfg.caCertPath
 	p.session = session
 
 	// the xsProvider type itself is made available for resources and data sources
@@ -165,22 +256,42 @@ func (p *xsProvider) Configure(ctx context.Context, req provider.ConfigureReques
 	resp.ResourceData = p
 }
 
-func loginServer(host string, username string, password string) (*xenapi.Session, error) {
+func ensureHTTPS(host string) string {
+	host = strings.TrimPrefix(host, "http://")
+	host = strings.TrimPrefix(host, "https://")
+	return "https://" + host
+}
+
+func loginServer(host string, username string, password string, insecure bool, caCertPath string) (*xenapi.Session, error) {
 	// check if host, username, password are non-empty
 	if host == "" || username == "" || password == "" {
 		return nil, errors.New("host, username, password cannot be empty")
 	}
 
-	if !strings.HasPrefix(host, "http") {
-		host = "https://" + host
+	if !insecure && caCertPath == "" {
+		return nil, errors.New("ca_cert_path cannot be empty when insecure is false")
 	}
 
-	session := xenapi.NewSession(&xenapi.ClientOpts{
+	if !insecure {
+		if _, err := loadCACertPool(caCertPath); err != nil {
+			return nil, err
+		}
+	}
+
+	host = ensureHTTPS(host)
+
+	opts := &xenapi.ClientOpts{
 		URL: host,
 		Headers: map[string]string{
-			"User-Agent": "XS SDK for Go v1.0",
+			"User-Agent": "XenServerTerraformProvider/" + terraformProviderVersion,
 		},
-	})
+	}
+	if !insecure {
+		opts.SecureOpts = &xenapi.SecureOpts{
+			ServerCert: caCertPath,
+		}
+	}
+	session := xenapi.NewSession(opts)
 
 	_, err := session.LoginWithPassword(username, password, "1.0", "terraform provider")
 	if err != nil {
