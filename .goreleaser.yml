@@ -1,4 +1,5 @@
 version: 2
+project_name: terraform-provider-xenserver
 # Visit https://goreleaser.com for documentation on how to customize this
 # behavior.
 before:

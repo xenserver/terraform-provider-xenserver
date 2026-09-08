@@ -1,3 +1,8 @@
+// Copyright © 2026. Citrix Systems, Inc. All Rights Reserved.
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 package xenserver
 
 import (
@@ -14,9 +19,10 @@ import (
 
 // Ensure provider defined types fully satisfy framework interfaces.
 var (
-	_ resource.Resource                = &poolResource{}
-	_ resource.ResourceWithConfigure   = &poolResource{}
-	_ resource.ResourceWithImportState = &poolResource{}
+	_ resource.Resource                   = &poolResource{}
+	_ resource.ResourceWithConfigure      = &poolResource{}
+	_ resource.ResourceWithImportState    = &poolResource{}
+	_ resource.ResourceWithValidateConfig = &poolResource{}
 )
 
 func NewPoolResource() resource.Resource {
@@ -38,6 +44,15 @@ func (r *poolResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 		MarkdownDescription: "This provides a pool resource." + "\n\n-> **Note:** During the execution of `terraform destroy` for this particular resource, all of the hosts that are part of the pool will be separated and converted into standalone hosts.",
 		Attributes:          PoolSchema(),
 	}
+}
+
+func (r *poolResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var data poolResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	validateJoinSupporters(ctx, data.JoinSupporters, &resp.Diagnostics)
 }
 
 // Set the parameter of the resource, pass value from provider

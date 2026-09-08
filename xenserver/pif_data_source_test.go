@@ -1,3 +1,8 @@
+// Copyright © 2026. Citrix Systems, Inc. All Rights Reserved.
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 package xenserver
 
 import (
@@ -9,13 +14,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
-func testAccPifDataSourceConfig(device string) string {
-	return fmt.Sprintf(`
+func testAccPifDataSourceConfig() string {
+	return `
 data "xenserver_pif" "test_pif_data" {
-	device = "%s"
 	management = true
 }
-`, device)
+`
 }
 
 func testAccPifDataSourceConfig1() string {
@@ -33,9 +37,8 @@ func TestAccPifDataSource(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Read testing
 			{
-				Config: providerConfig + testAccPifDataSourceConfig("eth0"),
+				Config: providerConfig + testAccPifDataSourceConfig(),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("data.xenserver_pif.test_pif_data", "device", "eth0"),
 					resource.TestCheckResourceAttr("data.xenserver_pif.test_pif_data", "management", "true"),
 					resource.TestCheckResourceAttrSet("data.xenserver_pif.test_pif_data", "data_items.#"),
 				),

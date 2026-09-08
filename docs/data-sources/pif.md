@@ -28,7 +28,7 @@ output "pif_data_out" {
 
 ### Optional
 
-- `device` (String) The machine-readable name of the physical interface (PIF). (eg. `"eth0"`)
+- `device` (String) The machine-readable name of the physical interface (PIF). (eg. `"eth0"` or `"eno12409np1"`)
 - `management` (Boolean) Indicates whether the control software is listening for connections on this physical interface.
 - `network` (String) The UUID of the virtual network to which this PIF is connected.
 
@@ -45,7 +45,7 @@ Read-Only:
 - `bond_slave_of` (String) Indicates which bond(UUID) this interface is part of.
 - `capabilities` (List of String) Additional capabilities on the interface.
 - `currently_attached` (Boolean) True if this interface is online.
-- `device` (String) The machine-readable name of the physical interface (PIF). (For example, `"eth0"`)
+- `device` (String) The machine-readable name of the physical interface (PIF). (For example, `"eth0"` or `"eno12409np1"`)
 - `disallow_unplug` (Boolean) Prevent this PIF from being unplugged; set this to notify the management toolstack that the PIF has a special use and should not be unplugged under any circumstances. (For example, because you're running storage traffic over it)
 - `dns` (String) Comma-separated list of the IP addresses of the DNS servers to use.
 - `gateway` (String) IP gateway.

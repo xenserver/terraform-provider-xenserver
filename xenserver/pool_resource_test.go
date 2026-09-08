@@ -1,8 +1,14 @@
+// Copyright © 2026. Citrix Systems, Inc. All Rights Reserved.
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 package xenserver
 
 import (
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -66,7 +72,14 @@ resource "xenserver_sr_nfs" "nfs" {
 `, storage_location, extra)
 }
 
-func joinSupporterParams(name_label string, name_description string, supporterHost string, supporterUsername string, supporterPassowd string) string {
+func joinSupporterParams(name_label string, name_description string, supporterHost string, supporterUsername string, supporterPassword string, supporterInsecure string, supporterCACertPath string) string {
+	var tlsLines []string
+	if supporterInsecure != "" {
+		tlsLines = append(tlsLines, "insecure = "+supporterInsecure)
+	}
+	if supporterCACertPath != "" {
+		tlsLines = append(tlsLines, `ca_cert_path = "`+supporterCACertPath+`"`)
+	}
 	return fmt.Sprintf(`
 resource "xenserver_pool" "pool" {
     name_label   = "%s"
@@ -77,17 +90,15 @@ resource "xenserver_pool" "pool" {
 		    host = "%s"
 			username = "%s"
 			password = "%s"
+			%s
 		}
     ]
-}	
-`, name_label, name_description, supporterHost, supporterUsername, supporterPassowd)
+}
+`, name_label, name_description, supporterHost, supporterUsername, supporterPassword, strings.Join(tlsLines, "\n\t\t\t"))
 }
 
 func TestAccPoolResource(t *testing.T) {
-	// skip test if TEST_POOL is not set
-	if os.Getenv("TEST_POOL") == "" {
-		t.Skip("Skipping TestAccPoolResource test due to TEST_POOL not set")
-	}
+	skipIfEnvUnset(t, "TEST_POOL", "NFS_SERVER", "NFS_SERVER_PATH", "SUPPORTER_HOST", "SUPPORTER_USERNAME", "SUPPORTER_PASSWORD")
 
 	storageLocation := os.Getenv("NFS_SERVER") + ":" + os.Getenv("NFS_SERVER_PATH")
 	resource.Test(t, resource.TestCase{
@@ -100,7 +111,9 @@ func TestAccPoolResource(t *testing.T) {
 					"Test Pool Join",
 					os.Getenv("SUPPORTER_HOST"),
 					os.Getenv("SUPPORTER_USERNAME"),
-					os.Getenv("SUPPORTER_PASSWORD"))),
+					os.Getenv("SUPPORTER_PASSWORD"),
+					os.Getenv("SUPPORTER_INSECURE"),
+					os.Getenv("SUPPORTER_CA_CERT_PATH"))),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("xenserver_pool.pool", "name_label", "Test Pool A"),
 					resource.TestCheckResourceAttr("xenserver_pool.pool", "name_description", "Test Pool Join"),
@@ -112,7 +125,9 @@ func TestAccPoolResource(t *testing.T) {
 					"Test Pool Join again",
 					os.Getenv("SUPPORTER_HOST"),
 					os.Getenv("SUPPORTER_USERNAME"),
-					os.Getenv("SUPPORTER_PASSWORD"))),
+					os.Getenv("SUPPORTER_PASSWORD"),
+					os.Getenv("SUPPORTER_INSECURE"),
+					os.Getenv("SUPPORTER_CA_CERT_PATH"))),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("xenserver_pool.pool", "name_label", "Test Pool B"),
 					resource.TestCheckResourceAttr("xenserver_pool.pool", "name_description", "Test Pool Join again"),
@@ -124,10 +139,7 @@ func TestAccPoolResource(t *testing.T) {
 }
 
 func TestAccPoolManagementNetwork(t *testing.T) {
-	// skip test if TEST_POOL is not set
-	if os.Getenv("TEST_POOL") == "" {
-		t.Skip("Skipping TestAccPoolManagementNetwork test due to TEST_POOL not set")
-	}
+	skipIfEnvUnset(t, "TEST_POOL", "NFS_SERVER", "NFS_SERVER_PATH")
 
 	storageLocation := os.Getenv("NFS_SERVER") + ":" + os.Getenv("NFS_SERVER_PATH")
 	resource.Test(t, resource.TestCase{

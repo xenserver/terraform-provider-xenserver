@@ -1,3 +1,8 @@
+// Copyright © 2026. Citrix Systems, Inc. All Rights Reserved.
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 package xenserver
 
 import (
@@ -10,8 +15,10 @@ import (
 
 func testAccPIFConfigureResourceConfig(disallow_unplug string, mode string) string {
 	return fmt.Sprintf(`
+data "xenserver_network" "networks" {}
+
 data "xenserver_pif" "pif" {
-  device = "eth1"
+  network = one([for n in data.xenserver_network.networks.data_items : n.uuid if n.bridge == "xenbr1"])
 }
 
 resource "xenserver_pif_configure" "pif_update" {

@@ -22,18 +22,18 @@ data "xenserver_pif" "pif_eth1" {
 
 # Update single PIF configuration
 resource "xenserver_pif_configure" "pif_update" {
-  uuid = data.xenserver_pif.pif_eth1.data_items[0].uuid
+  uuid            = data.xenserver_pif.pif_eth1.data_items[0].uuid
   disallow_unplug = true
   interface = {
-    mode = "Static"
-    ip = "192.0.2.1"
+    mode    = "Static"
+    ip      = "192.0.2.1"
     netmask = "255.255.255.0"
   }
 }
 
 # Update multiple PIFs configuration
 locals {
-  pif_data = tomap({for element in data.xenserver_pif.pif_eth1.data_items: element.uuid => element})
+  pif_data = tomap({ for element in data.xenserver_pif.pif_eth1.data_items : element.uuid => element })
 }
 
 resource "xenserver_pif_configure" "pif_update" {
@@ -79,6 +79,8 @@ Optional:
 ## Import
 
 Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
 terraform import xenserver_pif_configure.pif_update 00000000-0000-0000-0000-000000000000

@@ -1,3 +1,8 @@
+// Copyright © 2026. Citrix Systems, Inc. All Rights Reserved.
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 package xenserver
 
 import (
@@ -72,6 +77,7 @@ func (r *vdiResource) Create(ctx context.Context, req resource.CreateRequest, re
 		)
 		return
 	}
+
 	vdiRef, err := xenapi.VDI.Create(r.session, record)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -80,13 +86,14 @@ func (r *vdiResource) Create(ctx context.Context, req resource.CreateRequest, re
 		)
 		return
 	}
+
 	vdiRecord, err := xenapi.VDI.GetRecord(r.session, vdiRef)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to get VDI record",
 			err.Error(),
 		)
-		err = cleanupVDIResource(r.session, vdiRef)
+		err = cleanupVDIResource(ctx, r.session, vdiRef)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error cleaning up VDI resource",
@@ -95,13 +102,14 @@ func (r *vdiResource) Create(ctx context.Context, req resource.CreateRequest, re
 		}
 		return
 	}
+
 	err = updateVDIResourceModelComputed(ctx, vdiRecord, &data)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to update the computed fields of VDIResourceModel",
 			err.Error(),
 		)
-		err = cleanupVDIResource(r.session, vdiRef)
+		err = cleanupVDIResource(ctx, r.session, vdiRef)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error cleaning up VDI resource",
@@ -110,8 +118,8 @@ func (r *vdiResource) Create(ctx context.Context, req resource.CreateRequest, re
 		}
 		return
 	}
-	tflog.Debug(ctx, "VDI created")
 
+	tflog.Debug(ctx, "VDI created")
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
@@ -224,7 +232,7 @@ func (r *vdiResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 		)
 		return
 	}
-	err = cleanupVDIResource(r.session, vdiRef)
+	err = cleanupVDIResource(ctx, r.session, vdiRef)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to delete VDI resource",

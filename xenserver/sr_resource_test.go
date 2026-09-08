@@ -1,3 +1,8 @@
+// Copyright © 2026. Citrix Systems, Inc. All Rights Reserved.
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 package xenserver
 
 import (
@@ -105,6 +110,7 @@ resource "xenserver_sr" "test_sr" {
 }
 
 func TestAccSRResourceShared(t *testing.T) {
+	skipIfEnvUnset(t, "NFS_SERVER", "NFS_SERVER_PATH")
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{

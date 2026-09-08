@@ -11,9 +11,11 @@ terraform {
 }
 
 provider "xenserver" {
-  host     = local.env_vars["XENSERVER_HOST"]
-  username = local.env_vars["XENSERVER_USERNAME"]
-  password = local.env_vars["XENSERVER_PASSWORD"]
+  host         = local.env_vars["XENSERVER_HOST"]
+  username     = local.env_vars["XENSERVER_USERNAME"]
+  password     = local.env_vars["XENSERVER_PASSWORD"]
+  insecure     = local.env_vars["XENSERVER_INSECURE"]
+  ca_cert_path = local.env_vars["XENSERVER_CA_CERT_PATH"]
 }
 
 # get the existing supporter hosts
@@ -23,15 +25,17 @@ data "xenserver_host" "supporter" {
 
 # join a new supporter to the pool
 resource "xenserver_pool" "pool" {
-  name_label   = "pool"
+  name_label = "pool"
   join_supporters = [
     {
-      host = local.env_vars["SUPPORTER_HOST"]
-      username = local.env_vars["SUPPORTER_USERNAME"]
-      password = local.env_vars["SUPPORTER_PASSWORD"]
+      host         = local.env_vars["SUPPORTER_HOST"]
+      username     = local.env_vars["SUPPORTER_USERNAME"]
+      password     = local.env_vars["SUPPORTER_PASSWORD"]
+      insecure     = local.env_vars["SUPPORTER_INSECURE"]
+      ca_cert_path = local.env_vars["SUPPORTER_CA_CERT_PATH"]
     }
   ]
-  eject_supporters = [ data.xenserver_host.supporter.data_items[0].uuid ]
+  eject_supporters = [data.xenserver_host.supporter.data_items[0].uuid]
 }
 
 

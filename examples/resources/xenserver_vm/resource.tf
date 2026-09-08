@@ -61,11 +61,11 @@ resource "xenserver_vm" "windows_vm" {
 
 # Create a Windows 11 VM that is copy from the custom template
 resource "xenserver_vm" "windows_vm_copy" {
-  name_label       = "Windows VM Copy From Custom Template"
-  template_name    = "Custom Windows 11 Template"
-  static_mem_max   = 4 * 1024 * 1024 * 1024
-  vcpus            = 4
-  cores_per_socket = 2
+  name_label            = "Windows VM Copy From Custom Template"
+  template_name         = "Custom Windows 11 Template"
+  static_mem_max        = 4 * 1024 * 1024 * 1024
+  vcpus                 = 4
+  cores_per_socket      = 2
   sr_for_full_disk_copy = data.xenserver_sr.sr.data_items[0].uuid
 
   network_interface = [
@@ -118,10 +118,10 @@ variable "password" {
 locals {
   virtual_machines = {
     "windows-vm" = {
-      name_label       = "Windows VM"
-      template_name    = "Windows 11"
-      static_mem_max   = 8 * 1024 * 1024 * 1024
-      vcpus            = 4
+      name_label     = "Windows VM"
+      template_name  = "Windows 11"
+      static_mem_max = 8 * 1024 * 1024 * 1024
+      vcpus          = 4
       hard_drive = [
         {
           vdi_uuid = xenserver_vdi.vdi1.uuid,
@@ -137,10 +137,10 @@ locals {
       ]
     }
     "linux-vm" = {
-      name_label       = "Linux VM"
-      template_name    = "Debian Bullseye 11"
-      static_mem_max   = 4 * 1024 * 1024 * 1024
-      vcpus            = 2
+      name_label     = "Linux VM"
+      template_name  = "Debian Bullseye 11"
+      static_mem_max = 4 * 1024 * 1024 * 1024
+      vcpus          = 2
       hard_drive = [
         {
           vdi_uuid = xenserver_vdi.vdi2.uuid,
@@ -159,9 +159,9 @@ locals {
 }
 
 resource "xenserver_vm" "vm" {
-  for_each = local.virtual_machines
+  for_each          = local.virtual_machines
   name_label        = each.value.name_label
-  template_name     = each.value.template_name 
+  template_name     = each.value.template_name
   static_mem_max    = each.value.static_mem_max
   vcpus             = each.value.vcpus
   hard_drive        = each.value.hard_drive
