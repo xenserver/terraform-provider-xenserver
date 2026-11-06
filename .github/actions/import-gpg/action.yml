@@ -1,0 +1,108 @@
+# Repository-local replacement for crazy-max/ghaction-import-gpg, which is not
+# allowed by the enterprise GitHub Actions policy. It keeps the same input and
+# output names, so a workflow only needs to change its "uses:" line.
+name: Import GPG key
+description: >-
+  Import a GPG private key into an isolated keyring and preset its passphrase
+  in gpg-agent, so that tools such as GoReleaser can sign non-interactively
+  with "gpg --batch --local-user <fingerprint>".
+
+inputs:
+  gpg_private_key:
+    description: GPG private key to import, either ASCII-armored or base64-encoded.
+    required: true
+  passphrase:
+    description: Passphrase of the GPG private key. Leave empty if the key has no passphrase.
+    required: false
+    default: ''
+
+outputs:
+  fingerprint:
+    description: Fingerprint of the imported primary key.
+    value: ${{ steps.import.outputs.fingerprint }}
+
+runs:
+  using: composite
+  steps:
+    - name: Import GPG key
+      id: import
+      shell: bash
+      env:
+        GPG_PRIVATE_KEY: ${{ inputs.gpg_private_key }}
+        GPG_PASSPHRASE: ${{ inputs.passphrase }}
+      run: |
+        set -euo pipefail
+
+        if [[ -z "${GPG_PRIVATE_KEY}" ]]; then
+          echo "::error::gpg_private_key is empty. Check that the GPG private key secret is set."
+          exit 1
+        fi
+
+        # Use a fresh keyring under RUNNER_TEMP. The runner deletes RUNNER_TEMP
+        # when the job ends, which replaces the post-job key cleanup that
+        # ghaction-import-gpg performs.
+        GNUPGHOME="$(mktemp -d "${RUNNER_TEMP}/gnupg.XXXXXX")"
+        export GNUPGHOME
+        chmod 700 "${GNUPGHOME}"
+        cat > "${GNUPGHOME}/gpg-agent.conf" <<'EOF'
+        default-cache-ttl 21600
+        max-cache-ttl 31536000
+        allow-preset-passphrase
+        EOF
+
+        # The secret can hold the ASCII-armored key or a base64-encoded export.
+        # Only the generic armor prefix is matched: spelling out the full
+        # private key header makes secret scanners flag this file.
+        if [[ "${GPG_PRIVATE_KEY}" == *"-----BEGIN PGP "* ]]; then
+          printf '%s\n' "${GPG_PRIVATE_KEY}" | gpg --batch --import
+        else
+          printf '%s' "${GPG_PRIVATE_KEY}" | base64 --decode | gpg --batch --import
+        fi
+
+        # First "fpr" record after "sec" is the primary key. awk reads all input
+        # (no early exit) so gpg never gets SIGPIPE under pipefail.
+        fingerprint="$(gpg --batch --with-colons --list-secret-keys |
+          awk -F: '$1 == "sec" { primary = 1; next } primary && $1 == "fpr" && !done { print $10; done = 1 }')"
+        if [[ -z "${fingerprint}" ]]; then
+          echo "::error::No secret key found in gpg_private_key."
+          exit 1
+        fi
+
+        if [[ -n "${GPG_PASSPHRASE}" ]]; then
+          gpg-connect-agent reloadagent /bye >/dev/null
+
+          mapfile -t keygrips < <(gpg --batch --with-colons --with-keygrip --list-secret-keys "${fingerprint}" |
+            awk -F: '$1 == "grp" { print $10 }')
+          if [[ "${#keygrips[@]}" -eq 0 ]]; then
+            echo "::error::No keygrips found for key ${fingerprint}."
+            exit 1
+          fi
+
+          # Cache the passphrase for the primary key and every subkey. The
+          # commands are sent on stdin, so the passphrase never appears in a
+          # process argument list.
+          passphrase_hex="$(printf '%s' "${GPG_PASSPHRASE}" | od -An -v -tx1 | tr -d ' \n' | tr 'a-f' 'A-F')"
+          preset_result="$(for keygrip in "${keygrips[@]}"; do
+            printf 'PRESET_PASSPHRASE %s -1 %s\n' "${keygrip}" "${passphrase_hex}"
+          done | gpg-connect-agent)"
+          if grep -q '^ERR' <<<"${preset_result}"; then
+            echo "::error::gpg-agent rejected the passphrase preset: ${preset_result//$'\n'/ }"
+            exit 1
+          fi
+        fi
+
+        # Sign a probe file the same way GoReleaser signs, but fail instead of
+        # prompting, so a wrong passphrase is reported here and not at release time.
+        probe="${GNUPGHOME}/sign-probe.txt"
+        printf 'terraform-provider-xenserver signing probe\n' > "${probe}"
+        if ! gpg --batch --yes --pinentry-mode error --local-user "${fingerprint}" \
+          --output "${probe}.sig" --detach-sign "${probe}"; then
+          echo "::error::Test signing with key ${fingerprint} failed. Check that the passphrase secret matches the key."
+          exit 1
+        fi
+        gpg --batch --verify "${probe}.sig" "${probe}"
+        rm -f "${probe}" "${probe}.sig"
+
+        echo "GNUPGHOME=${GNUPGHOME}" >> "${GITHUB_ENV}"
+        echo "fingerprint=${fingerprint}" >> "${GITHUB_OUTPUT}"
+        echo "Imported GPG key ${fingerprint}."

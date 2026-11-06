@@ -56,7 +56,7 @@ resource "xenserver_sr" "nfs" {
 -> **Note:** `device_config` is not allowed to be updated.
 - `host` (String) The UUID of the host to create/make the SR on, default to use the pool coordinator.
 
--> **Note:** `host` is not allowed to be updated.
+-> **Note:** `host` is not allowed to be updated. Removing it from the configuration later has no effect.
 - `name_description` (String) The description of the storage repository, default to be `""`.
 - `shared` (Boolean) True if this SR is (capable of being) shared between multiple hosts, default to be `false`.
 

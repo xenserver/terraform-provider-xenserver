@@ -32,14 +32,15 @@ data "xenserver_network" "network" {}
 
 # Create a Windows 11 VM that is cloned from the base template
 resource "xenserver_vm" "windows_vm" {
-  name_label       = "Windows VM"
-  template_name    = "Windows 11"
-  static_mem_max   = 4 * 1024 * 1024 * 1024
-  vcpus            = 4
-  cores_per_socket = 2
-  cdrom            = "win11-x64_uefi.iso"
-  boot_mode        = "uefi_security"
-  boot_order       = "cdn"
+  name_label                   = "Windows VM"
+  template_name                = "Windows 11"
+  static_mem_max               = 4 * 1024 * 1024 * 1024
+  vcpus                        = 4
+  cores_per_socket             = 2
+  cdrom                        = "win11-x64_uefi.iso"
+  boot_mode                    = "uefi_security"
+  boot_order                   = "cdn"
+  allow_windows_update_drivers = true
 
   hard_drive = [
     {
@@ -89,6 +90,45 @@ resource "xenserver_vm" "windows_vm_copy" {
       network_uuid = data.xenserver_network.network.data_items[0].uuid,
     },
   ]
+}
+
+# Create a Windows VM that is cloned from the custom template (contains Windows guest tools)
+# and assign a static IPv4 address
+resource "xenserver_vm" "windows_vm_static_ip" {
+  name_label       = "Windows VM Static IP"
+  template_name    = "Custom Windows 11 Template"
+  static_mem_max   = 4 * 1024 * 1024 * 1024
+  vcpus            = 4
+  check_ip_timeout = 60 * 5
+
+  network_interface = [
+    {
+      device       = "0"
+      network_uuid = data.xenserver_network.network.data_items[0].uuid
+      ipv4_address = "10.62.50.49/20"
+      ipv4_gateway = "10.62.48.1"
+    },
+  ]
+
+  # This requires the guest template to be pre-configured for remote access: 
+  # eg. WinRM enabled with a listener, the firewall open for the port (5985/5986), and an authentication method matching the connection block (use_ntlm, or Basic + HTTPS). 
+  connection {
+    type     = "winrm"
+    user     = "Administrator"
+    password = var.password
+    host     = self.ip_addresses["0"]
+    port     = 5986
+    https    = true
+    insecure = true
+    use_ntlm = false
+    timeout  = "10m"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "whoami",
+    ]
+  }
 }
 
 # Create a Linux VM that is cloned from the custom template
@@ -205,12 +245,17 @@ output "vm_out" {
 
 ### Optional
 
+- `allow_windows_update_drivers` (Boolean) Whether allow Windows Update to deliver I/O drivers, default inherited from the template<br />When enabled, sets `has_vendor_device=true` so the emulated vendor PCI device is present, letting Windows guests detect the XenServer PV drivers and fetch driver updates through Windows Update.
+
+-> **Note:** `allow_windows_update_drivers` is not allowed to be updated. Removing it from the configuration later has no effect. Recommended to be `true` for Windows guests.
 - `boot_mode` (String) The boot mode of the virtual machine, default inherited from the template.<br />This value can be one of [`"bios", "uefi", "uefi_security"`].
 
--> **Note:** `boot_mode` is not allowed to be updated.
+-> **Note:** `boot_mode` is not allowed to be updated. Removing it from the configuration later has no effect.
 - `boot_order` (String) The boot order of the virtual machine, default inherited from the template.<br />This value is a combination string of [`"c", "d", "n"`]. Find more details in [Setting boot order for domUs](https://wiki.xenproject.org/wiki/Setting_boot_order_for_domUs).
 - `cdrom` (String) The VDI name in ISO library to attach to the virtual machine, default inherited from the template.
-- `check_ip_timeout` (Number) The duration for checking the IP address of the virtual machine. default is 0 seconds, once the value greater than 0, the provider will check the IP address of the virtual machine in the specified duration.
+- `check_ip_timeout` (Number) The number of seconds to wait for the VM's IP address, default to be `0`. When set greater than 0, the provider starts the VM and populates `default_ip` and `ip_addresses` from the guest tools.
+
+-> **Note:** Checking the IP address requires the guest tools to be pre-installed in the template. The apply fails if no IP address is reported within the timeout.
 - `cores_per_socket` (Number) The number of core pre socket for the virtual machine, default inherited from the template.
 - `dynamic_mem_max` (Number) Dynamic maximum memory (bytes), default same with `static_mem_max`.
 - `dynamic_mem_min` (Number) Dynamic minimum memory (bytes), default same with `static_mem_max`.
@@ -224,8 +269,13 @@ output "vm_out" {
 
 ### Read-Only
 
-- `default_ip` (String) The default IP address of the virtual machine.
+- `default_ip` (String) The IPv4 address of one of the VM's network interfaces, reported by the guest tools. When the VM has multiple network interfaces, use `ip_addresses` to select a specific interface by device number.
+
+-> **Note:** Requires `check_ip_timeout` to be set greater than 0.
 - `id` (String) The test ID of the virtual machine.
+- `ip_addresses` (Map of String) A map from network interface device number to the interface's IPv4 address, reported by the guest tools (e.g. `ip_addresses["0"]`).
+
+-> **Note:** Requires `check_ip_timeout` to be set greater than 0.
 - `uuid` (String) The UUID of the virtual machine.
 
 <a id="nestedatt--network_interface"></a>
@@ -238,9 +288,15 @@ Required:
 
 Optional:
 
+- `ipv4_address` (String) Static IPv4 address for this interface in CIDR notation (address and prefix, e.g. `192.168.10.25/24`). Omit to use DHCP.
+
+-> **Note:** 1. This is for **Windows guests only** and requires the XenServer Windows guest tools to be pre-installed in the template.<br>2. Setting it requires the VM to be running, so the provider starts it to apply the address.<br>3. Ensure the `ipv4_address` and `ipv4_gateway` are valid for the interface's network and not already in use, otherwise the guest tools may fail to apply them and the interface stays on DHCP.<br>4. The provider only assigns the address. To make it reachable, also ensure the guest's remote-access service is configured.<br>
+- `ipv4_gateway` (String) Default IPv4 gateway for this interface.
+
+-> **Note:** Only used together with `ipv4_address`.
 - `mac` (String) MAC address of the VIF, default to be a random MAC address generated by XenServer.
 
--> **Note:** `mac` is not allowed to be updated.
+-> **Note:** `mac` is not allowed to be updated. Removing it from the configuration later has no effect.
 - `other_config` (Map of String) The additional configuration of the network interface, default to be `{}`.Find more details in [advanced-settings-for-network-interfaces](https://docs.xenserver.com/en-us/xenserver/developer/sdk-guide/xs-api-extensions#advanced-settings-for-network-interfaces).
 
 Read-Only:

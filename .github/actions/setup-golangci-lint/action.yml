@@ -1,0 +1,55 @@
+# Repository-local replacement for golangci/golangci-lint-action, which is not
+# allowed by the enterprise GitHub Actions policy.
+name: Setup golangci-lint
+description: >-
+  Download a pinned golangci-lint release binary from GitHub Releases, verify
+  its SHA-256 checksum and add it to PATH.
+
+inputs:
+  version:
+    description: golangci-lint release to install, for example v2.14.0.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Install golangci-lint
+      shell: bash
+      env:
+        GOLANGCI_LINT_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+
+        version="${GOLANGCI_LINT_VERSION#v}"
+        if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "::error::version must be a full release such as v2.14.0, got '${GOLANGCI_LINT_VERSION}'."
+          exit 1
+        fi
+
+        if [[ "$(uname -s)" != "Linux" ]]; then
+          echo "::error::Only Linux runners are supported, got $(uname -s)."
+          exit 1
+        fi
+        case "$(uname -m)" in
+          x86_64 | amd64) arch=amd64 ;;
+          aarch64 | arm64) arch=arm64 ;;
+          *) echo "::error::Unsupported architecture: $(uname -m)."; exit 1 ;;
+        esac
+
+        package="golangci-lint-${version}-linux-${arch}"
+        base_url="https://github.com/golangci/golangci-lint/releases/download/v${version}"
+        work_dir="$(mktemp -d "${RUNNER_TEMP}/golangci-lint.XXXXXX")"
+        cd "${work_dir}"
+
+        curl -fsSL --retry 3 -o "${package}.tar.gz" "${base_url}/${package}.tar.gz"
+        curl -fsSL --retry 3 -o checksums.txt "${base_url}/golangci-lint-${version}-checksums.txt"
+        awk -v file="${package}.tar.gz" '$2 == file' checksums.txt > "${package}.sha256"
+        if [[ ! -s "${package}.sha256" ]]; then
+          echo "::error::${package}.tar.gz is not listed in the release checksums."
+          exit 1
+        fi
+        sha256sum --check --strict "${package}.sha256"
+
+        tar -xzf "${package}.tar.gz"
+        echo "${work_dir}/${package}" >> "${GITHUB_PATH}"
+        "${work_dir}/${package}/golangci-lint" --version

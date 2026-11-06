@@ -54,7 +54,7 @@ File-per-component naming inside `xenserver/`:
 
 ## Install dependencies
 
-- [Go](https://go.dev/doc/install) — version per [`go.mod`](./go.mod) (currently `1.25.8`)
+- [Go](https://go.dev/doc/install) — version per [`go.mod`](./go.mod) (currently `1.27.3`)
 - [Terraform](https://developer.hashicorp.com/terraform/downloads) >= 1.8
 - `make`
 - [`golangci-lint`](https://golangci-lint.run/) (or run it via Docker, shown in [Linting](#linting))
