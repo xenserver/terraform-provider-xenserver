@@ -9,7 +9,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"net"
 	"regexp"
 	"slices"
@@ -49,7 +48,7 @@ type vmRecordData struct {
 	NameLabel                   types.String  `tfsdk:"name_label"`
 	NameDescription             types.String  `tfsdk:"name_description"`
 	PowerState                  types.String  `tfsdk:"power_state"`
-	UserVersion                 types.Int32   `tfsdk:"user_version"`
+	UserVersion                 types.Int64   `tfsdk:"user_version"`
 	IsATemplate                 types.Bool    `tfsdk:"is_a_template"`
 	IsDefaultTemplate           types.Bool    `tfsdk:"is_default_template"`
 	SuspendVDI                  types.String  `tfsdk:"suspend_vdi"`
@@ -63,8 +62,8 @@ type vmRecordData struct {
 	MemoryDynamicMin            types.Int64   `tfsdk:"memory_dynamic_min"`
 	MemoryStaticMin             types.Int64   `tfsdk:"memory_static_min"`
 	VCPUsParams                 types.Map     `tfsdk:"vcpus_params"`
-	VCPUsMax                    types.Int32   `tfsdk:"vcpus_max"`
-	VCPUsAtStartup              types.Int32   `tfsdk:"vcpus_at_startup"`
+	VCPUsMax                    types.Int64   `tfsdk:"vcpus_max"`
+	VCPUsAtStartup              types.Int64   `tfsdk:"vcpus_at_startup"`
 	ActionsAfterSoftreboot      types.String  `tfsdk:"actions_after_softreboot"`
 	ActionsAfterShutdown        types.String  `tfsdk:"actions_after_shutdown"`
 	ActionsAfterReboot          types.String  `tfsdk:"actions_after_reboot"`
@@ -87,7 +86,7 @@ type vmRecordData struct {
 	Platform                    types.Map     `tfsdk:"platform"`
 	PCIBus                      types.String  `tfsdk:"pci_bus"`
 	OtherConfig                 types.Map     `tfsdk:"other_config"`
-	Domid                       types.Int32   `tfsdk:"domid"`
+	Domid                       types.Int64   `tfsdk:"domid"`
 	Domarch                     types.String  `tfsdk:"domarch"`
 	LastBootCPUFlags            types.Map     `tfsdk:"last_boot_cpu_flags"`
 	IsControlDomain             types.Bool    `tfsdk:"is_control_domain"`
@@ -118,13 +117,13 @@ type vmRecordData struct {
 	Appliance                   types.String  `tfsdk:"appliance"`
 	StartDelay                  types.Int64   `tfsdk:"start_delay"`
 	ShutdownDelay               types.Int64   `tfsdk:"shutdown_delay"`
-	Order                       types.Int32   `tfsdk:"order"`
+	Order                       types.Int64   `tfsdk:"order"`
 	VGPUs                       types.List    `tfsdk:"vgpus"`
 	AttachedPCIs                types.List    `tfsdk:"attached_pcis"`
 	SuspendSR                   types.String  `tfsdk:"suspend_sr"`
-	Version                     types.Int32   `tfsdk:"version"`
+	Version                     types.Int64   `tfsdk:"version"`
 	GenerationID                types.String  `tfsdk:"generation_id"`
-	HardwarePlatformVersion     types.Int32   `tfsdk:"hardware_platform_version"`
+	HardwarePlatformVersion     types.Int64   `tfsdk:"hardware_platform_version"`
 	HasVendorDevice             types.Bool    `tfsdk:"has_vendor_device"`
 	RequiresReboot              types.Bool    `tfsdk:"requires_reboot"`
 	ReferenceLabel              types.String  `tfsdk:"reference_label"`
@@ -138,26 +137,28 @@ type vmRecordData struct {
 
 // vmResourceModel describes the resource data model.
 type vmResourceModel struct {
-	NameLabel         types.String `tfsdk:"name_label"`
-	NameDescription   types.String `tfsdk:"name_description"`
-	TemplateName      types.String `tfsdk:"template_name"`
-	StaticMemMin      types.Int64  `tfsdk:"static_mem_min"`
-	StaticMemMax      types.Int64  `tfsdk:"static_mem_max"`
-	DynamicMemMin     types.Int64  `tfsdk:"dynamic_mem_min"`
-	DynamicMemMax     types.Int64  `tfsdk:"dynamic_mem_max"`
-	VCPUs             types.Int32  `tfsdk:"vcpus"`
-	BootMode          types.String `tfsdk:"boot_mode"`
-	BootOrder         types.String `tfsdk:"boot_order"`
-	CorePerSocket     types.Int32  `tfsdk:"cores_per_socket"`
-	OtherConfig       types.Map    `tfsdk:"other_config"`
-	HardDrive         types.Set    `tfsdk:"hard_drive"`
-	SRForFullDiskCopy types.String `tfsdk:"sr_for_full_disk_copy"`
-	NetworkInterface  types.Set    `tfsdk:"network_interface"`
-	CDROM             types.String `tfsdk:"cdrom"`
-	UUID              types.String `tfsdk:"uuid"`
-	ID                types.String `tfsdk:"id"`
-	DefaultIP         types.String `tfsdk:"default_ip"`
-	CheckIPTimeout    types.Int64  `tfsdk:"check_ip_timeout"`
+	NameLabel                 types.String `tfsdk:"name_label"`
+	NameDescription           types.String `tfsdk:"name_description"`
+	TemplateName              types.String `tfsdk:"template_name"`
+	StaticMemMin              types.Int64  `tfsdk:"static_mem_min"`
+	StaticMemMax              types.Int64  `tfsdk:"static_mem_max"`
+	DynamicMemMin             types.Int64  `tfsdk:"dynamic_mem_min"`
+	DynamicMemMax             types.Int64  `tfsdk:"dynamic_mem_max"`
+	VCPUs                     types.Int64  `tfsdk:"vcpus"`
+	BootMode                  types.String `tfsdk:"boot_mode"`
+	BootOrder                 types.String `tfsdk:"boot_order"`
+	CorePerSocket             types.Int64  `tfsdk:"cores_per_socket"`
+	AllowWindowsUpdateDrivers types.Bool   `tfsdk:"allow_windows_update_drivers"`
+	OtherConfig               types.Map    `tfsdk:"other_config"`
+	HardDrive                 types.Set    `tfsdk:"hard_drive"`
+	SRForFullDiskCopy         types.String `tfsdk:"sr_for_full_disk_copy"`
+	NetworkInterface          types.Set    `tfsdk:"network_interface"`
+	CDROM                     types.String `tfsdk:"cdrom"`
+	UUID                      types.String `tfsdk:"uuid"`
+	ID                        types.String `tfsdk:"id"`
+	DefaultIP                 types.String `tfsdk:"default_ip"`
+	IPAddresses               types.Map    `tfsdk:"ip_addresses"`
+	CheckIPTimeout            types.Int64  `tfsdk:"check_ip_timeout"`
 }
 
 func vmSchema() map[string]schema.Attribute {
@@ -196,19 +197,26 @@ func vmSchema() map[string]schema.Attribute {
 			Optional:            true,
 			Computed:            true,
 		},
-		"vcpus": schema.Int32Attribute{
+		"vcpus": schema.Int64Attribute{
 			MarkdownDescription: "The number of VCPUs for the virtual machine.",
 			Required:            true,
 		},
-		"cores_per_socket": schema.Int32Attribute{
+		"cores_per_socket": schema.Int64Attribute{
 			MarkdownDescription: "The number of core pre socket for the virtual machine, default inherited from the template.",
 			Optional:            true,
 			Computed:            true,
 		},
+		"allow_windows_update_drivers": schema.BoolAttribute{
+			MarkdownDescription: "Whether allow Windows Update to deliver I/O drivers, default inherited from the template" + "<br />" +
+				"When enabled, sets `has_vendor_device=true` so the emulated vendor PCI device is present, letting Windows guests detect the XenServer PV drivers and fetch driver updates through Windows Update." +
+				"\n\n-> **Note:** `allow_windows_update_drivers` is not allowed to be updated. Removing it from the configuration later has no effect. Recommended to be `true` for Windows guests.",
+			Optional: true,
+			Computed: true,
+		},
 		"boot_mode": schema.StringAttribute{
 			MarkdownDescription: "The boot mode of the virtual machine, default inherited from the template." + "<br />" +
 				"This value can be one of [`\"bios\", \"uefi\", \"uefi_security\"`]." +
-				"\n\n-> **Note:** `boot_mode` is not allowed to be updated.",
+				"\n\n-> **Note:** `boot_mode` is not allowed to be updated. Removing it from the configuration later has no effect.",
 			Optional: true,
 			Computed: true,
 			Validators: []validator.String{
@@ -263,20 +271,25 @@ func vmSchema() map[string]schema.Attribute {
 			Default:             mapdefault.StaticValue(types.MapValueMust(types.StringType, map[string]attr.Value{})),
 		},
 		"check_ip_timeout": schema.Int64Attribute{
-			MarkdownDescription: "The duration for checking the IP address of the virtual machine. default is 0 seconds, once the value greater than 0, the provider will check the IP address of the virtual machine in the specified duration.",
-			Optional:            true,
-			Computed:            true,
-			Default:             int64default.StaticInt64(0),
+			MarkdownDescription: "The number of seconds to wait for the VM's IP address, default to be `0`. When set greater than 0, the provider starts the VM and populates `default_ip` and `ip_addresses` from the guest tools." +
+				"\n\n-> **Note:** Checking the IP address requires the guest tools to be pre-installed in the template. The apply fails if no IP address is reported within the timeout.",
+			Optional: true,
+			Computed: true,
+			Default:  int64default.StaticInt64(0),
 			Validators: []validator.Int64{
 				int64validator.AtLeast(0),
 			},
 		},
 		"default_ip": schema.StringAttribute{
-			MarkdownDescription: "The default IP address of the virtual machine.",
-			Computed:            true,
-			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
-			},
+			MarkdownDescription: "The IPv4 address of one of the VM's network interfaces, reported by the guest tools. When the VM has multiple network interfaces, use `ip_addresses` to select a specific interface by device number." +
+				"\n\n-> **Note:** Requires `check_ip_timeout` to be set greater than 0.",
+			Computed: true,
+		},
+		"ip_addresses": schema.MapAttribute{
+			MarkdownDescription: "A map from network interface device number to the interface's IPv4 address, reported by the guest tools (e.g. `ip_addresses[\"0\"]`)." +
+				"\n\n-> **Note:** Requires `check_ip_timeout` to be set greater than 0.",
+			ElementType: types.StringType,
+			Computed:    true,
 		},
 		"uuid": schema.StringAttribute{
 			MarkdownDescription: "The UUID of the virtual machine.",
@@ -309,11 +322,7 @@ func updateVMRecordData(ctx context.Context, session *xenapi.Session, record xen
 	data.NameLabel = types.StringValue(record.NameLabel)
 	data.NameDescription = types.StringValue(record.NameDescription)
 	data.PowerState = types.StringValue(string(record.PowerState))
-	userVersion, err := ToInt32(record.UserVersion)
-	if err != nil {
-		return err
-	}
-	data.UserVersion = types.Int32Value(userVersion)
+	data.UserVersion = types.Int64Value(record.UserVersion)
 	data.IsATemplate = types.BoolValue(record.IsATemplate)
 	data.IsDefaultTemplate = types.BoolValue(record.IsDefaultTemplate)
 	suspendVDI, err := getUUIDFromVDIRef(session, record.SuspendVDI)
@@ -336,26 +345,18 @@ func updateVMRecordData(ctx context.Context, session *xenapi.Session, record xen
 		return err
 	}
 	data.Affinity = types.StringValue(affinity)
-	data.MemoryOverhead = types.Int64Value(int64(record.MemoryOverhead))
-	data.MemoryTarget = types.Int64Value(int64(record.MemoryTarget))
-	data.MemoryStaticMax = types.Int64Value(int64(record.MemoryStaticMax))
-	data.MemoryDynamicMax = types.Int64Value(int64(record.MemoryDynamicMax))
-	data.MemoryDynamicMin = types.Int64Value(int64(record.MemoryDynamicMin))
-	data.MemoryStaticMin = types.Int64Value(int64(record.MemoryStaticMin))
+	data.MemoryOverhead = types.Int64Value(record.MemoryOverhead)
+	data.MemoryTarget = types.Int64Value(record.MemoryTarget)
+	data.MemoryStaticMax = types.Int64Value(record.MemoryStaticMax)
+	data.MemoryDynamicMax = types.Int64Value(record.MemoryDynamicMax)
+	data.MemoryDynamicMin = types.Int64Value(record.MemoryDynamicMin)
+	data.MemoryStaticMin = types.Int64Value(record.MemoryStaticMin)
 	data.VCPUsParams, diags = types.MapValueFrom(ctx, types.StringType, record.VCPUsParams)
 	if diags.HasError() {
 		return errors.New("unable to read VM VCPUs params")
 	}
-	vcpusMax, err := ToInt32(record.VCPUsMax)
-	if err != nil {
-		return err
-	}
-	data.VCPUsMax = types.Int32Value(vcpusMax)
-	vcpusAtStartup, err := ToInt32(record.VCPUsAtStartup)
-	if err != nil {
-		return err
-	}
-	data.VCPUsAtStartup = types.Int32Value(vcpusAtStartup)
+	data.VCPUsMax = types.Int64Value(record.VCPUsMax)
+	data.VCPUsAtStartup = types.Int64Value(record.VCPUsAtStartup)
 	data.ActionsAfterSoftreboot = types.StringValue(string(record.ActionsAfterSoftreboot))
 	data.ActionsAfterShutdown = types.StringValue(string(record.ActionsAfterShutdown))
 	data.ActionsAfterReboot = types.StringValue(string(record.ActionsAfterReboot))
@@ -429,11 +430,7 @@ func updateVMRecordData(ctx context.Context, session *xenapi.Session, record xen
 	if diags.HasError() {
 		return errors.New("unable to read VM other config")
 	}
-	domId, err := ToInt32(record.Domid)
-	if err != nil {
-		return err
-	}
-	data.Domid = types.Int32Value(domId)
+	data.Domid = types.Int64Value(record.Domid)
 	data.Domarch = types.StringValue(record.Domarch)
 	data.LastBootCPUFlags, diags = types.MapValueFrom(ctx, types.StringType, record.LastBootCPUFlags)
 	if diags.HasError() {
@@ -531,13 +528,9 @@ func updateVMRecordData(ctx context.Context, session *xenapi.Session, record xen
 		return err
 	}
 	data.Appliance = types.StringValue(appliance)
-	data.StartDelay = types.Int64Value(int64(record.StartDelay))
-	data.ShutdownDelay = types.Int64Value(int64(record.ShutdownDelay))
-	order, err := ToInt32(record.Order)
-	if err != nil {
-		return err
-	}
-	data.Order = types.Int32Value(order)
+	data.StartDelay = types.Int64Value(record.StartDelay)
+	data.ShutdownDelay = types.Int64Value(record.ShutdownDelay)
+	data.Order = types.Int64Value(record.Order)
 	vgpus, err := getVGPUUUIDs(session, record.VGPUs)
 	if err != nil {
 		return err
@@ -559,17 +552,9 @@ func updateVMRecordData(ctx context.Context, session *xenapi.Session, record xen
 		return err
 	}
 	data.SuspendSR = types.StringValue(suspendSR)
-	version, err := ToInt32(record.Version)
-	if err != nil {
-		return err
-	}
-	data.Version = types.Int32Value(version)
+	data.Version = types.Int64Value(record.Version)
 	data.GenerationID = types.StringValue(record.GenerationID)
-	hwPlatVer, err := ToInt32(record.HardwarePlatformVersion)
-	if err != nil {
-		return err
-	}
-	data.HardwarePlatformVersion = types.Int32Value(hwPlatVer)
+	data.HardwarePlatformVersion = types.Int64Value(record.HardwarePlatformVersion)
 	data.HasVendorDevice = types.BoolValue(record.HasVendorDevice)
 	data.RequiresReboot = types.BoolValue(record.RequiresReboot)
 	data.ReferenceLabel = types.StringValue(record.ReferenceLabel)
@@ -716,7 +701,7 @@ func updateOtherConfigFromPlan(ctx context.Context, session *xenapi.Session, vmR
 	}
 
 	vmOtherConfig["tf_other_config_keys"] = strings.Join(tfOtherConfigKeys, ",")
-	vmOtherConfig["tf_check_ip_timeout"] = plan.CheckIPTimeout.String()
+	vmOtherConfig["tf_check_ip_timeout"] = strconv.FormatInt(plan.CheckIPTimeout.ValueInt64(), 10)
 	vmOtherConfig["tf_template_name"] = plan.TemplateName.ValueString()
 	vmOtherConfig["tf_sr_for_full_disk_copy"] = plan.SRForFullDiskCopy.ValueString()
 
@@ -746,20 +731,17 @@ func getBootModeFromVMRecord(vmRecord xenapi.VMRecord) (string, error) {
 	return bootMode, nil
 }
 
-func getCorePerSocket(vmRecord xenapi.VMRecord) (int32, error) {
+func getCorePerSocket(vmRecord xenapi.VMRecord) (int64, error) {
 	socket, ok := vmRecord.Platform["cores-per-socket"]
 	if !ok {
 		return 0, errors.New("unable to read VM platform cores-per-socket")
 	}
-	socketInt, err := strconv.Atoi(socket)
+	socketInt, err := strconv.ParseInt(socket, 10, 64)
 	if err != nil {
 		return 0, errors.New("unable to convert cores-per-socket to an int value")
 	}
-	if socketInt < math.MinInt32 || socketInt > math.MaxInt32 {
-		return 0, errors.New("integer overflow")
-	}
 
-	return int32(socketInt), nil // #nosec G109
+	return socketInt, nil
 }
 
 func updateVMResourceModelComputed(ctx context.Context, session *xenapi.Session, vmRecord xenapi.VMRecord, data *vmResourceModel) error {
@@ -767,15 +749,17 @@ func updateVMResourceModelComputed(ctx context.Context, session *xenapi.Session,
 	data.NameDescription = types.StringValue(vmRecord.NameDescription)
 	data.UUID = types.StringValue(vmRecord.UUID)
 	data.ID = types.StringValue(vmRecord.UUID)
-	data.StaticMemMin = types.Int64Value(int64(vmRecord.MemoryStaticMin))
-	data.DynamicMemMin = types.Int64Value(int64(vmRecord.MemoryDynamicMin))
-	data.DynamicMemMax = types.Int64Value(int64(vmRecord.MemoryDynamicMax))
+	data.StaticMemMin = types.Int64Value(vmRecord.MemoryStaticMin)
+	data.DynamicMemMin = types.Int64Value(vmRecord.MemoryDynamicMin)
+	data.DynamicMemMax = types.Int64Value(vmRecord.MemoryDynamicMax)
 
 	socketInt, err := getCorePerSocket(vmRecord)
 	if err != nil {
 		return err
 	}
-	data.CorePerSocket = types.Int32Value(socketInt)
+	data.CorePerSocket = types.Int64Value(socketInt)
+
+	data.AllowWindowsUpdateDrivers = types.BoolValue(vmRecord.HasVendorDevice)
 
 	data.NetworkInterface, err = getVIFsFromVMRecord(ctx, session, vmRecord)
 	if err != nil {
@@ -812,17 +796,27 @@ func updateVMResourceModelComputed(ctx context.Context, session *xenapi.Session,
 	}
 
 	if _, ok := vmRecord.OtherConfig["tf_check_ip_timeout"]; ok {
-		checkIPDuration, err := strconv.Atoi(vmRecord.OtherConfig["tf_check_ip_timeout"])
+		checkIPDuration, err := strconv.ParseInt(vmRecord.OtherConfig["tf_check_ip_timeout"], 10, 64)
 		if err != nil {
 			return errors.New("unable to convert check_ip_timeout to an int value")
 		}
-		data.CheckIPTimeout = types.Int64Value(int64(checkIPDuration))
+		data.CheckIPTimeout = types.Int64Value(checkIPDuration)
 
-		ip, err := checkIP(ctx, session, vmRecord)
+		ipAddresses, err := checkIPAddresses(ctx, session, vmRecord, checkIPDuration)
 		if err != nil {
 			return err
 		}
-		data.DefaultIP = types.StringValue(ip)
+		defaultIP := ""
+		for _, ip := range ipAddresses {
+			defaultIP = ip
+			break
+		}
+		data.DefaultIP = types.StringValue(defaultIP)
+		ipMap, diags := types.MapValueFrom(ctx, types.StringType, ipAddresses)
+		if diags.HasError() {
+			return errors.New("unable to read VM ip addresses")
+		}
+		data.IPAddresses = ipMap
 	}
 
 	if _, ok := vmRecord.OtherConfig["tf_sr_for_full_disk_copy"]; ok {
@@ -836,12 +830,8 @@ func updateVMResourceModelComputed(ctx context.Context, session *xenapi.Session,
 func updateVMResourceModel(ctx context.Context, session *xenapi.Session, vmRecord xenapi.VMRecord, data *vmResourceModel) error {
 	data.NameLabel = types.StringValue(vmRecord.NameLabel)
 	data.TemplateName = types.StringValue(vmRecord.OtherConfig["tf_template_name"])
-	data.StaticMemMax = types.Int64Value(int64(vmRecord.MemoryStaticMax))
-	vcpusMax, err := ToInt32(vmRecord.VCPUsMax)
-	if err != nil {
-		return err
-	}
-	data.VCPUs = types.Int32Value(vcpusMax)
+	data.StaticMemMax = types.Int64Value(vmRecord.MemoryStaticMax)
+	data.VCPUs = types.Int64Value(vmRecord.VCPUsMax)
 	return updateVMResourceModelComputed(ctx, session, vmRecord, data)
 }
 
@@ -930,6 +920,18 @@ func getVIFsFromVMRecord(ctx context.Context, session *xenapi.Session, vmRecord 
 			return setValue, errors.New("unable to read VIF other config")
 		}
 
+		if vifRecord.Ipv4ConfigurationMode == xenapi.VifIpv4ConfigurationModeStatic && len(vifRecord.Ipv4Addresses) > 0 && vifRecord.Ipv4Addresses[0] != "" {
+			vif.IPv4Address = types.StringValue(vifRecord.Ipv4Addresses[0])
+			if vifRecord.Ipv4Gateway != "" {
+				vif.IPv4Gateway = types.StringValue(vifRecord.Ipv4Gateway)
+			} else {
+				vif.IPv4Gateway = types.StringNull()
+			}
+		} else {
+			vif.IPv4Address = types.StringNull()
+			vif.IPv4Gateway = types.StringNull()
+		}
+
 		vifSet = append(vifSet, vif)
 	}
 
@@ -943,25 +945,25 @@ func getVIFsFromVMRecord(ctx context.Context, session *xenapi.Session, vmRecord 
 }
 
 type vmMemorySetting struct {
-	staticMemMin  int
-	staticMemMax  int
-	dynamicMemMin int
-	dynamicMemMax int
+	staticMemMin  int64
+	staticMemMax  int64
+	dynamicMemMin int64
+	dynamicMemMax int64
 }
 
 func getVMMemory(data vmResourceModel) vmMemorySetting {
-	staticMemMax := int(data.StaticMemMax.ValueInt64())
+	staticMemMax := data.StaticMemMax.ValueInt64()
 	staticMemMin := staticMemMax
 	dynamicMemMin := staticMemMax
 	dynamicMemMax := staticMemMax
 	if !data.StaticMemMin.IsUnknown() {
-		staticMemMin = int(data.StaticMemMin.ValueInt64())
+		staticMemMin = data.StaticMemMin.ValueInt64()
 	}
 	if !data.DynamicMemMin.IsUnknown() {
-		dynamicMemMin = int(data.DynamicMemMin.ValueInt64())
+		dynamicMemMin = data.DynamicMemMin.ValueInt64()
 	}
 	if !data.DynamicMemMax.IsUnknown() {
-		dynamicMemMax = int(data.DynamicMemMax.ValueInt64())
+		dynamicMemMax = data.DynamicMemMax.ValueInt64()
 	}
 
 	return vmMemorySetting{staticMemMin, staticMemMax, dynamicMemMin, dynamicMemMax}
@@ -1008,7 +1010,7 @@ func changeVCPUSettings(session *xenapi.Session, vmRef xenapi.VMRef, plan vmReso
 		return errors.New("unable to change vcpus for a running VM")
 	}
 
-	vcpus := int(plan.VCPUs.ValueInt32())
+	vcpus := plan.VCPUs.ValueInt64()
 	vcpusAtStartup, err := xenapi.VM.GetVCPUsAtStartup(session, vmRef)
 	if err != nil {
 		return errors.New(err.Error())
@@ -1055,19 +1057,19 @@ func updateCorePerSocket(session *xenapi.Session, vmRef xenapi.VMRef, plan vmRes
 	if plan.CorePerSocket.IsUnknown() {
 		// if user doesn't set cores-per-socket and it is not found in template, set it to VCPUs num as the default value
 		if _, ok := platform["cores-per-socket"]; !ok {
-			platform["cores-per-socket"] = plan.VCPUs.String()
+			platform["cores-per-socket"] = strconv.FormatInt(plan.VCPUs.ValueInt64(), 10)
 			err := xenapi.VM.SetPlatform(session, vmRef, platform)
 			if err != nil {
 				return errors.New(err.Error())
 			}
 		}
 	} else {
-		coresPerSocket := int(plan.CorePerSocket.ValueInt32())
-		vcpus := int(plan.VCPUs.ValueInt32())
+		coresPerSocket := plan.CorePerSocket.ValueInt64()
+		vcpus := plan.VCPUs.ValueInt64()
 		if vcpus%coresPerSocket != 0 {
 			return fmt.Errorf("%d cores could not fit to %d cores-per-socket topology", vcpus, coresPerSocket)
 		}
-		platform["cores-per-socket"] = strconv.Itoa(coresPerSocket)
+		platform["cores-per-socket"] = strconv.FormatInt(coresPerSocket, 10)
 		err := xenapi.VM.SetPlatform(session, vmRef, platform)
 		if err != nil {
 			return errors.New(err.Error())
@@ -1124,6 +1126,19 @@ func updateBootMode(session *xenapi.Session, vmRef xenapi.VMRef, plan vmResource
 	hvmBootParams := vmRecord.HVMBootParams
 	hvmBootParams["firmware"] = bootMode
 	err = xenapi.VM.SetHVMBootParams(session, vmRef, hvmBootParams)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+
+	return nil
+}
+
+func setHasVendorDevice(session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel) error {
+	if plan.AllowWindowsUpdateDrivers.IsUnknown() {
+		return nil
+	}
+
+	err := xenapi.VM.SetHasVendorDevice(session, vmRef, plan.AllowWindowsUpdateDrivers.ValueBool())
 	if err != nil {
 		return errors.New(err.Error())
 	}
@@ -1188,7 +1203,12 @@ func vmResourceModelUpdate(ctx context.Context, session *xenapi.Session, vmRef x
 		return err
 	}
 
-	err = startVM(session, vmRef, plan)
+	err = startVMForIPCheck(session, vmRef, plan)
+	if err != nil {
+		return err
+	}
+
+	err = configureVIFsIPv4(ctx, session, vmRef, plan, state)
 	if err != nil {
 		return err
 	}
@@ -1248,6 +1268,12 @@ func setVMResourceModel(ctx context.Context, session *xenapi.Session, vmRef xena
 		return err
 	}
 
+	// set has_vendor_device on the fresh clone before the VM is ever started
+	err = setHasVendorDevice(session, vmRef, plan)
+	if err != nil {
+		return err
+	}
+
 	// add hard_drive
 	err = createVBDs(ctx, session, vmRef, plan, xenapi.VbdTypeDisk)
 	if err != nil {
@@ -1277,7 +1303,12 @@ func setVMResourceModel(ctx context.Context, session *xenapi.Session, vmRef xena
 		return errors.New(err.Error())
 	}
 
-	err = startVM(session, vmRef, plan)
+	err = startVMForIPCheck(session, vmRef, plan)
+	if err != nil {
+		return err
+	}
+
+	err = configureVIFsIPv4(ctx, session, vmRef, plan, vmResourceModel{})
 	if err != nil {
 		return err
 	}
@@ -1291,35 +1322,32 @@ func isValidIpAddress(ip net.IP) bool {
 	return ip.IsGlobalUnicast()
 }
 
-func startVM(session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel) error {
-	// start a VM automatically if the check_ip_timeout is set and not equal to 0
+func startVMForIPCheck(session *xenapi.Session, vmRef xenapi.VMRef, plan vmResourceModel) error {
 	if plan.CheckIPTimeout.IsUnknown() || plan.CheckIPTimeout.ValueInt64() == 0 {
 		return nil
 	}
+	return startVM(session, vmRef)
+}
+
+func startVM(session *xenapi.Session, vmRef xenapi.VMRef) error {
 	vmPowerState, err := xenapi.VM.GetPowerState(session, vmRef)
 	if err != nil {
 		return errors.New(err.Error())
 	}
-
-	if vmPowerState != xenapi.VMPowerStateRunning {
-		err := xenapi.VM.Start(session, vmRef, false, true)
-		if err != nil {
-			return errors.New(err.Error())
-		}
+	if vmPowerState == xenapi.VMPowerStateRunning {
+		return nil
 	}
-
+	err = xenapi.VM.Start(session, vmRef, false, true)
+	if err != nil {
+		return errors.New(err.Error())
+	}
 	return nil
 }
 
-func checkIP(ctx context.Context, session *xenapi.Session, vmRecord xenapi.VMRecord) (string, error) {
-	checkIPTimeout, err := strconv.Atoi(vmRecord.OtherConfig["tf_check_ip_timeout"])
-	if err != nil {
-		return "", errors.New(err.Error())
-	}
-
-	// check_ip_timeout is 0 that means won't need to checkIP, return directly
+func checkIPAddresses(ctx context.Context, session *xenapi.Session, vmRecord xenapi.VMRecord, checkIPTimeout int64) (map[string]string, error) {
+	// check_ip_timeout is 0 that means won't need to check IP, return directly
 	if checkIPTimeout == 0 {
-		return "", nil
+		return map[string]string{}, nil
 	}
 
 	// set timeout channel to check if IP address is available
@@ -1327,33 +1355,33 @@ func checkIP(ctx context.Context, session *xenapi.Session, vmRecord xenapi.VMRec
 	for {
 		select {
 		case <-timeoutChan:
-			return "", errors.New("get IP timeout in " + vmRecord.OtherConfig["tf_check_ip_timeout"] + " seconds")
+			return nil, errors.New("timed out after " + strconv.FormatInt(checkIPTimeout, 10) + " seconds waiting for the IP address; ensure the guest tools are running in the VM or set check_ip_timeout = 0 to skip the IP check")
 		default:
-			ip, _ := getIPAddressFromMetrics(session, vmRecord)
-			if ip != "" {
-				return ip, nil
+			ipAddresses, _ := getIPAddressesFromMetrics(session, vmRecord)
+			if len(ipAddresses) > 0 {
+				return ipAddresses, nil
 			}
-			tflog.Debug(ctx, "-----> Retry getIPAddressFromMetrics")
+			tflog.Debug(ctx, "-----> Retry getIPAddressesFromMetrics")
 			time.Sleep(5 * time.Second)
 		}
 	}
 }
 
-func getIPAddressFromMetrics(session *xenapi.Session, vmRecord xenapi.VMRecord) (string, error) {
+func getIPAddressesFromMetrics(session *xenapi.Session, vmRecord xenapi.VMRecord) (map[string]string, error) {
 	vmGuestMetricRecord, err := xenapi.VMGuestMetrics.GetRecord(session, vmRecord.GuestMetrics)
 	if err != nil {
-		return "", errors.New(err.Error())
+		return nil, errors.New(err.Error())
 	}
 
+	ipAddresses := make(map[string]string)
 	for k, v := range vmGuestMetricRecord.Networks {
-		if strings.HasSuffix(k, "ip") {
-			if isValidIpAddress(net.ParseIP(v)) {
-				return v, nil
-			}
+		// keys are of the form "<device>/ip" for each interface's IPv4 address
+		if strings.HasSuffix(k, "/ip") && isValidIpAddress(net.ParseIP(v)) {
+			ipAddresses[strings.TrimSuffix(k, "/ip")] = v
 		}
 	}
 
-	return "", errors.New("unable to get IP address from metrics")
+	return ipAddresses, nil
 }
 
 func cleanupVMResource(session *xenapi.Session, vmRef xenapi.VMRef) error {
@@ -1415,15 +1443,11 @@ func vmResourceModelUpdateCheck(plan vmResourceModel, state vmResourceModel) err
 	if !plan.BootMode.IsUnknown() && plan.BootMode != state.BootMode {
 		return errors.New(`"boot_mode" doesn't expected to be updated`)
 	}
+	if !plan.AllowWindowsUpdateDrivers.IsUnknown() && plan.AllowWindowsUpdateDrivers != state.AllowWindowsUpdateDrivers {
+		return errors.New(`"allow_windows_update_drivers" doesn't expected to be updated`)
+	}
 	if !plan.SRForFullDiskCopy.IsUnknown() && plan.SRForFullDiskCopy != state.SRForFullDiskCopy {
 		return errors.New(`"sr_for_full_disk_copy" doesn't expected to be updated`)
 	}
 	return nil
-}
-
-func ToInt32(n int) (int32, error) {
-	if n < math.MinInt32 || n > math.MaxInt32 {
-		return 0, errors.New("integer overflow")
-	}
-	return int32(n), nil
 }

@@ -92,7 +92,7 @@ func updateSnapshotResourceModelComputed(ctx context.Context, session *xenapi.Se
 				NameLabel:       types.StringValue(vdiRecord.NameLabel),
 				NameDescription: types.StringValue(vdiRecord.NameDescription),
 				SR:              types.StringValue(srUUID),
-				VirtualSize:     types.Int64Value(int64(vdiRecord.VirtualSize)),
+				VirtualSize:     types.Int64Value(vdiRecord.VirtualSize),
 				UUID:            types.StringValue(vdiRecord.UUID),
 				ID:              types.StringValue(vdiRecord.UUID),
 				Type:            types.StringValue(string(vdiRecord.Type)),

@@ -41,8 +41,8 @@ jobs:
           url=${{ vars.XENSERVER_SDK_URL }}
           if [ -z "$url" ]; then
             version=$(curl -s 'https://www.xenserver.com/downloads' | \
-              grep -oE 'Software Development Kit \(SDK\) [0-9]+\.[0-9]+\.[0-9]+' | \
-              grep -oE '[0-9]+\.[0-9]+\.[0-9]+$')
+              grep -oE 'XenServer-SDK-[0-9]+\.[0-9]+\.[0-9]+\.zip' | \
+              grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | sort -uV | tail -n1)
             # xenserver.com zero-pads components (e.g. 26.16.01) but the xen-api tag
             # does not (v26.16.1), so strip leading zeros before building the URL.
             version=$(echo "$version" | awk -F. '{printf "%d.%d.%d", $1, $2, $3}')
@@ -56,7 +56,7 @@ jobs:
       - name: Run linters
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.11
+          version: v2.14
 
   build:
     name: Build
@@ -77,8 +77,8 @@ jobs:
           url=${{ vars.XENSERVER_SDK_URL }}
           if [ -z "$url" ]; then
             version=$(curl -s 'https://www.xenserver.com/downloads' | \
-              grep -oE 'Software Development Kit \(SDK\) [0-9]+\.[0-9]+\.[0-9]+' | \
-              grep -oE '[0-9]+\.[0-9]+\.[0-9]+$')
+              grep -oE 'XenServer-SDK-[0-9]+\.[0-9]+\.[0-9]+\.zip' | \
+              grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | sort -uV | tail -n1)
             # xenserver.com zero-pads components (e.g. 26.16.01) but the xen-api tag
             # does not (v26.16.1), so strip leading zeros before building the URL.
             version=$(echo "$version" | awk -F. '{printf "%d.%d.%d", $1, $2, $3}')

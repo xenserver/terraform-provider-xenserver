@@ -64,11 +64,11 @@ func pifDataSchema() map[string]schema.Attribute {
 			MarkdownDescription: "Ethernet MAC address of the physical interface.",
 			Computed:            true,
 		},
-		"mtu": schema.Int32Attribute{
+		"mtu": schema.Int64Attribute{
 			MarkdownDescription: "MTU in octets.",
 			Computed:            true,
 		},
-		"vlan": schema.Int32Attribute{
+		"vlan": schema.Int64Attribute{
 			MarkdownDescription: "VLAN tag for all traffic passing through this interface.",
 			Computed:            true,
 		},
