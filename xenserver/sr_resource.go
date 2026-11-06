@@ -96,7 +96,7 @@ func (r *srResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *r
 			},
 			"host": schema.StringAttribute{
 				MarkdownDescription: "The UUID of the host to create/make the SR on, default to use the pool coordinator." +
-					"\n\n-> **Note:** `host` is not allowed to be updated.",
+					"\n\n-> **Note:** `host` is not allowed to be updated. Removing it from the configuration later has no effect.",
 				Optional: true,
 				Computed: true,
 			},

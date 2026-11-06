@@ -10,14 +10,14 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/hashicorp/terraform-plugin-framework-validators/int32validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int32default"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
@@ -63,13 +63,13 @@ func (r *vlanResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 				Computed:            true,
 				Default:             stringdefault.StaticString(""),
 			},
-			"mtu": schema.Int32Attribute{
+			"mtu": schema.Int64Attribute{
 				MarkdownDescription: "The MTU of the network, default to be `1500`. The minimum value this attribute can be set is `0`.",
 				Optional:            true,
 				Computed:            true,
-				Default:             int32default.StaticInt32(1500),
-				Validators: []validator.Int32{
-					int32validator.AtLeast(0),
+				Default:             int64default.StaticInt64(1500),
+				Validators: []validator.Int64{
+					int64validator.AtLeast(0),
 				},
 			},
 			"managed": schema.BoolAttribute{
@@ -86,7 +86,7 @@ func (r *vlanResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 				Default:             mapdefault.StaticValue(types.MapValueMust(types.StringType, map[string]attr.Value{})),
 				ElementType:         types.StringType,
 			},
-			"vlan_tag": schema.Int32Attribute{
+			"vlan_tag": schema.Int64Attribute{
 				MarkdownDescription: "The VLAN tag of the network." +
 					"\n\n-> **Note:** `vlan_tag` is not allowed to be updated.",
 				Required: true,

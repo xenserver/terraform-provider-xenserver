@@ -130,7 +130,7 @@ func getVDICreateParams(ctx context.Context, session *xenapi.Session, data vdiRe
 		return record, errors.New(err.Error())
 	}
 	record.SR = srRef
-	record.VirtualSize = int(data.VirtualSize.ValueInt64())
+	record.VirtualSize = data.VirtualSize.ValueInt64()
 	record.Type = xenapi.VdiType(data.Type.ValueString())
 	record.Sharable = data.Sharable.ValueBool()
 	record.ReadOnly = data.ReadOnly.ValueBool()
@@ -150,7 +150,7 @@ func updateVDIResourceModel(ctx context.Context, session *xenapi.Session, record
 		return err
 	}
 	data.SR = types.StringValue(srUUID)
-	data.VirtualSize = types.Int64Value(int64(record.VirtualSize))
+	data.VirtualSize = types.Int64Value(record.VirtualSize)
 
 	return updateVDIResourceModelComputed(ctx, record, data)
 }
