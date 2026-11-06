@@ -41,8 +41,8 @@ jobs:
           url=${{ vars.XENSERVER_SDK_URL }}
           if [ -z "$url" ]; then
             version=$(curl -s 'https://www.xenserver.com/downloads' | \
-              grep -oE 'Software Development Kit \(SDK\) [0-9]+\.[0-9]+\.[0-9]+' | \
-              grep -oE '[0-9]+\.[0-9]+\.[0-9]+$')
+              grep -oE 'XenServer-SDK-[0-9]+\.[0-9]+\.[0-9]+\.zip' | \
+              grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | sort -uV | tail -n1)
             # xenserver.com zero-pads components (e.g. 26.16.01) but the xen-api tag
             # does not (v26.16.1), so strip leading zeros before building the URL.
             version=$(echo "$version" | awk -F. '{printf "%d.%d.%d", $1, $2, $3}')
@@ -53,10 +53,16 @@ jobs:
           mkdir -p goSDK
           mv sdk_temp/sdk_go/src/* goSDK/
           rm -rf sdk_temp xenserver-sdk.zip
-      - name: Run linters
-        uses: golangci/golangci-lint-action@v9
+      # golangci/golangci-lint-action is not allowed by the enterprise GitHub
+      # Actions policy, so install the binary with a repository-local action.
+      - name: Install golangci-lint
+        uses: ./.github/actions/setup-golangci-lint
         with:
-          version: v2.11
+          version: v2.14.0
+      - name: Run linters
+        run: |
+          golangci-lint config verify
+          golangci-lint run
 
   build:
     name: Build
@@ -77,8 +83,8 @@ jobs:
           url=${{ vars.XENSERVER_SDK_URL }}
           if [ -z "$url" ]; then
             version=$(curl -s 'https://www.xenserver.com/downloads' | \
-              grep -oE 'Software Development Kit \(SDK\) [0-9]+\.[0-9]+\.[0-9]+' | \
-              grep -oE '[0-9]+\.[0-9]+\.[0-9]+$')
+              grep -oE 'XenServer-SDK-[0-9]+\.[0-9]+\.[0-9]+\.zip' | \
+              grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | sort -uV | tail -n1)
             # xenserver.com zero-pads components (e.g. 26.16.01) but the xen-api tag
             # does not (v26.16.1), so strip leading zeros before building the URL.
             version=$(echo "$version" | awk -F. '{printf "%d.%d.%d", $1, $2, $3}')

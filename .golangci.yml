@@ -20,7 +20,7 @@ linters:
     - gochecksumtype
     - gocritic
     - godox
-    - gomodguard
+    - gomodguard_v2
     - goprintffuncname
     - gosec
     - gosmopolitan

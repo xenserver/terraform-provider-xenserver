@@ -53,7 +53,7 @@ func TestAccPifDataSource(t *testing.T) {
 						}
 						// the length of data_items depends on the number of hosts in the pool
 						attr := rs.Primary.Attributes["data_items.#"]
-						value, err := strconv.Atoi(attr)
+						value, err := strconv.ParseInt(attr, 10, 64)
 						if err != nil {
 							return fmt.Errorf("Error converting attribute value to integer: %w", err)
 						}

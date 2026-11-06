@@ -10,6 +10,7 @@ import (
 	"errors"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -77,9 +78,9 @@ func updateSRRecordData(ctx context.Context, session *xenapi.Session, record xen
 	if diags.HasError() {
 		return errors.New("unable to read SR PBDs")
 	}
-	data.VirtualAllocation = types.Int64Value(int64(record.VirtualAllocation))
-	data.PhysicalUtilisation = types.Int64Value(int64(record.PhysicalUtilisation))
-	data.PhysicalSize = types.Int64Value(int64(record.PhysicalSize))
+	data.VirtualAllocation = types.Int64Value(record.VirtualAllocation)
+	data.PhysicalUtilisation = types.Int64Value(record.PhysicalUtilisation)
+	data.PhysicalSize = types.Int64Value(record.PhysicalSize)
 	data.Type = types.StringValue(record.Type)
 	data.ContentType = types.StringValue(record.ContentType)
 	data.Shared = types.BoolValue(record.Shared)
@@ -117,7 +118,7 @@ func updateSRRecordData(ctx context.Context, session *xenapi.Session, record xen
 type srCreateParams struct {
 	Host            xenapi.HostRef
 	DeviceConfig    map[string]string
-	PhysicalSize    int
+	PhysicalSize    int64
 	NameLabel       string
 	NameDescription string
 	TypeKey         string
@@ -305,19 +306,28 @@ func unplugPBDs(session *xenapi.Session, pbdRefs []xenapi.PBDRef) error {
 }
 
 func cleanupSRResource(session *xenapi.Session, ref xenapi.SRRef) error {
-	pbdRefs, err := xenapi.SR.GetPBDs(session, ref)
-	if err != nil {
-		return errors.New(err.Error())
+	cleanup := func() error {
+		pbdRefs, err := xenapi.SR.GetPBDs(session, ref)
+		if err != nil {
+			return errors.New(err.Error())
+		}
+		if err = unplugPBDs(session, pbdRefs); err != nil {
+			return err
+		}
+		if err = xenapi.SR.Forget(session, ref); err != nil {
+			return errors.New(err.Error())
+		}
+		return nil
 	}
-	err = unplugPBDs(session, pbdRefs)
-	if err != nil {
-		return err
+
+	var err error
+	for range 5 {
+		if err = cleanup(); err == nil || !strings.Contains(err.Error(), "HANDLE_INVALID") {
+			return err
+		}
+		time.Sleep(1 * time.Second)
 	}
-	err = xenapi.SR.Forget(session, ref)
-	if err != nil {
-		return errors.New(err.Error())
-	}
-	return nil
+	return err
 }
 
 func createSRResource(session *xenapi.Session, params srCreateParams) (xenapi.SRRef, error) {

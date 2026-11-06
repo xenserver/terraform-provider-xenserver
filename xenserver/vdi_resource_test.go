@@ -42,11 +42,11 @@ func TestAccVDIResource(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create and Read testing
 			{
-				Config: providerConfig + testAccVDIResourceConfig("Test VDI", "", "1 * 1024 * 1024 * 1024", ""),
+				Config: providerConfig + testAccVDIResourceConfig("Test VDI", "", "3 * 1024 * 1024 * 1024", ""),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("xenserver_vdi.test_vdi", "name_label", "Test VDI"),
 					resource.TestCheckResourceAttr("xenserver_vdi.test_vdi", "name_description", ""),
-					resource.TestCheckResourceAttr("xenserver_vdi.test_vdi", "virtual_size", "1073741824"),
+					resource.TestCheckResourceAttr("xenserver_vdi.test_vdi", "virtual_size", "3221225472"),
 					resource.TestCheckResourceAttr("xenserver_vdi.test_vdi", "other_config.%", "1"),
 					resource.TestCheckResourceAttr("xenserver_vdi.test_vdi", "other_config.flag", "1"),
 					// Verify dynamic values have any value set in the state.
@@ -66,24 +66,24 @@ func TestAccVDIResource(t *testing.T) {
 				ExpectError: regexp.MustCompile(`"virtual_size" doesn't expected to be updated`),
 			},
 			{
-				Config:      providerConfig + testAccVDIResourceConfig("Test VDI 2", "Test VDI description", "1 * 1024 * 1024 * 1024", `type = "dummy"`),
+				Config:      providerConfig + testAccVDIResourceConfig("Test VDI 2", "Test VDI description", "3 * 1024 * 1024 * 1024", `type = "dummy"`),
 				ExpectError: regexp.MustCompile(`"type" doesn't expected to be updated`),
 			},
 			{
-				Config:      providerConfig + testAccVDIResourceConfig("Test VDI 2", "Test VDI description", "1 * 1024 * 1024 * 1024", "sharable = true"),
+				Config:      providerConfig + testAccVDIResourceConfig("Test VDI 2", "Test VDI description", "3 * 1024 * 1024 * 1024", "sharable = true"),
 				ExpectError: regexp.MustCompile(`"sharable" doesn't expected to be updated`),
 			},
 			{
-				Config:      providerConfig + testAccVDIResourceConfig("Test VDI 2", "Test VDI description", "1 * 1024 * 1024 * 1024", "read_only = true"),
+				Config:      providerConfig + testAccVDIResourceConfig("Test VDI 2", "Test VDI description", "3 * 1024 * 1024 * 1024", "read_only = true"),
 				ExpectError: regexp.MustCompile(`"read_only" doesn't expected to be updated`),
 			},
 			// Update and Read testing
 			{
-				Config: providerConfig + testAccVDIResourceConfig("Test VDI 2", "Test VDI description", "1 * 1024 * 1024 * 1024", ""),
+				Config: providerConfig + testAccVDIResourceConfig("Test VDI 2", "Test VDI description", "3 * 1024 * 1024 * 1024", ""),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("xenserver_vdi.test_vdi", "name_label", "Test VDI 2"),
 					resource.TestCheckResourceAttr("xenserver_vdi.test_vdi", "name_description", "Test VDI description"),
-					resource.TestCheckResourceAttr("xenserver_vdi.test_vdi", "virtual_size", "1073741824"),
+					resource.TestCheckResourceAttr("xenserver_vdi.test_vdi", "virtual_size", "3221225472"),
 					resource.TestCheckResourceAttr("xenserver_vdi.test_vdi", "other_config.%", "1"),
 					resource.TestCheckResourceAttr("xenserver_vdi.test_vdi", "other_config.flag", "1"),
 					// Verify dynamic values have any value set in the state.

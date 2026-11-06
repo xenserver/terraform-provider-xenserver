@@ -17,14 +17,15 @@ data "xenserver_network" "network" {}
 
 # Create a Windows 11 VM that is cloned from the base template
 resource "xenserver_vm" "windows_vm" {
-  name_label       = "Windows VM"
-  template_name    = "Windows 11"
-  static_mem_max   = 4 * 1024 * 1024 * 1024
-  vcpus            = 4
-  cores_per_socket = 2
-  cdrom            = "win11-x64_uefi.iso"
-  boot_mode        = "uefi_security"
-  boot_order       = "cdn"
+  name_label                   = "Windows VM"
+  template_name                = "Windows 11"
+  static_mem_max               = 4 * 1024 * 1024 * 1024
+  vcpus                        = 4
+  cores_per_socket             = 2
+  cdrom                        = "win11-x64_uefi.iso"
+  boot_mode                    = "uefi_security"
+  boot_order                   = "cdn"
+  allow_windows_update_drivers = true
 
   hard_drive = [
     {
@@ -74,6 +75,45 @@ resource "xenserver_vm" "windows_vm_copy" {
       network_uuid = data.xenserver_network.network.data_items[0].uuid,
     },
   ]
+}
+
+# Create a Windows VM that is cloned from the custom template (contains Windows guest tools)
+# and assign a static IPv4 address
+resource "xenserver_vm" "windows_vm_static_ip" {
+  name_label       = "Windows VM Static IP"
+  template_name    = "Custom Windows 11 Template"
+  static_mem_max   = 4 * 1024 * 1024 * 1024
+  vcpus            = 4
+  check_ip_timeout = 60 * 5
+
+  network_interface = [
+    {
+      device       = "0"
+      network_uuid = data.xenserver_network.network.data_items[0].uuid
+      ipv4_address = "10.62.50.49/20"
+      ipv4_gateway = "10.62.48.1"
+    },
+  ]
+
+  # This requires the guest template to be pre-configured for remote access: 
+  # eg. WinRM enabled with a listener, the firewall open for the port (5985/5986), and an authentication method matching the connection block (use_ntlm, or Basic + HTTPS). 
+  connection {
+    type     = "winrm"
+    user     = "Administrator"
+    password = var.password
+    host     = self.ip_addresses["0"]
+    port     = 5986
+    https    = true
+    insecure = true
+    use_ntlm = false
+    timeout  = "10m"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "whoami",
+    ]
+  }
 }
 
 # Create a Linux VM that is cloned from the custom template
